@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 测试用例生成器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: #fff; padding: 20px 0; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.15); }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header p { font-size: 14px; opacity: 0.85; margin-top: 6px; }
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 16px; }
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); padding: 24px; margin-bottom: 20px; }
+        .card-title { font-size: 16px; font-weight: 600; color: #1a73e8; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+        .card-title::before { content: ''; display: inline-block; width: 4px; height: 18px; background: #1a73e8; border-radius: 2px; }
+        textarea { width: 100%; height: 150px; padding: 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; transition: border-color 0.2s; }
+        textarea:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.15); }
+        .upload-area { border: 2px dashed #d9d9d9; border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; }
+        .upload-area:hover { border-color: #1a73e8; background: #f6f9ff; }
+        .upload-area.dragover { border-color: #1a73e8; background: #e8f0fe; }
+        .upload-area input { display: none; }
+        .upload-area .icon { font-size: 36px; color: #bbb; margin-bottom: 8px; }
+        .upload-area p { color: #666; font-size: 14px; }
+        .upload-area .hint { color: #999; font-size: 12px; margin-top: 4px; }
+        .file-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+        .file-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f6f9ff; border: 1px solid #e0e7ff; border-radius: 8px; font-size: 13px; position: relative; }
+        .file-item img { width: 48px; height: 48px; object-fit: cover; border-radius: 4px; border: 1px solid #e0e0e0; }
+        .file-item .file-name { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333; }
+        .file-item .file-type { font-size: 11px; color: #1a73e8; background: #e8f0fe; padding: 1px 6px; border-radius: 3px; }
+        .file-item .remove-btn { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; background: #d32f2f; color: #fff; border: none; border-radius: 50%; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1; }
+        .section-label { font-size: 13px; color: #666; margin-bottom: 8px; font-weight: 500; }
+        .options { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 16px; }
+        .options label { font-size: 14px; color: #555; display: flex; align-items: center; gap: 6px; }
+        .options select, .options input[type="text"] { padding: 6px 12px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 14px; }
+        .btn { padding: 10px 28px; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #1a73e8; color: #fff; }
+        .btn-primary:hover { background: #1557b0; }
+        .btn-primary:disabled { background: #93b8f0; cursor: not-allowed; }
+        .btn-success { background: #34a853; color: #fff; }
+        .btn-success:hover { background: #2d8e47; }
+        .btn-success:disabled { background: #8fd4a4; cursor: not-allowed; }
+        .btn-outline { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
+        .btn-outline:hover { background: #f6f9ff; }
+        .actions { display: flex; gap: 12px; margin-top: 20px; justify-content: center; }
+        .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 6px; vertical-align: middle; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .result-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+        .stats { display: flex; gap: 16px; }
+        .stat { text-align: center; padding: 8px 16px; background: #f6f9ff; border-radius: 8px; }
+        .stat .num { font-size: 24px; font-weight: 700; color: #1a73e8; }
+        .stat .label { font-size: 12px; color: #666; }
+        .download-btns { display: flex; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; font-size: 14px; }
+        th { background: #f6f9ff; color: #1a73e8; font-weight: 600; text-align: left; padding: 12px 10px; border-bottom: 2px solid #e8e8e8; }
+        td { padding: 10px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
+        tr:hover td { background: #fafafa; }
+        .priority { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+        .priority-P0 { background: #fff0f0; color: #d32f2f; }
+        .priority-P1 { background: #fff8e1; color: #f57f17; }
+        .priority-P2 { background: #f1f8e9; color: #558b2f; }
+        .priority-P3 { background: #e3f2fd; color: #1565c0; }
+        .type-tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #f0f0f0; color: #555; margin-right: 4px; }
+        .expand-btn { color: #1a73e8; cursor: pointer; font-size: 13px; border: none; background: none; }
+        .expand-btn:hover { text-decoration: underline; }
+        .detail-row { display: none; }
+        .detail-row.show { display: table-row; }
+        .detail-row td { background: #fafcff; padding: 16px; }
+        .detail-content { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; font-size: 13px; }
+        .detail-content dt { color: #888; font-size: 12px; margin-bottom: 4px; }
+        .detail-content dd { color: #333; white-space: pre-wrap; line-height: 1.6; }
+        .review-panel { background: #fffde7; border: 1px solid #ffe082; border-radius: 8px; padding: 20px; margin-top: 20px; white-space: pre-wrap; line-height: 1.8; font-size: 14px; }
+        .toast { position: fixed; top: 20px; right: 20px; padding: 12px 24px; border-radius: 8px; color: #fff; font-size: 14px; z-index: 1000; transform: translateX(120%); transition: transform 0.3s; }
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #34a853; }
+        .toast.error { background: #d32f2f; }
+        .input-section { margin-bottom: 16px; }
+        .input-section + .input-section { padding-top: 16px; border-top: 1px solid #f0f0f0; }
+        @media (max-width: 768px) {
+            .options { flex-direction: column; }
+            .detail-content { grid-template-columns: 1fr; }
+            .stats { flex-wrap: wrap; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>AI 测试用例生成器</h1>
+        <p>输入需求描述 / 上传需求文档 / 截图 UI 设计稿，自动生成测试用例</p>
+    </div>
+
+    <div class="container">
+        <!-- 输入区 -->
+        <div class="card">
+            <div class="card-title">需求输入</div>
+
+            <!-- 文本输入 -->
+            <div class="input-section">
+                <div class="section-label">文字描述（可选，与图片配合使用效果更佳）</div>
+                <textarea id="requirement" placeholder="请输入需求描述...&#10;&#10;例如：&#10;用户通过手机号+验证码登录系统&#10;1. 手机号为11位中国大陆手机号&#10;2. 验证码为6位数字，有效期5分钟&#10;3. 同一手机号每天最多发送10次验证码"></textarea>
+            </div>
+
+            <!-- 文件/图片上传 -->
+            <div class="input-section">
+                <div class="section-label">上传文件（支持需求文档 + UI 截图混合上传）</div>
+                <div class="upload-area" id="uploadArea">
+                    <div class="icon">&#128228;</div>
+                    <p>点击或拖拽文件到此处</p>
+                    <div class="hint">支持 .md / .txt / .xlsx 需求文档 + .png / .jpg / .gif / .webp 图片，可同时上传多个</div>
+                    <input type="file" id="fileInput" multiple accept=".md,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.bmp">
+                </div>
+                <div class="file-list" id="fileList"></div>
+            </div>
+
+            <div class="options">
+                <label>默认优先级:
+                    <select id="priority">
+                        <option value="P0">P0 - 阻塞</option>
+                        <option value="P1" selected>P1 - 严重</option>
+                        <option value="P2">P2 - 一般</option>
+                        <option value="P3">P3 - 轻微</option>
+                    </select>
+                </label>
+                <label>用例类型:
+                    <input type="text" id="caseTypes" value="功能测试,边界测试,异常测试" placeholder="逗号分隔" style="width:240px;">
+                </label>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary" id="btnGenerate" onclick="generate()">生成测试用例</button>
+            </div>
+        </div>
+
+        <!-- 加载中 -->
+        <div id="loading" class="card" style="display:none;text-align:center;padding:40px;">
+            <div class="spinner" style="width:32px;height:32px;border:3px solid #e8e8e8;border-top-color:#1a73e8;animation:spin 0.8s linear infinite;"></div>
+            <p style="margin-top:12px;color:#666;" id="loadingText">正在调用 AI 生成测试用例，请稍候...</p>
+        </div>
+
+        <!-- 结果区 -->
+        <div id="result" class="card" style="display:none;">
+            <div class="result-header">
+                <div class="stats">
+                    <div class="stat"><div class="num" id="totalCount">0</div><div class="label">用例总数</div></div>
+                    <div class="stat"><div class="num" id="p0Count">0</div><div class="label">P0</div></div>
+                    <div class="stat"><div class="num" id="p1Count">0</div><div class="label">P1</div></div>
+                    <div class="stat"><div class="num" id="p2Count">0</div><div class="label">P2</div></div>
+                    <div class="stat"><div class="num" id="p3Count">0</div><div class="label">P3</div></div>
+                </div>
+                <div class="download-btns">
+                    <button class="btn btn-outline" onclick="downloadFile('excel')">&#128196; 下载 Excel</button>
+                    <button class="btn btn-outline" onclick="downloadFile('markdown')">&#128221; 下载 Markdown</button>
+                    <button class="btn btn-success" id="btnReview" onclick="review()">&#128269; AI 评审</button>
+                </div>
+            </div>
+            <div id="inputInfo" style="margin-bottom:12px;font-size:13px;color:#888;"></div>
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:80px;">编号</th>
+                        <th style="width:100px;">模块</th>
+                        <th>标题</th>
+                        <th style="width:70px;">优先级</th>
+                        <th style="width:90px;">类型</th>
+                        <th style="width:60px;">操作</th>
+                    </tr>
+                </thead>
+                <tbody id="tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- 评审报告 -->
+        <div id="reviewPanel" class="card" style="display:none;">
+            <div class="card-title">AI 评审报告</div>
+            <div class="review-panel" id="reviewContent"></div>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        let currentFiles = {};
+        let currentRequirement = '';
+        let currentTestcases = [];
+        let uploadedFiles = [];
+
+        // 文件上传
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+        uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+        uploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            addFiles(e.dataTransfer.files);
+        });
+        fileInput.addEventListener('change', () => {
+            addFiles(fileInput.files);
+            fileInput.value = '';
+        });
+
+        function addFiles(files) {
+            for (const file of files) {
+                if (uploadedFiles.some(f => f.name === file.name && f.size === file.size)) continue;
+                uploadedFiles.push(file);
+            }
+            renderFileList();
+        }
+
+        function removeFile(index) {
+            uploadedFiles.splice(index, 1);
+            renderFileList();
+        }
+
+        function renderFileList() {
+            if (!uploadedFiles.length) {
+                fileList.innerHTML = '';
+                return;
+            }
+            fileList.innerHTML = uploadedFiles.map((file, i) => {
+                const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(file.name);
+                const ext = file.name.split('.').pop().toUpperCase();
+                let preview = '';
+                if (isImg) {
+                    const url = URL.createObjectURL(file);
+                    preview = `<img src="${url}" alt="${file.name}">`;
+                }
+                return `<div class="file-item">
+                    ${preview}
+                    <div>
+                        <div class="file-name" title="${file.name}">${file.name}</div>
+                        <span class="file-type">${isImg ? '图片' : ext}</span>
+                    </div>
+                    <button class="remove-btn" onclick="removeFile(${i})" title="移除">&times;</button>
+                </div>`;
+            }).join('');
+        }
+
+        function showToast(msg, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast ' + type + ' show';
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        async function generate() {
+            const requirement = document.getElementById('requirement').value.trim();
+
+            if (!requirement && !uploadedFiles.length) {
+                showToast('请输入需求描述或上传文件/图片', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('btnGenerate');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>生成中...';
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loadingText').textContent = uploadedFiles.some(f => /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name))
+                ? '正在识别图片并生成测试用例，请稍候...'
+                : '正在调用 AI 生成测试用例，请稍候...';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('reviewPanel').style.display = 'none';
+
+            try {
+                const formData = new FormData();
+                formData.append('requirement', requirement);
+                formData.append('priority', document.getElementById('priority').value);
+                formData.append('case_types', document.getElementById('caseTypes').value);
+                for (const file of uploadedFiles) {
+                    formData.append('files', file);
+                }
+
+                const response = await fetch('/api/generate', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '生成失败');
+
+                currentTestcases = data.testcases;
+                currentFiles = data.files;
+                currentRequirement = requirement;
+                renderResult(data);
+
+                let msg = `生成成功！共 ${data.count} 条用例`;
+                if (data.input && data.input.image_count > 0) {
+                    msg += `（含 ${data.input.image_count} 张图片）`;
+                }
+                showToast(msg);
+
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '生成测试用例';
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        function renderResult(data) {
+            const testcases = data.testcases;
+            const counts = { P0: 0, P1: 0, P2: 0, P3: 0 };
+            testcases.forEach(tc => { counts[tc.priority] = (counts[tc.priority] || 0) + 1; });
+
+            document.getElementById('totalCount').textContent = testcases.length;
+            document.getElementById('p0Count').textContent = counts.P0;
+            document.getElementById('p1Count').textContent = counts.P1;
+            document.getElementById('p2Count').textContent = counts.P2;
+            document.getElementById('p3Count').textContent = counts.P3;
+
+            // 显示输入信息
+            const info = data.input;
+            let infoText = '';
+            if (info) {
+                const parts = [];
+                if (info.has_text) parts.push('文字需求');
+                if (info.image_count > 0) parts.push(`${info.image_count} 张图片 (${info.image_names.join(', ')})`);
+                if (parts.length) infoText = '输入来源: ' + parts.join(' + ');
+            }
+            document.getElementById('inputInfo').textContent = infoText;
+
+            const tbody = document.getElementById('tbody');
+            tbody.innerHTML = testcases.map((tc, i) => `
+                <tr>
+                    <td><strong>${tc.id}</strong></td>
+                    <td>${tc.module}</td>
+                    <td>${tc.title}</td>
+                    <td><span class="priority priority-${tc.priority}">${tc.priority}</span></td>
+                    <td><span class="type-tag">${tc.type}</span></td>
+                    <td><button class="expand-btn" onclick="toggleDetail(${i})">详情</button></td>
+                </tr>
+                <tr class="detail-row" id="detail-${i}">
+                    <td colspan="6">
+                        <div class="detail-content">
+                            <div><dt>前置条件</dt><dd>${tc.precondition || '无'}</dd></div>
+                            <div><dt>测试步骤</dt><dd>${tc.steps}</dd></div>
+                            <div><dt>预期结果</dt><dd>${tc.expected}</dd></div>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+
+            document.getElementById('result').style.display = 'block';
+        }
+
+        function toggleDetail(i) {
+            const row = document.getElementById('detail-' + i);
+            row.classList.toggle('show');
+        }
+
+        function downloadFile(type) {
+            const path = type === 'excel' ? currentFiles.excel : currentFiles.markdown;
+            if (!path) return;
+            const filename = path.split(/[/\\]/).pop();
+            window.open('/api/download/' + filename, '_blank');
+        }
+
+        async function review() {
+            const btn = document.getElementById('btnReview');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>评审中...';
+
+            try {
+                const response = await fetch('/api/review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        requirement: currentRequirement,
+                        testcases: currentTestcases,
+                    }),
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || '评审失败');
+
+                document.getElementById('reviewContent').textContent = data.review;
+                document.getElementById('reviewPanel').style.display = 'block';
+                document.getElementById('reviewPanel').scrollIntoView({ behavior: 'smooth' });
+                showToast('评审完成');
+
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '&#128269; AI 评审';
+            }
+        }
+    </script>
+</body>
+</html>
