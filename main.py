@@ -36,6 +36,7 @@ def build_client(cfg: dict) -> LLMClient:
         temperature=cfg.get("temperature", 0.3),
         max_tokens=cfg.get("max_tokens", 4096),
         max_retries=cfg.get("max_retries", 3),
+        enable_thinking=cfg.get("enable_thinking", False),
     )
 
 

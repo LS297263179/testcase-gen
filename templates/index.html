@@ -74,6 +74,24 @@
         .toast.show { transform: translateX(0); }
         .toast.success { background: #34a853; }
         .toast.error { background: #d32f2f; }
+        .diff-added { background: #e6ffed; border-left: 3px solid #34a853; }
+        .diff-modified { background: #fff8e1; border-left: 3px solid #f57f17; }
+        .diff-removed { background: #ffeef0; border-left: 3px solid #d32f2f; }
+        .diff-item { padding: 10px 14px; margin-bottom: 8px; border-radius: 6px; font-size: 13px; }
+        .diff-item .diff-label { font-weight: 600; margin-right: 8px; font-size: 12px; }
+        .diff-added .diff-label { color: #34a853; }
+        .diff-modified .diff-label { color: #f57f17; }
+        .diff-removed .diff-label { color: #d32f2f; }
+        .diff-detail { color: #555; margin-top: 4px; font-size: 12px; }
+        .diff-stat { text-align:center;padding:8px 16px;border-radius:8px;min-width:80px; }
+        .diff-stat .num { font-size:20px;font-weight:700; }
+        .diff-stat .label { font-size:12px;color:#666; }
+        .diff-stat.add { background:#e6ffed; }
+        .diff-stat.add .num { color:#34a853; }
+        .diff-stat.mod { background:#fff8e1; }
+        .diff-stat.mod .num { color:#f57f17; }
+        .diff-stat.del { background:#ffeef0; }
+        .diff-stat.del .num { color:#d32f2f; }
         .input-section { margin-bottom: 16px; }
         .input-section + .input-section { padding-top: 16px; border-top: 1px solid #f0f0f0; }
         @media (max-width: 768px) {
@@ -172,6 +190,16 @@
         <div id="reviewPanel" class="card" style="display:none;">
             <div class="card-title">AI 评审报告</div>
             <div class="review-panel" id="reviewContent"></div>
+            <div style="text-align:center;margin-top:16px;">
+                <button class="btn btn-success" id="btnOptimize" onclick="optimize()">&#128640; 根据评审优化用例</button>
+            </div>
+        </div>
+
+        <!-- 优化对比 -->
+        <div id="diffPanel" class="card" style="display:none;">
+            <div class="card-title">优化变更对比</div>
+            <div class="diff-stats" id="diffStats" style="display:flex;gap:16px;margin-bottom:16px;"></div>
+            <div id="diffContent" style="max-height:500px;overflow-y:auto;"></div>
         </div>
     </div>
 
@@ -181,6 +209,8 @@
         let currentFiles = {};
         let currentRequirement = '';
         let currentTestcases = [];
+        let currentReview = '';
+        let originalTestcases = [];
         let uploadedFiles = [];
 
         // 文件上传
@@ -199,6 +229,25 @@
         fileInput.addEventListener('change', () => {
             addFiles(fileInput.files);
             fileInput.value = '';
+        });
+
+        // 粘贴图片到文本框自动添加到上传区
+        document.getElementById('requirement').addEventListener('paste', e => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        const ext = file.type.split('/')[1] || 'png';
+                        const namedFile = new File([file], `粘贴图片_${Date.now()}.${ext}`, { type: file.type });
+                        uploadedFiles.push(namedFile);
+                        renderFileList();
+                        showToast('已从剪贴板添加图片');
+                    }
+                }
+            }
         });
 
         function addFiles(files) {
@@ -245,6 +294,42 @@
             setTimeout(() => toast.classList.remove('show'), 3000);
         }
 
+        // SSE 通用请求：onProgress 收到进度消息，onDone 收到最终结果
+        async function sseFetch(url, body, { onProgress, onDone }) {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    if (!line.startsWith('data: ')) continue;
+                    try {
+                        const event = JSON.parse(line.slice(6));
+                        if (event.type === 'progress' && onProgress) {
+                            onProgress(event.message);
+                        } else if (event.type === 'done' && onDone) {
+                            onDone(event.data);
+                        } else if (event.type === 'error') {
+                            throw new Error(event.message);
+                        }
+                    } catch (e) {
+                        if (e.message && !e.message.includes('JSON')) throw e;
+                    }
+                }
+            }
+        }
+
         async function generate() {
             const requirement = document.getElementById('requirement').value.trim();
 
@@ -257,11 +342,10 @@
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner"></span>生成中...';
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('loadingText').textContent = uploadedFiles.some(f => /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name))
-                ? '正在识别图片并生成测试用例，请稍候...'
-                : '正在调用 AI 生成测试用例，请稍候...';
+            document.getElementById('loadingText').textContent = 'AI 正在分析需求...';
             document.getElementById('result').style.display = 'none';
             document.getElementById('reviewPanel').style.display = 'none';
+            document.getElementById('diffPanel').style.display = 'none';
 
             try {
                 const formData = new FormData();
@@ -272,20 +356,45 @@
                     formData.append('files', file);
                 }
 
+                // SSE 流式请求
                 const response = await fetch('/api/generate', { method: 'POST', body: formData });
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || '生成失败');
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
 
-                currentTestcases = data.testcases;
-                currentFiles = data.files;
-                currentRequirement = requirement;
-                renderResult(data);
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                let msg = `生成成功！共 ${data.count} 条用例`;
-                if (data.input && data.input.image_count > 0) {
-                    msg += `（含 ${data.input.image_count} 张图片）`;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // 保留不完整的行
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const event = JSON.parse(line.slice(6));
+                            if (event.type === 'progress') {
+                                document.getElementById('loadingText').textContent = event.message;
+                            } else if (event.type === 'done') {
+                                const data = event.data;
+                                currentTestcases = data.testcases;
+                                currentFiles = data.files;
+                                currentRequirement = requirement;
+                                renderResult(data);
+                                let msg = `生成成功！共 ${data.count} 条用例`;
+                                if (data.input && data.input.image_count > 0) {
+                                    msg += `（含 ${data.input.image_count} 张图片）`;
+                                }
+                                showToast(msg);
+                            } else if (event.type === 'error') {
+                                throw new Error(event.message);
+                            }
+                        } catch (e) {
+                            if (e.message && !e.message.includes('JSON')) throw e;
+                        }
+                    }
                 }
-                showToast(msg);
 
             } catch (err) {
                 showToast(err.message, 'error');
@@ -294,6 +403,11 @@
                 btn.innerHTML = '生成测试用例';
                 document.getElementById('loading').style.display = 'none';
             }
+        }
+
+        function esc(str) {
+            if (!str) return '';
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/`/g, '&#96;').replace(/\$/g, '&#36;');
         }
 
         function renderResult(data) {
@@ -321,19 +435,19 @@
             const tbody = document.getElementById('tbody');
             tbody.innerHTML = testcases.map((tc, i) => `
                 <tr>
-                    <td><strong>${tc.id}</strong></td>
-                    <td>${tc.module}</td>
-                    <td>${tc.title}</td>
-                    <td><span class="priority priority-${tc.priority}">${tc.priority}</span></td>
-                    <td><span class="type-tag">${tc.type}</span></td>
+                    <td><strong>${esc(tc.id)}</strong></td>
+                    <td>${esc(tc.module)}</td>
+                    <td>${esc(tc.title)}</td>
+                    <td><span class="priority priority-${esc(tc.priority)}">${esc(tc.priority)}</span></td>
+                    <td><span class="type-tag">${esc(tc.type)}</span></td>
                     <td><button class="expand-btn" onclick="toggleDetail(${i})">详情</button></td>
                 </tr>
                 <tr class="detail-row" id="detail-${i}">
                     <td colspan="6">
                         <div class="detail-content">
-                            <div><dt>前置条件</dt><dd>${tc.precondition || '无'}</dd></div>
-                            <div><dt>测试步骤</dt><dd>${tc.steps}</dd></div>
-                            <div><dt>预期结果</dt><dd>${tc.expected}</dd></div>
+                            <div><dt>前置条件</dt><dd>${esc(tc.precondition) || '无'}</dd></div>
+                            <div><dt>测试步骤</dt><dd>${esc(tc.steps).replace(/\\n/g, '<br>')}</dd></div>
+                            <div><dt>预期结果</dt><dd>${esc(tc.expected)}</dd></div>
                         </div>
                     </td>
                 </tr>
@@ -360,29 +474,123 @@
             btn.innerHTML = '<span class="spinner"></span>评审中...';
 
             try {
-                const response = await fetch('/api/review', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        requirement: currentRequirement,
-                        testcases: currentTestcases,
-                    }),
+                await sseFetch('/api/review', {
+                    requirement: currentRequirement,
+                    testcases: currentTestcases,
+                }, {
+                    onProgress: msg => { btn.innerHTML = `<span class="spinner"></span>${msg}`; },
+                    onDone: data => {
+                        currentReview = data.review;
+                        document.getElementById('reviewContent').textContent = data.review;
+                        document.getElementById('reviewPanel').style.display = 'block';
+                        document.getElementById('reviewPanel').scrollIntoView({ behavior: 'smooth' });
+                        showToast('评审完成');
+                    },
                 });
-
-                const data = await response.json();
-                if (!response.ok) throw new Error(data.error || '评审失败');
-
-                document.getElementById('reviewContent').textContent = data.review;
-                document.getElementById('reviewPanel').style.display = 'block';
-                document.getElementById('reviewPanel').scrollIntoView({ behavior: 'smooth' });
-                showToast('评审完成');
-
             } catch (err) {
                 showToast(err.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = '&#128269; AI 评审';
             }
+        }
+
+        async function optimize() {
+            const btn = document.getElementById('btnOptimize');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>优化中...';
+
+            // 保存优化前的用例快照
+            originalTestcases = JSON.parse(JSON.stringify(currentTestcases));
+
+            try {
+                await sseFetch('/api/optimize', {
+                    requirement: currentRequirement,
+                    testcases: currentTestcases,
+                    review: currentReview,
+                }, {
+                    onProgress: msg => { btn.innerHTML = `<span class="spinner"></span>${msg}`; },
+                    onDone: data => {
+                        currentTestcases = data.testcases;
+                        currentFiles = data.files;
+                        renderResult(data);
+                        showDiff(originalTestcases, data.testcases);
+                        showToast(`优化完成！共 ${data.count} 条用例`);
+                    },
+                });
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '&#128640; 根据评审优化用例';
+            }
+        }
+
+        function showDiff(oldCases, newCases) {
+            const oldMap = {};
+            oldCases.forEach(tc => { oldMap[tc.id] = tc; });
+            const newMap = {};
+            newCases.forEach(tc => { newMap[tc.id] = tc; });
+
+            const added = [], modified = [], removed = [];
+
+            // 新增和修改
+            newCases.forEach(tc => {
+                if (!oldMap[tc.id]) {
+                    added.push(tc);
+                } else {
+                    const old = oldMap[tc.id];
+                    const changes = [];
+                    if (old.title !== tc.title) changes.push(`标题: "${old.title}" → "${tc.title}"`);
+                    if (old.steps !== tc.steps) changes.push('测试步骤已更新');
+                    if (old.expected !== tc.expected) changes.push(`预期: "${old.expected}" → "${tc.expected}"`);
+                    if (old.priority !== tc.priority) changes.push(`优先级: ${old.priority} → ${tc.priority}`);
+                    if (old.type !== tc.type) changes.push(`类型: ${old.type} → ${tc.type}`);
+                    if (changes.length) modified.push({ tc, changes });
+                }
+            });
+
+            // 删除
+            oldCases.forEach(tc => {
+                if (!newMap[tc.id]) removed.push(tc);
+            });
+
+            // 无变更
+            if (!added.length && !modified.length && !removed.length) {
+                document.getElementById('diffPanel').style.display = 'none';
+                return;
+            }
+
+            // 统计
+            document.getElementById('diffStats').innerHTML = `
+                <div class="diff-stat add"><div class="num">+${added.length}</div><div class="label">新增</div></div>
+                <div class="diff-stat mod"><div class="num">${modified.length}</div><div class="label">修改</div></div>
+                <div class="diff-stat del"><div class="num">-${removed.length}</div><div class="label">删除</div></div>
+            `;
+
+            // 详情
+            let html = '';
+            added.forEach(tc => {
+                html += `<div class="diff-item diff-added">
+                    <span class="diff-label">新增</span> ${esc(tc.id)} - ${esc(tc.title)}
+                    <div class="diff-detail">${esc(tc.steps).substring(0, 100)}${tc.steps.length > 100 ? '...' : ''}</div>
+                </div>`;
+            });
+            modified.forEach(({ tc, changes }) => {
+                html += `<div class="diff-item diff-modified">
+                    <span class="diff-label">修改</span> ${esc(tc.id)} - ${esc(tc.title)}
+                    <div class="diff-detail">${esc(changes.join(' | '))}</div>
+                </div>`;
+            });
+            removed.forEach(tc => {
+                html += `<div class="diff-item diff-removed">
+                    <span class="diff-label">删除</span> ${esc(tc.id)} - ${esc(tc.title)}
+                </div>`;
+            });
+
+            document.getElementById('diffContent').innerHTML = html;
+            document.getElementById('diffPanel').style.display = 'block';
+            document.getElementById('diffPanel').scrollIntoView({ behavior: 'smooth' });
         }
     </script>
 </body>

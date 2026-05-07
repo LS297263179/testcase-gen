@@ -1,19 +1,20 @@
 """Flask Web 应用"""
 
+import json
 import os
 import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, send_file
+from flask import Flask, Response, jsonify, render_template, request, send_file, stream_with_context
 
 from generator import generate_testcases
 from llm_client import LLMClient, load_config
 from output import to_excel, to_markdown
 from reader import (get_image_media_type, image_to_base64, is_image,
                     read_excel, read_text)
-from reviewer import review_testcases
+from reviewer import optimize_testcases, review_testcases
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片）
@@ -30,6 +31,7 @@ def build_client(cfg: dict) -> LLMClient:
         temperature=cfg.get("temperature", 0.3),
         max_tokens=cfg.get("max_tokens", 4096),
         max_retries=cfg.get("max_retries", 3),
+        enable_thinking=cfg.get("enable_thinking", False),
     )
 
 
@@ -46,6 +48,16 @@ def get_review_client() -> LLMClient:
     return build_client(config["generate"])
 
 
+def get_image_client() -> LLMClient | None:
+    config = load_config("config.yaml")
+    gen_cfg = config["generate"]
+    image_model = gen_cfg.get("image_model")
+    if not image_model:
+        return None
+    cfg = {**gen_cfg, "model": image_model}
+    return build_client(cfg)
+
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -53,43 +65,44 @@ def index():
 
 @app.route("/api/generate", methods=["POST"])
 def api_generate():
-    """生成测试用例（支持文本 + 图片混合输入）"""
+    """生成测试用例（SSE 流式返回进度 + 结果）"""
+    # 先解析请求参数
+    requirement = ""
+    priority = None
+    case_types = None
+    images = []
+
+    is_multipart = request.content_type and "multipart/form-data" in request.content_type
+
     try:
-        requirement = ""
-        priority = None
-        case_types = None
-        images = []
-
-        is_multipart = request.content_type and "multipart/form-data" in request.content_type
-
         if is_multipart:
-            # 文本需求
             requirement = request.form.get("requirement", "")
             priority = request.form.get("priority")
             ct = request.form.get("case_types")
             if ct:
                 case_types = [x.strip() for x in ct.split(",") if x.strip()]
 
-            # 处理上传的文件
             files = request.files.getlist("files")
             for f in files:
                 if not f.filename:
                     continue
                 suffix = Path(f.filename).suffix.lower()
                 with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    f.save(tmp.name)
-                    if is_image(tmp.name):
-                        # 图片：转 base64
+                    tmp_path = tmp.name
+                f.save(tmp_path)
+                try:
+                    if is_image(tmp_path):
                         images.append({
-                            "data": image_to_base64(tmp.name),
-                            "media_type": get_image_media_type(tmp.name),
+                            "data": image_to_base64(tmp_path),
+                            "media_type": get_image_media_type(tmp_path),
                             "filename": f.filename,
                         })
                     elif suffix in (".xlsx", ".xls"):
-                        requirement += "\n" + read_excel(tmp.name)
+                        requirement += "\n" + read_excel(tmp_path)
                     else:
-                        requirement += "\n" + read_text(tmp.name)
-                    os.unlink(tmp.name)
+                        requirement += "\n" + read_text(tmp_path)
+                finally:
+                    os.unlink(tmp_path)
         else:
             data = request.get_json()
             requirement = data.get("requirement", "")
@@ -98,47 +111,86 @@ def api_generate():
 
         if not requirement.strip() and not images:
             return jsonify({"error": "需求内容不能为空（文本或图片至少提供一项）"}), 400
-
-        # 获取参数
-        config = load_config("config.yaml")
-        default_priority = priority or config["testcase"]["default_priority"]
-        case_types = case_types or config["testcase"]["case_types"]
-
-        # 生成用例
-        client = get_generate_client()
-        testcases = generate_testcases(
-            client, requirement, default_priority, case_types,
-            images=images if images else None,
-        )
-
-        # 导出文件
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        excel_path = to_excel(testcases, OUTPUT_DIR, f"testcases_{timestamp}.xlsx")
-        md_path = to_markdown(testcases, OUTPUT_DIR, f"testcases_{timestamp}.md")
-
-        return jsonify({
-            "success": True,
-            "count": len(testcases),
-            "testcases": testcases,
-            "files": {
-                "excel": excel_path,
-                "markdown": md_path,
-            },
-            "input": {
-                "has_text": bool(requirement.strip()),
-                "image_count": len(images),
-                "image_names": [img["filename"] for img in images],
-            }
-        })
-
     except Exception as e:
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            def on_progress(msg: str):
+                print(f"[进度] {msg}")
+
+            config = load_config("config.yaml")
+            default_priority = priority or config["testcase"]["default_priority"]
+            _case_types = case_types or config["testcase"]["case_types"]
+
+            # Step 1: 分析模块
+            from generator import _analyze_modules, _generate_for_module, _deduplicate, _generate_all_in_one
+            client = get_generate_client()
+            image_client = get_image_client() if images else None
+            active_client = image_client if (images and image_client) else client
+
+            yield _sse({"type": "progress", "message": "正在分析需求，拆解功能模块..."})
+            modules = _analyze_modules(active_client, requirement, _case_types, images if images else None)
+
+            if not modules:
+                yield _sse({"type": "progress", "message": "模块分析失败，使用一次性生成模式..."})
+                testcases = _generate_all_in_one(active_client, requirement, default_priority, _case_types, images if images else None)
+            else:
+                # Step 2: 按模块生成
+                all_testcases = []
+                for i, mod in enumerate(modules):
+                    yield _sse({"type": "progress", "message": f"正在生成「{mod['name']}」模块的测试用例 ({i + 1}/{len(modules)})..."})
+                    cases = _generate_for_module(active_client, requirement, mod, default_priority)
+                    all_testcases.extend(cases)
+
+                if not all_testcases:
+                    raise ValueError("分段生成未产出任何用例")
+
+                # Step 3: 去重编号
+                raw_count = len(all_testcases)
+                testcases = _deduplicate(all_testcases)
+                dedup_count = raw_count - len(testcases)
+                for i, tc in enumerate(testcases):
+                    tc["id"] = f"TC_{i + 1:03d}"
+                if dedup_count > 0:
+                    yield _sse({"type": "progress", "message": f"去重完成，移除 {dedup_count} 条重复用例"})
+
+            # 导出文件
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            excel_path = to_excel(testcases, OUTPUT_DIR, f"testcases_{timestamp}.xlsx")
+            md_path = to_markdown(testcases, OUTPUT_DIR, f"testcases_{timestamp}.md")
+
+            result = {
+                "success": True,
+                "count": len(testcases),
+                "testcases": testcases,
+                "files": {"excel": excel_path, "markdown": md_path},
+                "input": {
+                    "has_text": bool(requirement.strip()),
+                    "image_count": len(images),
+                    "image_names": [img.get("filename", "") for img in images],
+                },
+            }
+            yield _sse({"type": "done", "data": result})
+
+        except Exception as e:
+            traceback.print_exc()
+            yield _sse({"type": "error", "message": str(e)})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+def _sse(data: dict) -> str:
+    return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
 @app.route("/api/review", methods=["POST"])
 def api_review():
-    """评审测试用例"""
+    """评审测试用例（SSE 流式返回进度）"""
     try:
         data = request.get_json()
         requirement = data.get("requirement", "")
@@ -146,29 +198,90 @@ def api_review():
 
         if not testcases:
             return jsonify({"error": "没有可评审的用例"}), 400
-
-        client = get_review_client()
-        result = review_testcases(client, requirement, testcases)
-
-        report_path = Path(OUTPUT_DIR) / "review_report.md"
-        report_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(report_path, "w", encoding="utf-8") as f:
-            f.write(f"# 测试用例评审报告\n\n{result}")
-
-        return jsonify({
-            "success": True,
-            "review": result,
-            "report_path": str(report_path),
-        })
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            client = get_review_client()
+
+            yield _sse({"type": "progress", "message": f"正在分析 {len(testcases)} 条用例..."})
+            result = review_testcases(client, requirement, testcases)
+
+            yield _sse({"type": "progress", "message": "正在生成评审报告..."})
+            report_path = Path(OUTPUT_DIR) / "review_report.md"
+            report_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(f"# 测试用例评审报告\n\n{result}")
+
+            yield _sse({"type": "done", "data": {
+                "success": True,
+                "review": result,
+                "report_path": str(report_path),
+            }})
+        except Exception as e:
+            traceback.print_exc()
+            yield _sse({"type": "error", "message": str(e)})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/api/optimize", methods=["POST"])
+def api_optimize():
+    """根据评审报告优化测试用例（SSE 流式返回进度）"""
+    try:
+        data = request.get_json()
+        requirement = data.get("requirement", "")
+        testcases = data.get("testcases", [])
+        review_report = data.get("review", "")
+
+        if not testcases:
+            return jsonify({"error": "没有可优化的用例"}), 400
+        if not review_report:
+            return jsonify({"error": "请先进行 AI 评审"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            client = get_generate_client()
+
+            yield _sse({"type": "progress", "message": "正在分析评审报告中的问题和建议..."})
+            optimized = optimize_testcases(client, requirement, testcases, review_report)
+
+            yield _sse({"type": "progress", "message": f"正在导出优化后的 {len(optimized)} 条用例..."})
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            excel_path = to_excel(optimized, OUTPUT_DIR, f"testcases_optimized_{timestamp}.xlsx")
+            md_path = to_markdown(optimized, OUTPUT_DIR, f"testcases_optimized_{timestamp}.md")
+
+            yield _sse({"type": "done", "data": {
+                "success": True,
+                "count": len(optimized),
+                "testcases": optimized,
+                "files": {"excel": excel_path, "markdown": md_path},
+            }})
+        except Exception as e:
+            traceback.print_exc()
+            yield _sse({"type": "error", "message": str(e)})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.route("/api/download/<path:filename>")
 def api_download(filename):
     """下载文件"""
-    filepath = os.path.join(OUTPUT_DIR, filename)
+    filepath = os.path.realpath(os.path.join(OUTPUT_DIR, filename))
+    output_real = os.path.realpath(OUTPUT_DIR)
+    if not filepath.startswith(output_real + os.sep) and filepath != output_real:
+        return jsonify({"error": "非法路径"}), 403
     if os.path.exists(filepath):
         return send_file(filepath, as_attachment=True)
     return jsonify({"error": "文件不存在"}), 404

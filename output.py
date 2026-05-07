@@ -1,6 +1,7 @@
 """测试用例输出模块 - Excel 和 Markdown"""
 
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -14,6 +15,15 @@ PRIORITY_COLORS = {
     "P2": "FFCC00",  # 黄
     "P3": "00CC00",  # 绿
 }
+
+
+def _split_steps(steps: str) -> list[str]:
+    """智能分割测试步骤，兼容换行和分号两种格式"""
+    if "\n" in steps:
+        return steps.split("\n")
+    # 兼容分号分隔的格式：1. xxx; 2. xxx
+    parts = re.split(r';\s*(?=\d+\.)', steps)
+    return parts if len(parts) > 1 else [steps]
 
 
 def _ensure_dir(path: str):
@@ -120,7 +130,7 @@ def to_markdown(testcases: list[dict], output_dir: str, filename: str | None = N
             if tc.get("precondition"):
                 lines.append(f"- **前置条件**: {tc.get('precondition', '')}")
             lines.append(f"- **测试步骤**:")
-            for step in tc.get("steps", "").split("\n"):
+            for step in _split_steps(tc.get("steps", "")):
                 step = step.strip()
                 if step:
                     lines.append(f"  {step}")

@@ -15,12 +15,14 @@ class LLMClient:
     def __init__(self, base_url: str, api_key: str, model: str,
                  api_type: str = "anthropic",
                  temperature: float = 0.3, max_tokens: int = 4096,
-                 max_retries: int = 3):
+                 max_retries: int = 3,
+                 enable_thinking: bool = False):
         self.api_type = api_type
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
         self.max_retries = max_retries
+        self.enable_thinking = enable_thinking
 
         if api_type == "anthropic":
             import anthropic
@@ -30,16 +32,24 @@ class LLMClient:
             self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def chat(self, system_prompt: str, user_prompt: str,
-             images: list[dict] | None = None) -> str:
+             images: list[dict] | None = None,
+             max_tokens: int | None = None) -> str:
         """调用 LLM，带指数退避重试
         images: [{"data": "base64...", "media_type": "image/png"}]
+        max_tokens: 可选，覆盖默认的 max_tokens
         """
+        self._current_max_tokens = max_tokens or self.max_tokens
         last_error = None
         for attempt in range(self.max_retries):
             try:
                 return self._call(system_prompt, user_prompt, images)
             except Exception as e:
                 last_error = e
+                # 图片不支持时，去掉图片重试
+                if images and "image" in str(e).lower():
+                    print("[WARN] 模型不支持图片输入，已自动忽略图片，仅使用文本生成")
+                    images = None
+                    continue
                 if attempt < self.max_retries - 1:
                     wait = 2 ** attempt
                     time.sleep(wait)
@@ -68,13 +78,21 @@ class LLMClient:
                 })
         content.append({"type": "text", "text": user_prompt})
 
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            system=system_prompt,
-            messages=[{"role": "user", "content": content}],
-        )
+        kwargs = {
+            "model": self.model,
+            "max_tokens": self._current_max_tokens,
+            "temperature": self.temperature,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": content}],
+        }
+        if self.enable_thinking:
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
+
+        response = self.client.messages.create(**kwargs)
+        # 思考模式下，跳过 thinking block，取 text block
+        for block in response.content:
+            if block.type == "text":
+                return block.text
         return response.content[0].text
 
     def _call_openai(self, system_prompt: str, user_prompt: str,
@@ -90,13 +108,19 @@ class LLMClient:
                 })
         content.append({"type": "text", "text": user_prompt})
 
-        response = self.client.chat.completions.create(
-            model=self.model,
-            temperature=self.temperature,
-            max_tokens=self.max_tokens,
-            messages=[
+        kwargs = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "max_tokens": self._current_max_tokens,
+            "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": content},
             ],
-        )
-        return response.choices[0].message.content
+        }
+        if self.enable_thinking:
+            kwargs["extra_body"] = {"enable_thinking": True}
+
+        response = self.client.chat.completions.create(**kwargs)
+        msg = response.choices[0].message
+        # 思考模式下，thinking 内容可能在 reasoning_content 字段
+        return msg.content
