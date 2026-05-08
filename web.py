@@ -122,9 +122,11 @@ def api_generate():
             config = load_config("config.yaml")
             default_priority = priority or config["testcase"]["default_priority"]
             _case_types = case_types or config["testcase"]["case_types"]
+            max_testcases = config["testcase"].get("max_testcases", 100)
 
             # Step 1: 分析模块
-            from generator import _analyze_modules, _generate_for_module, _deduplicate, _generate_all_in_one
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+            from generator import _analyze_modules, _generate_for_module, _deduplicate, _generate_all_in_one, _limit_testcases
             client = get_generate_client()
             image_client = get_image_client() if images else None
             active_client = image_client if (images and image_client) else client
@@ -134,14 +136,30 @@ def api_generate():
 
             if not modules:
                 yield _sse({"type": "progress", "message": "模块分析失败，使用一次性生成模式..."})
-                testcases = _generate_all_in_one(active_client, requirement, default_priority, _case_types, images if images else None)
+                testcases = _generate_all_in_one(active_client, requirement, default_priority, _case_types, images if images else None, max_testcases)
             else:
-                # Step 2: 按模块生成
+                # Step 2: 按模块并行生成
+                total_modules = len(modules)
+                max_workers = min(total_modules, 5)
+                yield _sse({"type": "progress", "message": f"正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）..."})
+
                 all_testcases = []
-                for i, mod in enumerate(modules):
-                    yield _sse({"type": "progress", "message": f"正在生成「{mod['name']}」模块的测试用例 ({i + 1}/{len(modules)})..."})
-                    cases = _generate_for_module(active_client, requirement, mod, default_priority)
-                    all_testcases.extend(cases)
+                _images = images if images else None
+                with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                    future_to_module = {
+                        executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, _images): mod
+                        for mod in modules
+                    }
+                    completed = 0
+                    for future in as_completed(future_to_module):
+                        mod = future_to_module[future]
+                        completed += 1
+                        try:
+                            cases = future.result()
+                            all_testcases.extend(cases)
+                            yield _sse({"type": "progress", "message": f"「{mod['name']}」模块完成，生成 {len(cases)} 条用例 ({completed}/{total_modules})"})
+                        except Exception as e:
+                            yield _sse({"type": "progress", "message": f"「{mod['name']}」模块生成失败: {e} ({completed}/{total_modules})"})
 
                 if not all_testcases:
                     raise ValueError("分段生成未产出任何用例")
@@ -150,10 +168,15 @@ def api_generate():
                 raw_count = len(all_testcases)
                 testcases = _deduplicate(all_testcases)
                 dedup_count = raw_count - len(testcases)
-                for i, tc in enumerate(testcases):
-                    tc["id"] = f"TC_{i + 1:03d}"
                 if dedup_count > 0:
                     yield _sse({"type": "progress", "message": f"去重完成，移除 {dedup_count} 条重复用例"})
+
+                if len(testcases) > max_testcases:
+                    yield _sse({"type": "progress", "message": f"用例数 ({len(testcases)}) 超过上限 {max_testcases}，按优先级保留"})
+                    testcases = _limit_testcases(testcases, max_testcases)
+
+                for i, tc in enumerate(testcases):
+                    tc["id"] = f"TC_{i + 1:03d}"
 
             # 导出文件
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

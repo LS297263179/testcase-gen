@@ -103,7 +103,7 @@
 </head>
 <body>
     <div class="header">
-        <h1>AI 测试用例生成器</h1>
+        <h1>我来帮你写用例</h1>
         <p>输入需求描述 / 上传需求文档 / 截图 UI 设计稿，自动生成测试用例</p>
     </div>
 
@@ -527,32 +527,76 @@
         }
 
         function showDiff(oldCases, newCases) {
-            const oldMap = {};
-            oldCases.forEach(tc => { oldMap[tc.id] = tc; });
-            const newMap = {};
-            newCases.forEach(tc => { newMap[tc.id] = tc; });
+            // 基于内容相似度匹配，而非 ID（优化后 ID 会重新编号）
+            const SIMILAR_THRESHOLD = 0.4;
+
+            function similarity(a, b) {
+                if (!a || !b) return 0;
+                const normalize = s => s.replace(/\s+/g, '').toLowerCase();
+                const na = normalize(a), nb = normalize(b);
+                if (na === nb) return 1;
+                // 用较短字符串的字符在较长字符串中的出现比例估算相似度
+                const [shorter, longer] = na.length <= nb.length ? [na, nb] : [nb, na];
+                let matches = 0;
+                for (const ch of shorter) {
+                    if (longer.includes(ch)) matches++;
+                }
+                return shorter.length ? matches / shorter.length : 0;
+            }
+
+            function tcSimilarity(a, b) {
+                const titleSim = similarity(a.title, b.title);
+                const stepsSim = similarity(a.steps, b.steps);
+                const expectedSim = similarity(a.expected, b.expected);
+                return titleSim * 0.4 + stepsSim * 0.3 + expectedSim * 0.3;
+            }
 
             const added = [], modified = [], removed = [];
+            const matchedOld = new Set();
+            const matchedNew = new Set();
 
-            // 新增和修改
-            newCases.forEach(tc => {
-                if (!oldMap[tc.id]) {
-                    added.push(tc);
-                } else {
-                    const old = oldMap[tc.id];
+            // 第一轮：找最佳匹配对
+            const pairs = [];
+            newCases.forEach((newTc, ni) => {
+                oldCases.forEach((oldTc, oi) => {
+                    const sim = tcSimilarity(newTc, oldTc);
+                    if (sim >= SIMILAR_THRESHOLD) {
+                        pairs.push({ ni, oi, sim, newTc, oldTc });
+                    }
+                });
+            });
+            // 按相似度降序排列，贪心匹配
+            pairs.sort((a, b) => b.sim - a.sim);
+            pairs.forEach(pair => {
+                if (matchedNew.has(pair.ni) || matchedOld.has(pair.oi)) return;
+                matchedNew.add(pair.ni);
+                matchedOld.add(pair.oi);
+
+                if (pair.sim < 0.95) {
+                    // 相似但有差异 → 修改
                     const changes = [];
-                    if (old.title !== tc.title) changes.push(`标题: "${old.title}" → "${tc.title}"`);
-                    if (old.steps !== tc.steps) changes.push('测试步骤已更新');
-                    if (old.expected !== tc.expected) changes.push(`预期: "${old.expected}" → "${tc.expected}"`);
-                    if (old.priority !== tc.priority) changes.push(`优先级: ${old.priority} → ${tc.priority}`);
-                    if (old.type !== tc.type) changes.push(`类型: ${old.type} → ${tc.type}`);
-                    if (changes.length) modified.push({ tc, changes });
+                    if (pair.oldTc.title !== pair.newTc.title)
+                        changes.push(`标题: "${pair.oldTc.title}" → "${pair.newTc.title}"`);
+                    if (pair.oldTc.steps !== pair.newTc.steps)
+                        changes.push('测试步骤已更新');
+                    if (pair.oldTc.expected !== pair.newTc.expected)
+                        changes.push(`预期结果已更新`);
+                    if (pair.oldTc.priority !== pair.newTc.priority)
+                        changes.push(`优先级: ${pair.oldTc.priority} → ${pair.newTc.priority}`);
+                    if (pair.oldTc.type !== pair.newTc.type)
+                        changes.push(`类型: ${pair.oldTc.type} → ${pair.newTc.type}`);
+                    if (changes.length) modified.push({ tc: pair.newTc, oldTc: pair.oldTc, changes });
                 }
+                // sim >= 0.95 视为未修改，跳过
             });
 
-            // 删除
-            oldCases.forEach(tc => {
-                if (!newMap[tc.id]) removed.push(tc);
+            // 未匹配的新用例 → 新增
+            newCases.forEach((tc, i) => {
+                if (!matchedNew.has(i)) added.push(tc);
+            });
+            // 未匹配的旧用例 → 删除
+            oldCases.forEach((tc, i) => {
+                if (!matchedOld.has(i)) removed.push(tc);
             });
 
             // 无变更
@@ -572,19 +616,20 @@
             let html = '';
             added.forEach(tc => {
                 html += `<div class="diff-item diff-added">
-                    <span class="diff-label">新增</span> ${esc(tc.id)} - ${esc(tc.title)}
+                    <span class="diff-label">新增</span> ${esc(tc.title)}
                     <div class="diff-detail">${esc(tc.steps).substring(0, 100)}${tc.steps.length > 100 ? '...' : ''}</div>
                 </div>`;
             });
-            modified.forEach(({ tc, changes }) => {
+            modified.forEach(({ tc, oldTc, changes }) => {
                 html += `<div class="diff-item diff-modified">
-                    <span class="diff-label">修改</span> ${esc(tc.id)} - ${esc(tc.title)}
+                    <span class="diff-label">修改</span> ${esc(tc.title)}
                     <div class="diff-detail">${esc(changes.join(' | '))}</div>
                 </div>`;
             });
             removed.forEach(tc => {
                 html += `<div class="diff-item diff-removed">
-                    <span class="diff-label">删除</span> ${esc(tc.id)} - ${esc(tc.title)}
+                    <span class="diff-label">删除</span> ${esc(tc.title)}
+                    <div class="diff-detail">${esc(tc.steps).substring(0, 100)}${tc.steps.length > 100 ? '...' : ''}</div>
                 </div>`;
             });
 

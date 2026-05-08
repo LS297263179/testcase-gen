@@ -32,6 +32,7 @@ output:
 # ---------- 用例配置 ----------
 testcase:
   default_priority: "P1"
+  max_testcases: 100        # 单次生成最大用例数
   case_types:
     - "功能测试"
     - "边界测试"

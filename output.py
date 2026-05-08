@@ -9,6 +9,47 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 HEADERS = ["用例编号", "模块", "标题", "前置条件", "测试步骤", "预期结果", "优先级", "用例类型"]
+
+
+def _strip_trailing_punctuation(text: str) -> str:
+    """去除文本结尾的标点符号"""
+    if not text:
+        return text
+    text = text.rstrip()
+    while text and text[-1] in ("。", ".", "，", ",", "；", ";", "：", ":"):
+        text = text[:-1].rstrip()
+    return text
+
+
+def _normalize_steps(steps: str) -> str:
+    """统一测试步骤格式：去除每步结尾的标点"""
+    if not steps:
+        return steps
+    lines = steps.split("\n")
+    normalized = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        m = re.match(r'^(\d+[.、]\s*)', line)
+        if m:
+            prefix = m.group(1)
+            content = line[len(prefix):].strip()
+            while content and content[-1] in ("。", ".", "，", ",", "；", ";", "：", ":"):
+                content = content[:-1].rstrip()
+            normalized.append(prefix + content)
+        else:
+            normalized.append(line)
+    return "\n".join(normalized)
+
+
+def normalize_testcase(tc: dict) -> dict:
+    """规范化用例文本字段，确保导出风格一致"""
+    tc = tc.copy()
+    tc["expected"] = _strip_trailing_punctuation(tc.get("expected", ""))
+    tc["precondition"] = _strip_trailing_punctuation(tc.get("precondition", ""))
+    tc["steps"] = _normalize_steps(tc.get("steps", ""))
+    return tc
 PRIORITY_COLORS = {
     "P0": "FF0000",  # 红
     "P1": "FF6600",  # 橙
@@ -57,6 +98,7 @@ def to_excel(testcases: list[dict], output_dir: str, filename: str | None = None
 
     # 数据行
     for row_idx, tc in enumerate(testcases, 2):
+        tc = normalize_testcase(tc)
         values = [
             tc.get("id", ""),
             tc.get("module", ""),
@@ -122,6 +164,7 @@ def to_markdown(testcases: list[dict], output_dir: str, filename: str | None = N
 
         # 详细用例
         for tc in tcs:
+            tc = normalize_testcase(tc)
             lines.append(f"### {tc.get('id', '')} - {tc.get('title', '')}")
             lines.append("")
             lines.append(f"- **模块**: {tc.get('module', '')}")

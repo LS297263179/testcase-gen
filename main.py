@@ -108,6 +108,7 @@ def main():
             gen_client, requirement,
             default_priority=config["testcase"]["default_priority"],
             case_types=config["testcase"]["case_types"],
+            max_testcases=config["testcase"].get("max_testcases", 100),
         )
     except Exception as e:
         console.print(f"[red]LLM 调用失败: {e}[/]")
