@@ -126,13 +126,13 @@ def api_generate():
 
             # Step 1: 分析模块
             from concurrent.futures import ThreadPoolExecutor, as_completed
-            from generator import _analyze_modules, _generate_for_module, _deduplicate, _generate_all_in_one, _limit_testcases
+            from generator import _analyze_modules, _generate_for_module, _deduplicate, _deduplicate_by_steps, _generate_all_in_one, _limit_testcases
             client = get_generate_client()
             image_client = get_image_client() if images else None
             active_client = image_client if (images and image_client) else client
 
             yield _sse({"type": "progress", "message": "正在分析需求，拆解功能模块..."})
-            modules = _analyze_modules(active_client, requirement, _case_types, images if images else None)
+            complexity, modules = _analyze_modules(active_client, requirement, _case_types, images if images else None)
 
             if not modules:
                 yield _sse({"type": "progress", "message": "模块分析失败，使用一次性生成模式..."})
@@ -141,13 +141,14 @@ def api_generate():
                 # Step 2: 按模块并行生成
                 total_modules = len(modules)
                 max_workers = min(total_modules, 5)
-                yield _sse({"type": "progress", "message": f"正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）..."})
+                complexity_label = {"simple": "简单", "medium": "中等", "complex": "复杂"}.get(complexity, "中等")
+                yield _sse({"type": "progress", "message": f"需求复杂度：{complexity_label}，正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）..."})
 
                 all_testcases = []
                 _images = images if images else None
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     future_to_module = {
-                        executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, _images): mod
+                        executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, _images, complexity): mod
                         for mod in modules
                     }
                     completed = 0
@@ -169,7 +170,13 @@ def api_generate():
                 testcases = _deduplicate(all_testcases)
                 dedup_count = raw_count - len(testcases)
                 if dedup_count > 0:
-                    yield _sse({"type": "progress", "message": f"去重完成，移除 {dedup_count} 条重复用例"})
+                    yield _sse({"type": "progress", "message": f"精确去重完成，移除 {dedup_count} 条重复用例"})
+
+                step_dedup_before = len(testcases)
+                testcases = _deduplicate_by_steps(testcases)
+                step_dedup_count = step_dedup_before - len(testcases)
+                if step_dedup_count > 0:
+                    yield _sse({"type": "progress", "message": f"步骤语义去重完成，移除 {step_dedup_count} 条相似用例"})
 
                 if len(testcases) > max_testcases:
                     yield _sse({"type": "progress", "message": f"用例数 ({len(testcases)}) 超过上限 {max_testcases}，按优先级保留"})
