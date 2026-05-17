@@ -30,3 +30,7 @@ _debug_*.txt
 # OS
 .DS_Store
 Thumbs.db
+
+# 数据库和日志
+data.db
+*.log

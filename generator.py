@@ -228,10 +228,12 @@ def generate_testcases(client: LLMClient, requirement: str,
                        images: list[dict] | None = None,
                        image_client: LLMClient | None = None,
                        on_progress: Callable[[str], None] | None = None,
-                       max_testcases: int = 100) -> list[dict]:
+                       max_testcases: int = 100,
+                       preferences: str | None = None) -> list[dict]:
     """分段生成测试用例：先分析模块，再按模块逐一生成，最后合并去重。
     on_progress: 进度回调，用于通知前端当前步骤
     max_testcases: 单次生成最大用例数，默认 100
+    preferences: 用户偏好上下文文本，注入 prompt 末尾
     """
     if case_types is None:
         case_types = ["功能测试", "边界测试", "异常测试"]
@@ -248,7 +250,7 @@ def generate_testcases(client: LLMClient, requirement: str,
         # 分析失败，回退到一次性生成
         if on_progress:
             on_progress("模块分析失败，使用一次性生成模式...")
-        return _generate_all_in_one(active_client, requirement, default_priority, case_types, images, max_testcases)
+        return _generate_all_in_one(active_client, requirement, default_priority, case_types, images, max_testcases, preferences)
 
     # Step 2: 按模块并行生成
     all_testcases = []
@@ -261,7 +263,7 @@ def generate_testcases(client: LLMClient, requirement: str,
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_module = {
-            executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, images, complexity): mod
+            executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, images, complexity, preferences): mod
             for mod in modules
         }
         completed = 0
@@ -342,7 +344,8 @@ def _analyze_modules(client: LLMClient, requirement: str,
 def _generate_for_module(client: LLMClient, requirement: str,
                          module: dict, default_priority: str,
                          images: list[dict] | None = None,
-                         complexity: str = "medium") -> list[dict]:
+                         complexity: str = "medium",
+                         preferences: str | None = None) -> list[dict]:
     """Step 2: 为单个模块生成测试用例"""
     case_count_guideline = COMPLEXITY_CASE_COUNT.get(complexity, COMPLEXITY_CASE_COUNT["medium"])
     prompt = MODULE_PROMPT.format(
@@ -355,6 +358,9 @@ def _generate_for_module(client: LLMClient, requirement: str,
     # 有图片时追加图片分析指引
     if images:
         prompt += MODULE_PROMPT_IMAGE_SUFFIX
+    # 注入用户偏好
+    if preferences:
+        prompt += "\n\n## 用户偏好（请遵循）\n" + preferences
 
     for attempt in range(2):
         try:
@@ -368,7 +374,8 @@ def _generate_for_module(client: LLMClient, requirement: str,
 def _generate_all_in_one(client: LLMClient, requirement: str,
                          default_priority: str, case_types: list[str],
                          images: list[dict] | None = None,
-                         max_testcases: int = 100) -> list[dict]:
+                         max_testcases: int = 100,
+                         preferences: str | None = None) -> list[dict]:
     """一次性生成（回退方案）"""
     if images:
         text_part = requirement if requirement else "请根据图片中的界面/需求生成测试用例。"
@@ -385,6 +392,8 @@ def _generate_all_in_one(client: LLMClient, requirement: str,
         )
 
     user_prompt += f"\n- 用例总数不超过 {max_testcases} 条，避免生成重复或高度相似的用例"
+    if preferences:
+        user_prompt += "\n\n## 用户偏好（请遵循）\n" + preferences
 
     for attempt in range(3):
         try:

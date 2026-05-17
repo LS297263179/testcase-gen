@@ -9,14 +9,19 @@ from pathlib import Path
 
 from flask import Flask, Response, jsonify, render_template, request, send_file, stream_with_context
 
+import db
 from generator import generate_testcases
 from llm_client import LLMClient, load_config
 from output import to_excel, to_markdown
+from preferences import compute_diffs, extract_preferences
 from reader import (get_image_media_type, image_to_base64, is_image,
                     read_excel, read_text)
 from reviewer import optimize_testcases, review_testcases
 
 app = Flask(__name__)
+
+# 初始化数据库
+db.init_db()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片）
 
 OUTPUT_DIR = "./output"
@@ -124,6 +129,9 @@ def api_generate():
             _case_types = case_types or config["testcase"]["case_types"]
             max_testcases = config["testcase"].get("max_testcases", 100)
 
+            # 加载用户偏好
+            pref_context = db.get_preference_context()
+
             # Step 1: 分析模块
             from concurrent.futures import ThreadPoolExecutor, as_completed
             from generator import _analyze_modules, _generate_for_module, _deduplicate, _deduplicate_by_steps, _generate_all_in_one, _limit_testcases
@@ -136,7 +144,7 @@ def api_generate():
 
             if not modules:
                 yield _sse({"type": "progress", "message": "模块分析失败，使用一次性生成模式..."})
-                testcases = _generate_all_in_one(active_client, requirement, default_priority, _case_types, images if images else None, max_testcases)
+                testcases = _generate_all_in_one(active_client, requirement, default_priority, _case_types, images if images else None, max_testcases, pref_context or None)
             else:
                 # Step 2: 按模块并行生成
                 total_modules = len(modules)
@@ -148,7 +156,7 @@ def api_generate():
                 _images = images if images else None
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     future_to_module = {
-                        executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, _images, complexity): mod
+                        executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, _images, complexity, pref_context or None): mod
                         for mod in modules
                     }
                     completed = 0
@@ -190,11 +198,21 @@ def api_generate():
             excel_path = to_excel(testcases, OUTPUT_DIR, f"testcases_{timestamp}.xlsx")
             md_path = to_markdown(testcases, OUTPUT_DIR, f"testcases_{timestamp}.md")
 
+            # 自动保存到历史记录
+            session_id = db.create_session(
+                requirement=requirement,
+                testcases=testcases,
+                priority=default_priority,
+                case_types=list(_case_types) if _case_types else None,
+                images=images if images else None,
+            )
+
             result = {
                 "success": True,
                 "count": len(testcases),
                 "testcases": testcases,
                 "files": {"excel": excel_path, "markdown": md_path},
+                "session_id": session_id,
                 "input": {
                     "has_text": bool(requirement.strip()),
                     "image_count": len(images),
@@ -315,3 +333,119 @@ def api_download(filename):
     if os.path.exists(filepath):
         return send_file(filepath, as_attachment=True)
     return jsonify({"error": "文件不存在"}), 404
+
+
+# ============================================================
+# 历史记录 API
+# ============================================================
+
+@app.route("/api/history")
+def api_history():
+    """列出历史记录"""
+    limit = request.args.get("limit", 50, type=int)
+    offset = request.args.get("offset", 0, type=int)
+    sessions = db.list_sessions(limit=limit, offset=offset)
+    return jsonify({"sessions": sessions})
+
+
+@app.route("/api/history/<int:session_id>")
+def api_history_detail(session_id):
+    """获取单条历史记录"""
+    session = db.get_session(session_id)
+    if not session:
+        return jsonify({"error": "记录不存在"}), 404
+    return jsonify(session)
+
+
+@app.route("/api/history/<int:session_id>", methods=["DELETE"])
+def api_history_delete(session_id):
+    """删除历史记录"""
+    db.delete_session(session_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/history/<int:session_id>/review", methods=["POST"])
+def api_history_save_review(session_id):
+    """为历史记录保存评审报告"""
+    data = request.get_json()
+    review = data.get("review", "")
+    if not review:
+        return jsonify({"error": "评审报告为空"}), 400
+    db.save_review(session_id, review)
+    return jsonify({"success": True})
+
+
+# ============================================================
+# 偏好 API
+# ============================================================
+
+@app.route("/api/preferences")
+def api_preferences():
+    """列出所有偏好规则"""
+    prefs = db.list_all_preferences()
+    return jsonify({"preferences": prefs})
+
+
+@app.route("/api/preferences/extract", methods=["POST"])
+def api_preferences_extract():
+    """从用户编辑中提取偏好规则（SSE 流式）"""
+    try:
+        data = request.get_json()
+        original = data.get("original", [])
+        edited = data.get("edited", [])
+        session_id = data.get("session_id")
+        if not original or not edited:
+            return jsonify({"error": "缺少原始或编辑后的用例"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            yield _sse({"type": "progress", "message": "正在分析修改差异..."})
+            diffs = compute_diffs(original, edited)
+            if not diffs:
+                yield _sse({"type": "done", "data": {
+                    "success": True,
+                    "preferences": [],
+                    "message": "未检测到有效修改",
+                }})
+                return
+
+            yield _sse({"type": "progress", "message": f"检测到 {len(diffs)} 处修改，正在提取偏好规则..."})
+            client = get_generate_client()
+            prefs = extract_preferences(diffs, client)
+
+            if prefs and session_id:
+                db.save_preferences(prefs, session_id, source_diffs=diffs)
+
+            yield _sse({"type": "done", "data": {
+                "success": True,
+                "preferences": prefs,
+                "count": len(prefs),
+            }})
+        except Exception as e:
+            traceback.print_exc()
+            yield _sse({"type": "error", "message": str(e)})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/api/preferences/<int:pref_id>", methods=["PUT"])
+def api_preferences_update(pref_id):
+    """更新偏好规则（启用/禁用/修改）"""
+    data = request.get_json()
+    active = data.get("active")
+    pattern = data.get("pattern")
+    db.update_preference(pref_id, active=active, pattern=pattern)
+    return jsonify({"success": True})
+
+
+@app.route("/api/preferences/<int:pref_id>", methods=["DELETE"])
+def api_preferences_delete(pref_id):
+    """删除偏好规则"""
+    db.delete_preference(pref_id)
+    return jsonify({"success": True})

@@ -39,3 +39,12 @@ testcase:
     - "异常测试"
     - "兼容性测试"
     - "性能测试"
+
+# ---------- 数据库配置 ----------
+database:
+  path: "./data.db"         # SQLite 数据库文件路径
+
+# ---------- 偏好学习配置 ----------
+preferences:
+  enabled: true             # 是否启用偏好学习
+  max_injected: 10          # 注入 prompt 的最大偏好条数

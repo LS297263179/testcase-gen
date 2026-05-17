@@ -99,12 +99,69 @@
             .detail-content { grid-template-columns: 1fr; }
             .stats { flex-wrap: wrap; }
         }
+
+        /* 历史记录侧边栏 */
+        .history-btn { position: absolute; right: 24px; top: 50%; transform: translateY(-50%); background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.4); color: #fff; padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+        .history-btn:hover { background: rgba(255,255,255,0.35); }
+        .header { position: relative; }
+        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 998; }
+        .sidebar-overlay.show { display: block; }
+        .sidebar { position: fixed; top: 0; right: -400px; width: 400px; max-width: 90vw; height: 100vh; background: #fff; box-shadow: -4px 0 20px rgba(0,0,0,0.15); z-index: 999; transition: right 0.3s; display: flex; flex-direction: column; }
+        .sidebar.open { right: 0; }
+        .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #eee; }
+        .sidebar-header h3 { font-size: 16px; color: #333; }
+        .sidebar-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; padding: 4px 8px; }
+        .sidebar-close:hover { color: #333; }
+        .sidebar-body { flex: 1; overflow-y: auto; padding: 12px; }
+        .history-item { padding: 12px 14px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 8px; cursor: pointer; transition: all 0.2s; }
+        .history-item:hover { border-color: #1a73e8; background: #f6f9ff; }
+        .history-item .h-time { font-size: 12px; color: #999; }
+        .history-item .h-preview { font-size: 13px; color: #333; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .history-item .h-meta { display: flex; gap: 12px; margin-top: 6px; font-size: 12px; color: #666; }
+        .history-item .h-actions { display: flex; gap: 6px; margin-top: 8px; }
+        .history-item .h-actions button { font-size: 12px; padding: 3px 10px; border-radius: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer; color: #555; }
+        .history-item .h-actions button:hover { border-color: #1a73e8; color: #1a73e8; }
+        .history-item .h-actions .del-btn:hover { border-color: #d32f2f; color: #d32f2f; }
+        .history-empty { text-align: center; color: #999; padding: 40px 20px; font-size: 14px; }
+
+        /* 内联编辑 */
+        .edit-input { width: 100%; padding: 4px 8px; border: 1px solid #1a73e8; border-radius: 4px; font-size: 13px; font-family: inherit; background: #f0f6ff; }
+        .edit-input:focus { outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+        .edit-textarea { width: 100%; padding: 6px 8px; border: 1px solid #1a73e8; border-radius: 4px; font-size: 13px; font-family: inherit; background: #f0f6ff; resize: vertical; min-height: 60px; }
+        .edit-textarea:focus { outline: none; box-shadow: 0 0 0 2px rgba(26,115,232,0.2); }
+        .edit-actions button { font-size: 12px; padding: 3px 10px; border-radius: 4px; border: none; cursor: pointer; margin-right: 4px; }
+        .edit-save { background: #34a853; color: #fff; }
+        .edit-cancel { background: #eee; color: #555; }
+        .edited-badge { display: inline-block; font-size: 11px; color: #f57f17; background: #fff8e1; padding: 1px 6px; border-radius: 3px; margin-left: 6px; }
+
+        /* 偏好管理 */
+        .pref-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 6px; font-size: 13px; }
+        .pref-item.inactive { opacity: 0.5; }
+        .pref-cat { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; background: #e8f0fe; color: #1a73e8; white-space: nowrap; }
+        .pref-pattern { flex: 1; color: #333; }
+        .pref-weight { font-size: 11px; color: #999; white-space: nowrap; }
+        .pref-item button { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer; color: #555; }
+        .pref-item button:hover { border-color: #1a73e8; color: #1a73e8; }
+        .pref-item .pref-del:hover { border-color: #d32f2f; color: #d32f2f; }
     </style>
 </head>
 <body>
     <div class="header">
         <h1>我来帮你写用例</h1>
         <p>输入需求描述 / 上传需求文档 / 截图 UI 设计稿，自动生成测试用例</p>
+        <button class="history-btn" onclick="toggleHistory()">&#128194; 历史记录</button>
+    </div>
+
+    <!-- 历史记录侧边栏 -->
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistory()"></div>
+    <div class="sidebar" id="historySidebar">
+        <div class="sidebar-header">
+            <h3>&#128194; 历史记录</h3>
+            <button class="sidebar-close" onclick="toggleHistory()">&times;</button>
+        </div>
+        <div class="sidebar-body" id="historyList">
+            <div class="history-empty">暂无历史记录</div>
+        </div>
     </div>
 
     <div class="container">
@@ -168,6 +225,7 @@
                     <button class="btn btn-outline" onclick="downloadFile('excel')">&#128196; 下载 Excel</button>
                     <button class="btn btn-outline" onclick="downloadFile('markdown')">&#128221; 下载 Markdown</button>
                     <button class="btn btn-success" id="btnReview" onclick="review()">&#128269; AI 评审</button>
+                    <button class="btn btn-outline" id="btnSavePref" onclick="savePreferences()" style="display:none;">&#128161; 保存偏好</button>
                 </div>
             </div>
             <div id="inputInfo" style="margin-bottom:12px;font-size:13px;color:#888;"></div>
@@ -201,6 +259,20 @@
             <div class="diff-stats" id="diffStats" style="display:flex;gap:16px;margin-bottom:16px;"></div>
             <div id="diffContent" style="max-height:500px;overflow-y:auto;"></div>
         </div>
+
+        <!-- 偏好管理 -->
+        <div class="card" id="prefPanel">
+            <div class="card-title" style="cursor:pointer;" onclick="togglePrefPanel()">
+                <span>偏好规则管理</span>
+                <span id="prefToggle" style="font-size:12px;color:#999;margin-left:auto;">展开</span>
+            </div>
+            <div id="prefContent" style="display:none;">
+                <div id="prefList" style="margin-top:8px;"></div>
+                <div style="text-align:center;margin-top:12px;">
+                    <button class="btn btn-outline" onclick="loadPreferences()" style="font-size:13px;padding:6px 16px;">刷新</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="toast" id="toast"></div>
@@ -212,6 +284,7 @@
         let currentReview = '';
         let originalTestcases = [];
         let uploadedFiles = [];
+        let currentSessionId = null;
 
         // 文件上传
         const uploadArea = document.getElementById('uploadArea');
@@ -381,6 +454,7 @@
                                 currentTestcases = data.testcases;
                                 currentFiles = data.files;
                                 currentRequirement = requirement;
+                                currentSessionId = data.session_id || null;
                                 renderResult(data);
                                 let msg = `生成成功！共 ${data.count} 条用例`;
                                 if (data.input && data.input.image_count > 0) {
@@ -434,13 +508,16 @@
 
             const tbody = document.getElementById('tbody');
             tbody.innerHTML = testcases.map((tc, i) => `
-                <tr>
+                <tr id="row-${i}">
                     <td><strong>${esc(tc.id)}</strong></td>
                     <td>${esc(tc.module)}</td>
                     <td>${esc(tc.title)}</td>
                     <td><span class="priority priority-${esc(tc.priority)}">${esc(tc.priority)}</span></td>
                     <td><span class="type-tag">${esc(tc.type)}</span></td>
-                    <td><button class="expand-btn" onclick="toggleDetail(${i})">详情</button></td>
+                    <td>
+                        <button class="expand-btn" onclick="toggleDetail(${i})">详情</button>
+                        <button class="expand-btn" onclick="editCase(${i})" style="margin-left:4px;">编辑</button>
+                    </td>
                 </tr>
                 <tr class="detail-row" id="detail-${i}">
                     <td colspan="6">
@@ -636,6 +713,272 @@
             document.getElementById('diffContent').innerHTML = html;
             document.getElementById('diffPanel').style.display = 'block';
             document.getElementById('diffPanel').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // ============================================================
+        // 历史记录
+        // ============================================================
+        function toggleHistory() {
+            const sidebar = document.getElementById('historySidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            const isOpen = sidebar.classList.contains('open');
+            if (isOpen) {
+                sidebar.classList.remove('open');
+                overlay.classList.remove('show');
+            } else {
+                sidebar.classList.add('open');
+                overlay.classList.add('show');
+                loadHistory();
+            }
+        }
+
+        async function loadHistory() {
+            const list = document.getElementById('historyList');
+            try {
+                const resp = await fetch('/api/history?limit=50');
+                const data = await resp.json();
+                const sessions = data.sessions || [];
+                if (!sessions.length) {
+                    list.innerHTML = '<div class="history-empty">暂无历史记录</div>';
+                    return;
+                }
+                list.innerHTML = sessions.map(s => `
+                    <div class="history-item">
+                        <div class="h-time">${esc(s.created_at)}</div>
+                        <div class="h-preview" title="${esc(s.requirement)}">${esc(s.requirement_preview)}</div>
+                        <div class="h-meta">
+                            <span>${s.tc_count} 条用例</span>
+                            ${s.priority ? '<span>' + esc(s.priority) + '</span>' : ''}
+                        </div>
+                        <div class="h-actions">
+                            <button onclick="loadSession(${s.id})">加载</button>
+                            <button class="del-btn" onclick="deleteSession(${s.id}, event)">删除</button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (err) {
+                list.innerHTML = '<div class="history-empty">加载失败: ' + esc(err.message) + '</div>';
+            }
+        }
+
+        async function loadSession(id) {
+            try {
+                const resp = await fetch('/api/history/' + id);
+                if (!resp.ok) throw new Error('记录不存在');
+                const session = await resp.json();
+
+                // 填充表单
+                document.getElementById('requirement').value = session.requirement || '';
+                if (session.priority) document.getElementById('priority').value = session.priority;
+                if (session.case_types) document.getElementById('caseTypes').value = session.case_types.join(',');
+
+                // 加载用例
+                currentTestcases = session.testcases;
+                currentRequirement = session.requirement;
+                currentSessionId = session.id;
+                currentReview = session.review_report || '';
+                currentFiles = {};
+
+                renderResult({ testcases: session.testcases, count: session.testcases.length, files: {}, session_id: session.id, input: { has_text: !!session.requirement, image_count: session.images ? session.images.length : 0, image_names: session.images ? session.images.map(i => i.filename || '') : [] } });
+
+                // 如果有评审报告，显示
+                if (currentReview) {
+                    document.getElementById('reviewContent').textContent = currentReview;
+                    document.getElementById('reviewPanel').style.display = 'block';
+                }
+
+                toggleHistory();
+                showToast('已加载历史记录 #' + id);
+                document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deleteSession(id, event) {
+            event.stopPropagation();
+            if (!confirm('确定删除这条历史记录？')) return;
+            try {
+                await fetch('/api/history/' + id, { method: 'DELETE' });
+                showToast('已删除');
+                loadHistory();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        // ============================================================
+        // 内联编辑
+        // ============================================================
+        function editCase(i) {
+            const tc = currentTestcases[i];
+            const row = document.getElementById('row-' + i);
+            const detailRow = document.getElementById('detail-' + i);
+
+            // 切换主行为编辑模式
+            row.innerHTML = `
+                <td><strong>${esc(tc.id)}</strong></td>
+                <td><input class="edit-input" id="edit-module-${i}" value="${esc(tc.module)}" style="width:100px;"></td>
+                <td><input class="edit-input" id="edit-title-${i}" value="${esc(tc.title)}"></td>
+                <td>
+                    <select id="edit-priority-${i}" style="padding:4px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;">
+                        <option value="P0" ${tc.priority==='P0'?'selected':''}>P0</option>
+                        <option value="P1" ${tc.priority==='P1'?'selected':''}>P1</option>
+                        <option value="P2" ${tc.priority==='P2'?'selected':''}>P2</option>
+                        <option value="P3" ${tc.priority==='P3'?'selected':''}>P3</option>
+                    </select>
+                </td>
+                <td><input class="edit-input" id="edit-type-${i}" value="${esc(tc.type)}" style="width:80px;font-size:12px;"></td>
+                <td class="edit-actions">
+                    <button class="edit-save" onclick="saveEdit(${i})">保存</button>
+                    <button class="edit-cancel" onclick="cancelEdit(${i})">取消</button>
+                </td>
+            `;
+
+            // 切换详情行为编辑模式
+            detailRow.classList.add('show');
+            detailRow.innerHTML = `
+                <td colspan="6" style="background:#f8fbff;">
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div>
+                            <dt style="color:#888;font-size:12px;margin-bottom:4px;">前置条件</dt>
+                            <textarea class="edit-textarea" id="edit-precondition-${i}" rows="2">${esc(tc.precondition)}</textarea>
+                        </div>
+                        <div>
+                            <dt style="color:#888;font-size:12px;margin-bottom:4px;">预期结果</dt>
+                            <textarea class="edit-textarea" id="edit-expected-${i}" rows="2">${esc(tc.expected)}</textarea>
+                        </div>
+                        <div style="grid-column:1/-1;">
+                            <dt style="color:#888;font-size:12px;margin-bottom:4px;">测试步骤</dt>
+                            <textarea class="edit-textarea" id="edit-steps-${i}" rows="4">${esc(tc.steps)}</textarea>
+                        </div>
+                    </div>
+                </td>
+            `;
+        }
+
+        function saveEdit(i) {
+            const tc = currentTestcases[i];
+            // 保存原始版本用于偏好对比
+            if (!originalTestcases.length) {
+                originalTestcases = JSON.parse(JSON.stringify(currentTestcases));
+            }
+
+            tc.module = document.getElementById('edit-module-' + i).value;
+            tc.title = document.getElementById('edit-title-' + i).value;
+            tc.priority = document.getElementById('edit-priority-' + i).value;
+            tc.type = document.getElementById('edit-type-' + i).value;
+            tc.precondition = document.getElementById('edit-precondition-' + i).value;
+            tc.expected = document.getElementById('edit-expected-' + i).value;
+            tc.steps = document.getElementById('edit-steps-' + i).value;
+
+            renderResult({ testcases: currentTestcases, count: currentTestcases.length, files: currentFiles, session_id: currentSessionId, input: {} });
+            document.getElementById('btnSavePref').style.display = '';
+            showToast('已保存修改');
+        }
+
+        function cancelEdit(i) {
+            renderResult({ testcases: currentTestcases, count: currentTestcases.length, files: currentFiles, session_id: currentSessionId, input: {} });
+        }
+
+        async function savePreferences() {
+            if (!originalTestcases.length) {
+                showToast('没有检测到修改', 'error');
+                return;
+            }
+            const btn = document.getElementById('btnSavePref');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner"></span>分析中...';
+
+            try {
+                await sseFetch('/api/preferences/extract', {
+                    original: originalTestcases,
+                    edited: currentTestcases,
+                    session_id: currentSessionId,
+                }, {
+                    onProgress: msg => { btn.innerHTML = `<span class="spinner"></span>${msg}`; },
+                    onDone: data => {
+                        if (data.preferences && data.preferences.length) {
+                            showToast(`已提取 ${data.count} 条偏好规则`);
+                            loadPreferences();
+                        } else {
+                            showToast('未提取到通用偏好规则');
+                        }
+                        originalTestcases = [];
+                        btn.style.display = 'none';
+                    },
+                });
+            } catch (err) {
+                showToast(err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '&#128161; 保存偏好';
+            }
+        }
+
+        // ============================================================
+        // 偏好管理
+        // ============================================================
+        function togglePrefPanel() {
+            const content = document.getElementById('prefContent');
+            const toggle = document.getElementById('prefToggle');
+            if (content.style.display === 'none') {
+                content.style.display = 'block';
+                toggle.textContent = '收起';
+                loadPreferences();
+            } else {
+                content.style.display = 'none';
+                toggle.textContent = '展开';
+            }
+        }
+
+        async function loadPreferences() {
+            const list = document.getElementById('prefList');
+            try {
+                const resp = await fetch('/api/preferences');
+                const data = await resp.json();
+                const prefs = data.preferences || [];
+                if (!prefs.length) {
+                    list.innerHTML = '<div style="text-align:center;color:#999;padding:16px;font-size:13px;">暂无偏好规则，编辑用例后点击"保存偏好"即可自动提取</div>';
+                    return;
+                }
+                list.innerHTML = prefs.map(p => `
+                    <div class="pref-item ${p.active ? '' : 'inactive'}">
+                        <span class="pref-cat">${esc(p.category)}</span>
+                        <span class="pref-pattern">${esc(p.pattern)}</span>
+                        <span class="pref-weight">权重: ${p.weight.toFixed(1)}</span>
+                        <button onclick="togglePref(${p.id}, ${p.active ? 0 : 1})">${p.active ? '禁用' : '启用'}</button>
+                        <button class="pref-del" onclick="deletePref(${p.id})">删除</button>
+                    </div>
+                `).join('');
+            } catch (err) {
+                list.innerHTML = '<div style="text-align:center;color:#d32f2f;padding:16px;">加载失败</div>';
+            }
+        }
+
+        async function togglePref(id, active) {
+            try {
+                await fetch('/api/preferences/' + id, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ active }),
+                });
+                showToast(active ? '已启用' : '已禁用');
+                loadPreferences();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
+        }
+
+        async function deletePref(id) {
+            if (!confirm('确定删除这条偏好规则？')) return;
+            try {
+                await fetch('/api/preferences/' + id, { method: 'DELETE' });
+                showToast('已删除');
+                loadPreferences();
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
         }
     </script>
 </body>
