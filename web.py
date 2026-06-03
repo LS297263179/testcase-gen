@@ -288,6 +288,129 @@ def api_analyze():
     )
 
 
+# ============================================================
+# 测试点生成 API
+# ============================================================
+
+TEST_POINTS_PROMPT = """你是一位资深测试专家。请根据以下需求，生成测试点。
+
+需求内容：
+{requirement}
+
+请返回 JSON 格式的测试点树，结构如下：
+[
+  {{
+    "module": "模块名称",
+    "points": [
+      {{"title": "测试点标题", "description": "简要描述"}},
+      ...
+    ]
+  }}
+]
+
+要求：
+1. 按功能模块分组
+2. 每个模块下列出关键测试点（正常流程、边界、异常）
+3. 测试点要具体可执行
+4. 只返回 JSON，不要其他内容"""
+
+
+@app.route("/api/generate-points", methods=["POST"])
+@login_required
+def api_generate_points():
+    """生成测试点（SSE 流式）"""
+    try:
+        data = request.get_json()
+        requirement = data.get("requirement", "")
+        if not requirement.strip():
+            return jsonify({"error": "需求内容不能为空"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            client = get_generate_client()
+            prompt = TEST_POINTS_PROMPT.format(requirement=requirement)
+
+            yield _sse({"type": "progress", "message": "正在分析需求，生成测试点..."})
+            response = client.chat("你是一位资深测试专家。", prompt)
+            text = response.strip()
+
+            # 提取 JSON
+            import re
+            json_match = re.search(r'\[[\s\S]*\]', text)
+            if json_match:
+                points = json.loads(json_match.group())
+            else:
+                points = json.loads(text)
+
+            yield _sse({"type": "done", "data": {
+                "success": True,
+                "points": points,
+                "total": sum(len(m.get("points", [])) for m in points),
+            }})
+        except Exception as e:
+            traceback.print_exc()
+            yield _sse({"type": "error", "message": str(e)})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.route("/api/export-points", methods=["POST"])
+@login_required
+def api_export_points():
+    """导出测试点为 MD 或 XMIND"""
+    data = request.get_json()
+    points = data.get("points", [])
+    fmt = data.get("format", "md")
+    title = data.get("title", "测试点")
+
+    if not points:
+        return jsonify({"error": "无测试点数据"}), 400
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if fmt == "md":
+        lines = [f"# {title}\n"]
+        for module in points:
+            lines.append(f"## {module.get('module', '未分类')}\n")
+            for p in module.get("points", []):
+                lines.append(f"- **{p.get('title', '')}**：{p.get('description', '')}")
+            lines.append("")
+        content = "\n".join(lines)
+        path = os.path.join(OUTPUT_DIR, f"testpoints_{timestamp}.md")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return jsonify({"success": True, "file": path})
+
+    elif fmt == "xmind":
+        import xmind
+        path = os.path.join(OUTPUT_DIR, f"testpoints_{timestamp}.xmind")
+        os.makedirs(OUTPUT_DIR, exist_ok=True)
+        workbook = xmind.Workbook(path)
+        sheet = workbook.getPrimarySheet()
+        sheet.setTitle(title)
+        root = sheet.getRootTopic()
+        root.setTitle(title)
+        for module in points:
+            mod_topic = root.addSubTopic()
+            mod_topic.setTitle(module.get("module", "未分类"))
+            for p in module.get("points", []):
+                pt_topic = mod_topic.addSubTopic()
+                pt_topic.setTitle(p.get("title", ""))
+                if p.get("description"):
+                    pt_topic.setPlainNotes(p["description"])
+        xmind.save(workbook, path)
+        return jsonify({"success": True, "file": path})
+
+    return jsonify({"error": "不支持的格式"}), 400
+
+
 def build_client(cfg: dict) -> LLMClient:
     return LLMClient(
         base_url=cfg["base_url"],

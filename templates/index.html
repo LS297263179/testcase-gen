@@ -185,6 +185,23 @@
         .diff-modified{background:#fff8e1;border-left:3px solid #f57f17;} .diff-modified .dl{color:#f57f17;}
         .diff-removed{background:#ffeef0;border-left:3px solid #d32f2f;} .diff-removed .dl{color:#d32f2f;}
 
+        /* ===== Test Points Tree ===== */
+        .tp-tree{padding:16px 20px;}
+        .tp-module{margin-bottom:14px;}
+        .tp-module-title{font-size:14px;font-weight:600;color:#1a73e8;padding:8px 12px;background:#f6f9ff;border-radius:6px;cursor:pointer;display:flex;align-items:center;gap:8px;}
+        .tp-module-title:hover{background:#e8f0fe;}
+        .tp-module-title .arrow{transition:transform 0.2s;font-size:12px;}
+        .tp-module-title .arrow.open{transform:rotate(90deg);}
+        .tp-module-count{font-size:11px;color:#999;font-weight:normal;}
+        .tp-points{padding:4px 0 4px 20px;display:none;}
+        .tp-points.show{display:block;}
+        .tp-point{padding:6px 10px;margin:3px 0;border-radius:5px;font-size:13px;display:flex;align-items:flex-start;gap:8px;cursor:pointer;transition:background 0.15s;}
+        .tp-point:hover{background:#f6f9ff;}
+        .tp-point .tp-dot{width:6px;height:6px;border-radius:50%;background:#1a73e8;margin-top:6px;flex-shrink:0;}
+        .tp-point .tp-info{flex:1;}
+        .tp-point .tp-title{color:#333;font-weight:500;}
+        .tp-point .tp-desc{color:#888;font-size:11px;margin-top:2px;}
+
         /* ===== Preferences ===== */
         .pref-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;margin-bottom:5px;font-size:12px;}
         .pref-item.inactive{opacity:0.45;}
@@ -319,7 +336,11 @@
         </div>
         <div class="nav-item" onclick="switchPage('generator')" id="nav-generator">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-            需求编写
+            测试用例
+        </div>
+        <div class="nav-item" onclick="switchPage('testpoints')" id="nav-testpoints">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            测试点
         </div>
         <div class="nav-item" onclick="switchPage('modelConfig')" id="nav-modelConfig">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
@@ -344,20 +365,20 @@
             </div>
 
             <div class="quick-actions">
+                <div class="quick-card" onclick="switchPage('testpoints')">
+                    <div class="qc-icon">&#128209;</div>
+                    <div class="qc-title">生成测试点</div>
+                    <div class="qc-desc">根据需求生成测试点，导出为 MD / XMind</div>
+                </div>
                 <div class="quick-card" onclick="switchPage('generator')">
                     <div class="qc-icon">&#9998;&#65039;</div>
                     <div class="qc-title">新建测试用例</div>
-                    <div class="qc-desc">输入需求描述，AI 自动生成测试用例</div>
+                    <div class="qc-desc">输入需求描述，AI 自动生成完整测试用例</div>
                 </div>
                 <div class="quick-card" onclick="switchPage('generator');setTimeout(()=>document.getElementById('requirement').focus(),100);">
                     <div class="qc-icon">&#128228;</div>
                     <div class="qc-title">上传需求文档</div>
                     <div class="qc-desc">支持 MD / TXT / Excel / 图片混合上传</div>
-                </div>
-                <div class="quick-card" onclick="switchPage('modelConfig')">
-                    <div class="qc-icon">&#9881;&#65039;</div>
-                    <div class="qc-title">模型配置</div>
-                    <div class="qc-desc">切换大模型，配置生成和评审参数</div>
                 </div>
             </div>
 
@@ -504,6 +525,45 @@
             </div>
         </div>
 
+        <!-- ====== 测试点生成 ====== -->
+        <div class="page" id="page-testpoints">
+            <div class="split-layout">
+                <!-- 左侧：输入 -->
+                <div class="split-left">
+                    <div class="card">
+                        <div class="card-header"><h3>需求输入</h3></div>
+                        <div class="card-body">
+                            <textarea id="tpRequirement" style="height:240px;" placeholder="请输入项目需求描述...&#10;&#10;例如：&#10;电商系统用户登录模块&#10;1. 支持手机号+验证码登录&#10;2. 支持账号密码登录&#10;3. 支持第三方微信/QQ登录"></textarea>
+                            <div style="margin-top:12px;display:flex;gap:8px;">
+                                <button class="btn btn-primary btn-sm" onclick="generatePoints()" id="btnGenPoints">&#128209; 生成测试点</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：结果 -->
+                <div class="split-right">
+                    <div id="tpLoading" class="card" style="display:none;">
+                        <div class="loading-card"><div class="spinner-lg"></div><p id="tpLoadingText">正在生成测试点...</p></div>
+                    </div>
+
+                    <div id="tpResult" class="card" style="display:none;">
+                        <div class="stats-bar">
+                            <div class="stats-group">
+                                <div class="stat-chip"><span class="num" id="tpTotal">0</span><span class="lbl">测试点总数</span></div>
+                                <div class="stat-chip"><span class="num" id="tpModules">0</span><span class="lbl">模块数</span></div>
+                            </div>
+                            <div class="stats-actions">
+                                <button class="btn btn-outline btn-sm" onclick="exportPoints('md')">&#128221; 导出 MD</button>
+                                <button class="btn btn-outline btn-sm" onclick="exportPoints('xmind')">&#128209; 导出 XMind</button>
+                            </div>
+                        </div>
+                        <div class="tp-tree" id="tpTree"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ====== 模型配置 ====== -->
         <div class="page" id="page-modelConfig">
             <div class="card">
@@ -586,6 +646,70 @@ function switchPage(name){
     document.getElementById('nav-'+name).classList.add('active');
     if(name==='dashboard')loadDashboard();
     if(name==='modelConfig')loadModelConfig();
+}
+
+// ============================================================
+// 测试点生成
+// ============================================================
+let testPointsData = [];
+async function generatePoints(){
+    const req=document.getElementById('tpRequirement').value.trim();
+    if(!req){showToast('请输入需求描述','error');return;}
+    const btn=document.getElementById('btnGenPoints');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> 生成中...';
+    document.getElementById('tpLoading').style.display='block';document.getElementById('tpLoadingText').textContent='正在分析需求...';
+    document.getElementById('tpResult').style.display='none';
+    try{
+        await sseFetch('/api/generate-points',{requirement:req},{
+            onProgress:m=>{document.getElementById('tpLoadingText').textContent=m;},
+            onDone:d=>{
+                testPointsData=d.points||[];
+                renderTestPoints(testPointsData);
+                showToast(`生成完成！共 ${d.total} 个测试点`);
+            }
+        });
+    }catch(e){showToast(e.message,'error');}
+    finally{btn.disabled=false;btn.innerHTML='&#128209; 生成测试点';document.getElementById('tpLoading').style.display='none';}
+}
+function renderTestPoints(points){
+    const total=points.reduce((s,m)=>s+m.points.length,0);
+    document.getElementById('tpTotal').textContent=total;
+    document.getElementById('tpModules').textContent=points.length;
+    const tree=document.getElementById('tpTree');
+    tree.innerHTML=points.map((m,i)=>`
+        <div class="tp-module">
+            <div class="tp-module-title" onclick="toggleTpModule(${i})">
+                <span class="arrow" id="tpArrow${i}">&#9656;</span>
+                ${esc(m.module)}
+                <span class="tp-module-count">${m.points.length} 个测试点</span>
+            </div>
+            <div class="tp-points" id="tpPoints${i}">
+                ${m.points.map(p=>`<div class="tp-point"><div class="tp-dot"></div><div class="tp-info"><div class="tp-title">${esc(p.title)}</div>${p.description?`<div class="tp-desc">${esc(p.description)}</div>`:''}</div></div>`).join('')}
+            </div>
+        </div>
+    `).join('');
+    document.getElementById('tpResult').style.display='block';
+}
+function toggleTpModule(i){
+    const pts=document.getElementById('tpPoints'+i);
+    const arrow=document.getElementById('tpArrow'+i);
+    pts.classList.toggle('show');
+    arrow.classList.toggle('open');
+}
+async function exportPoints(fmt){
+    if(!testPointsData.length){showToast('没有测试点可导出','error');return;}
+    const req=document.getElementById('tpRequirement').value.trim()||'测试点';
+    try{
+        const r=await authFetch('/api/export-points',{
+            method:'POST',headers:{'Content-Type':'application/json'},
+            body:JSON.stringify({points:testPointsData,format:fmt,title:req.substring(0,30)})
+        });
+        const d=await r.json();
+        if(d.success){
+            const filename=d.file.split(/[/\\]/).pop();
+            window.open('/api/download/'+filename,'_blank');
+            showToast('导出成功');
+        }else showToast(d.error||'导出失败','error');
+    }catch(e){showToast(e.message,'error');}
 }
 
 // ============================================================
