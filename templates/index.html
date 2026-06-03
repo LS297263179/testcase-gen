@@ -5,711 +5,781 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 测试用例生成器</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f0f2f5; color: #333; min-height: 100vh; }
+        *{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f0f2f5;color:#333;min-height:100vh;}
 
         /* ===== Header ===== */
-        .header { background: linear-gradient(135deg, #1a73e8, #0d47a1); color: #fff; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 8px rgba(0,0,0,0.15); position: sticky; top: 0; z-index: 100; }
-        .header-left { display: flex; align-items: center; gap: 10px; }
-        .header-left h1 { font-size: 18px; font-weight: 600; }
-        .header-left .badge { font-size: 10px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 10px; }
-        .header-right { display: flex; align-items: center; gap: 10px; }
-        .header-btn { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; transition: background 0.2s; display: flex; align-items: center; gap: 5px; }
-        .header-btn:hover { background: rgba(255,255,255,0.3); }
-        .header-btn svg { width: 14px; height: 14px; }
-        .username { color: rgba(255,255,255,0.9); font-size: 13px; }
+        .header{background:linear-gradient(135deg,#1a73e8,#0d47a1);color:#fff;padding:0 24px;height:54px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,0.15);position:sticky;top:0;z-index:100;}
+        .header-left{display:flex;align-items:center;gap:10px;}
+        .header-left h1{font-size:17px;font-weight:600;}
+        .header-left .badge{font-size:10px;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:10px;}
+        .header-right{display:flex;align-items:center;gap:10px;}
+        .header-btn{background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);color:#fff;padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;transition:background 0.2s;display:flex;align-items:center;gap:5px;}
+        .header-btn:hover{background:rgba(255,255,255,0.3);}
+        .header-btn svg{width:14px;height:14px;}
+        .username{color:rgba(255,255,255,0.9);font-size:13px;}
 
         /* ===== Layout ===== */
-        .app-layout { display: flex; min-height: calc(100vh - 52px); }
-
-        /* ===== Sidebar ===== */
-        .sidebar-nav { width: 120px; background: #fff; border-right: 1px solid #e8e8e8; display: flex; flex-direction: column; padding: 16px 0; flex-shrink: 0; }
-        .nav-item { display: flex; align-items: center; gap: 8px; padding: 12px 16px; cursor: pointer; color: #666; font-size: 13px; transition: all 0.15s; border-left: 3px solid transparent; }
-        .nav-item:hover { background: #f6f9ff; color: #1a73e8; }
-        .nav-item.active { background: #e8f0fe; color: #1a73e8; border-left-color: #1a73e8; font-weight: 600; }
-        .nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
-
-        /* ===== Main ===== */
-        .main-content { flex: 1; padding: 20px 28px 40px; overflow-y: auto; min-width: 0; }
-        .page { display: none; }
-        .page.active { display: block; }
+        .app-layout{display:flex;min-height:calc(100vh - 54px);}
+        .sidebar-nav{width:120px;background:#fff;border-right:1px solid #e8e8e8;display:flex;flex-direction:column;padding:16px 0;flex-shrink:0;}
+        .nav-item{display:flex;align-items:center;gap:8px;padding:12px 16px;cursor:pointer;color:#666;font-size:13px;transition:all 0.15s;border-left:3px solid transparent;}
+        .nav-item:hover{background:#f6f9ff;color:#1a73e8;}
+        .nav-item.active{background:#e8f0fe;color:#1a73e8;border-left-color:#1a73e8;font-weight:600;}
+        .nav-item svg{width:18px;height:18px;flex-shrink:0;}
+        .main-content{flex:1;padding:20px 28px 40px;overflow-y:auto;min-width:0;}
+        .page{display:none;}
+        .page.active{display:block;}
 
         /* ===== Card ===== */
-        .card { background: #fff; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); margin-bottom: 16px; overflow: hidden; }
-        .card-header { padding: 14px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; }
-        .card-header h3 { font-size: 15px; font-weight: 600; color: #1a73e8; display: flex; align-items: center; gap: 8px; }
-        .card-header h3::before { content: ''; display: inline-block; width: 3px; height: 15px; background: #1a73e8; border-radius: 2px; }
-        .card-body { padding: 18px 20px; }
+        .card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.06);margin-bottom:16px;overflow:hidden;}
+        .card-header{padding:14px 20px;border-bottom:1px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;}
+        .card-header h3{font-size:15px;font-weight:600;color:#1a73e8;display:flex;align-items:center;gap:8px;}
+        .card-header h3::before{content:'';display:inline-block;width:3px;height:15px;background:#1a73e8;border-radius:2px;}
+        .card-body{padding:18px 20px;}
 
-        /* ===== Form ===== */
-        textarea { width: 100%; height: 200px; padding: 10px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; resize: vertical; font-family: inherit; transition: border-color 0.2s; line-height: 1.6; }
-        textarea:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.12); }
-        .upload-area { border: 2px dashed #d9d9d9; border-radius: 8px; padding: 18px; text-align: center; cursor: pointer; transition: all 0.2s; margin-top: 10px; }
-        .upload-area:hover { border-color: #1a73e8; background: #f6f9ff; }
-        .upload-area.dragover { border-color: #1a73e8; background: #e8f0fe; }
-        .upload-area input { display: none; }
-        .upload-area .icon { font-size: 24px; color: #bbb; margin-bottom: 2px; }
-        .upload-area p { color: #666; font-size: 13px; }
-        .upload-area .hint { color: #999; font-size: 11px; margin-top: 2px; }
-        .file-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-        .file-item { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: #f6f9ff; border: 1px solid #e0e7ff; border-radius: 6px; font-size: 12px; position: relative; }
-        .file-item img { width: 36px; height: 36px; object-fit: cover; border-radius: 4px; border: 1px solid #e0e0e0; }
-        .file-item .file-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #333; font-size: 11px; }
-        .file-item .file-type { font-size: 10px; color: #1a73e8; background: #e8f0fe; padding: 1px 5px; border-radius: 3px; }
-        .file-item .remove-btn { position: absolute; top: -4px; right: -4px; width: 15px; height: 15px; background: #d32f2f; color: #fff; border: none; border-radius: 50%; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        /* ===== Dashboard ===== */
+        .dash-welcome{margin-bottom:20px;}
+        .dash-welcome h2{font-size:20px;color:#333;margin-bottom:4px;}
+        .dash-welcome p{font-size:13px;color:#888;}
+        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;}
+        .stat-card{background:#fff;border-radius:10px;padding:18px;box-shadow:0 1px 3px rgba(0,0,0,0.06);text-align:center;}
+        .stat-card .num{font-size:28px;font-weight:700;color:#1a73e8;}
+        .stat-card .label{font-size:12px;color:#888;margin-top:4px;}
+        .stat-card.pink{background:linear-gradient(135deg,#fce4ec,#fff);}
+        .stat-card.pink .num{color:#e91e63;}
+        .stat-card.green{background:linear-gradient(135deg,#e8f5e9,#fff);}
+        .stat-card.green .num{color:#4caf50;}
+        .stat-card.orange{background:linear-gradient(135deg,#fff3e0,#fff);}
+        .stat-card.orange .num{color:#ff9800;}
+        .quick-actions{display:flex;gap:12px;margin-bottom:20px;}
+        .quick-card{flex:1;background:#fff;border-radius:10px;padding:20px;cursor:pointer;transition:all 0.2s;border:2px solid transparent;box-shadow:0 1px 3px rgba(0,0,0,0.06);}
+        .quick-card:hover{border-color:#1a73e8;transform:translateY(-2px);box-shadow:0 4px 12px rgba(26,115,232,0.15);}
+        .quick-card .qc-icon{font-size:28px;margin-bottom:8px;}
+        .quick-card .qc-title{font-size:14px;font-weight:600;color:#333;margin-bottom:4px;}
+        .quick-card .qc-desc{font-size:12px;color:#888;}
+        .recent-list{list-style:none;}
+        .recent-item{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #f5f5f5;cursor:pointer;transition:background 0.15s;}
+        .recent-item:hover{background:#f6f9ff;margin:0 -20px;padding:10px 20px;}
+        .recent-item:last-child{border-bottom:none;}
+        .recent-item .ri-text{flex:1;font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .recent-item .ri-meta{font-size:11px;color:#999;margin-left:12px;white-space:nowrap;}
 
-        /* ===== Toolbar ===== */
-        .toolbar { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-top: 1px solid #f0f0f0; flex-wrap: wrap; }
-        .toolbar label { font-size: 13px; color: #555; display: flex; align-items: center; gap: 6px; }
-        .toolbar select, .toolbar input[type="text"] { padding: 5px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; }
-        .toolbar select:focus, .toolbar input[type="text"]:focus { outline: none; border-color: #1a73e8; }
-        .toolbar .spacer { flex: 1; }
+        /* ===== Split Layout ===== */
+        .split-layout{display:flex;gap:16px;height:calc(100vh - 94px);}
+        .split-left{width:42%;min-width:360px;display:flex;flex-direction:column;gap:16px;overflow-y:auto;padding-right:4px;}
+        .split-right{flex:1;display:flex;flex-direction:column;gap:16px;overflow-y:auto;padding-left:4px;}
+        .split-left .card,.split-right .card{margin-bottom:0;}
+        textarea{width:100%;height:200px;padding:10px 12px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;resize:vertical;font-family:inherit;transition:border-color 0.2s;line-height:1.6;}
+        textarea:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,0.12);}
+        .upload-area{border:2px dashed #d9d9d9;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;margin-top:10px;}
+        .upload-area:hover{border-color:#1a73e8;background:#f6f9ff;}
+        .upload-area.dragover{border-color:#1a73e8;background:#e8f0fe;}
+        .upload-area input{display:none;}
+        .upload-area p{color:#666;font-size:13px;}
+        .upload-area .hint{color:#999;font-size:11px;margin-top:2px;}
+        .file-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+        .file-item{display:flex;align-items:center;gap:6px;padding:5px 8px;background:#f6f9ff;border:1px solid #e0e7ff;border-radius:6px;font-size:12px;position:relative;}
+        .file-item img{width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid #e0e0e0;}
+        .file-item .fn{max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#333;font-size:11px;}
+        .file-item .ft{font-size:10px;color:#1a73e8;background:#e8f0fe;padding:1px 5px;border-radius:3px;}
+        .file-item .rb{position:absolute;top:-4px;right:-4px;width:15px;height:15px;background:#d32f2f;color:#fff;border:none;border-radius:50%;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+        .toolbar{display:flex;align-items:center;gap:10px;padding:12px 0;flex-wrap:wrap;}
+        .toolbar label{font-size:13px;color:#555;display:flex;align-items:center;gap:6px;}
+        .toolbar select,.toolbar input[type="text"]{padding:5px 10px;border:1px solid #d9d9d9;border-radius:6px;font-size:13px;}
+        .toolbar .spacer{flex:1;}
+
+        /* ===== Analysis Step ===== */
+        .analysis-result{margin-top:12px;}
+        .complexity-badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;margin-bottom:10px;}
+        .complexity-simple{background:#e8f5e9;color:#4caf50;}
+        .complexity-medium{background:#fff3e0;color:#ff9800;}
+        .complexity-complex{background:#fce4ec;color:#e91e63;}
+        .module-list{display:flex;flex-direction:column;gap:6px;}
+        .module-item{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e8e8e8;border-radius:8px;font-size:13px;}
+        .module-item .mi-name{flex:1;font-weight:500;color:#333;}
+        .module-item .mi-desc{font-size:11px;color:#888;}
+        .module-item .mi-cases{font-size:11px;color:#1a73e8;white-space:nowrap;}
 
         /* ===== Buttons ===== */
-        .btn { padding: 9px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-        .btn-primary { background: #1a73e8; color: #fff; }
-        .btn-primary:hover { background: #1557b0; }
-        .btn-primary:disabled { background: #93b8f0; cursor: not-allowed; }
-        .btn-success { background: #34a853; color: #fff; }
-        .btn-success:hover { background: #2d8e47; }
-        .btn-success:disabled { background: #8fd4a4; cursor: not-allowed; }
-        .btn-outline { background: #fff; color: #1a73e8; border: 1px solid #1a73e8; }
-        .btn-outline:hover { background: #f6f9ff; }
-        .btn-sm { padding: 6px 14px; font-size: 12px; }
-        .btn-danger { background: #d32f2f; color: #fff; }
-        .btn-danger:hover { background: #b71c1c; }
-
-        /* ===== Spinner ===== */
-        .spinner { display: inline-block; width: 13px; height: 13px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        .spinner-dark { border-color: #1a73e8; border-top-color: transparent; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        .btn{padding:9px 20px;border:none;border-radius:8px;font-size:14px;font-weight:500;cursor:pointer;transition:all 0.2s;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+        .btn-primary{background:#1a73e8;color:#fff;}
+        .btn-primary:hover{background:#1557b0;}
+        .btn-primary:disabled{background:#93b8f0;cursor:not-allowed;}
+        .btn-success{background:#34a853;color:#fff;}
+        .btn-success:hover{background:#2d8e47;}
+        .btn-success:disabled{background:#8fd4a4;cursor:not-allowed;}
+        .btn-outline{background:#fff;color:#1a73e8;border:1px solid #1a73e8;}
+        .btn-outline:hover{background:#f6f9ff;}
+        .btn-sm{padding:6px 14px;font-size:12px;}
+        .btn-ghost{background:transparent;color:#888;border:1px solid #ddd;}
+        .btn-ghost:hover{color:#1a73e8;border-color:#1a73e8;}
+        .spinner{display:inline-block;width:13px;height:13px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:spin 0.8s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg);}}
 
         /* ===== Loading ===== */
-        .loading-card { text-align: center; padding: 48px 16px; }
-        .loading-card .spinner-lg { width: 36px; height: 36px; border: 3px solid #e8e8e8; border-top-color: #1a73e8; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto; }
-        .loading-card p { margin-top: 14px; color: #666; font-size: 14px; }
+        .loading-card{text-align:center;padding:48px 16px;}
+        .loading-card .spinner-lg{width:36px;height:36px;border:3px solid #e8e8e8;border-top-color:#1a73e8;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;}
+        .loading-card p{margin-top:14px;color:#666;font-size:14px;}
 
-        /* ===== Stats ===== */
-        .stats-bar { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap; }
-        .stats-group { display: flex; gap: 8px; }
-        .stat-chip { display: flex; align-items: center; gap: 6px; padding: 4px 12px; background: #f6f9ff; border-radius: 6px; font-size: 13px; }
-        .stat-chip .num { font-weight: 700; color: #1a73e8; font-size: 16px; }
-        .stat-chip .label { color: #888; font-size: 12px; }
-        .stat-chip.p0 { background: #fff0f0; }
-        .stat-chip.p0 .num { color: #d32f2f; }
-        .stat-chip.p1 { background: #fff8e1; }
-        .stat-chip.p1 .num { color: #f57f17; }
-        .stat-chip.p2 { background: #f1f8e9; }
-        .stat-chip.p2 .num { color: #558b2f; }
-        .stat-chip.p3 { background: #e3f2fd; }
-        .stat-chip.p3 .num { color: #1565c0; }
-        .stats-actions { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
-        .input-info { font-size: 12px; color: #999; padding: 0 20px 10px; }
+        /* ===== Stats Bar ===== */
+        .stats-bar{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap;}
+        .stats-group{display:flex;gap:8px;}
+        .stat-chip{display:flex;align-items:center;gap:6px;padding:4px 12px;background:#f6f9ff;border-radius:6px;font-size:13px;}
+        .stat-chip .num{font-weight:700;color:#1a73e8;font-size:16px;}
+        .stat-chip .lbl{color:#888;font-size:12px;}
+        .stat-chip.p0{background:#fff0f0;} .stat-chip.p0 .num{color:#d32f2f;}
+        .stat-chip.p1{background:#fff8e1;} .stat-chip.p1 .num{color:#f57f17;}
+        .stat-chip.p2{background:#f1f8e9;} .stat-chip.p2 .num{color:#558b2f;}
+        .stat-chip.p3{background:#e3f2fd;} .stat-chip.p3 .num{color:#1565c0;}
+        .stats-actions{margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;}
+        .input-info{font-size:12px;color:#999;padding:0 20px 10px;}
+
+        /* ===== Batch Bar ===== */
+        .batch-bar{display:flex;align-items:center;gap:10px;padding:10px 20px;background:#f6f9ff;border-bottom:1px solid #e0e7ff;font-size:13px;}
+        .batch-bar input[type="checkbox"]{accent-color:#1a73e8;}
+        .batch-bar label{cursor:pointer;color:#555;}
+        .batch-bar .spacer{flex:1;}
 
         /* ===== Table ===== */
-        .tc-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .tc-table th { background: #f8fafc; color: #555; font-weight: 600; text-align: left; padding: 10px 12px; border-bottom: 1px solid #e8e8e8; font-size: 12px; text-transform: uppercase; letter-spacing: 0.3px; }
-        .tc-table td { padding: 10px 12px; border-bottom: 1px solid #f0f0f0; vertical-align: top; }
-        .tc-table tr:hover td { background: #fafcff; }
-        .priority { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
-        .priority-P0 { background: #fff0f0; color: #d32f2f; }
-        .priority-P1 { background: #fff8e1; color: #f57f17; }
-        .priority-P2 { background: #f1f8e9; color: #558b2f; }
-        .priority-P3 { background: #e3f2fd; color: #1565c0; }
-        .type-tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; background: #f0f0f0; color: #555; }
-        .action-btn { color: #1a73e8; cursor: pointer; font-size: 12px; border: none; background: none; padding: 2px 4px; }
-        .action-btn:hover { text-decoration: underline; }
+        .tc-table{width:100%;border-collapse:collapse;font-size:13px;}
+        .tc-table th{background:#f8fafc;color:#555;font-weight:600;text-align:left;padding:10px 12px;border-bottom:1px solid #e8e8e8;font-size:12px;}
+        .tc-table td{padding:10px 12px;border-bottom:1px solid #f0f0f0;vertical-align:top;}
+        .tc-table tr:hover td{background:#fafcff;}
+        .tc-table .cb-cell{width:36px;text-align:center;}
+        .tc-table .cb-cell input{accent-color:#1a73e8;}
+        .priority{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;}
+        .priority-P0{background:#fff0f0;color:#d32f2f;}
+        .priority-P1{background:#fff8e1;color:#f57f17;}
+        .priority-P2{background:#f1f8e9;color:#558b2f;}
+        .priority-P3{background:#e3f2fd;color:#1565c0;}
+        .type-tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;background:#f0f0f0;color:#555;}
+        .src-tag{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#ede7f6;color:#673ab7;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .action-btn{color:#1a73e8;cursor:pointer;font-size:12px;border:none;background:none;padding:2px 4px;}
+        .action-btn:hover{text-decoration:underline;}
 
         /* ===== Detail ===== */
-        .detail-row { display: none; }
-        .detail-row.show { display: table-row; }
-        .detail-row td { background: #fafcff; padding: 16px 20px; }
-        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 13px; }
-        .detail-grid dt { color: #999; font-size: 11px; margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.3px; }
-        .detail-grid dd { color: #333; white-space: pre-wrap; line-height: 1.6; }
+        .detail-row{display:none;}
+        .detail-row.show{display:table-row;}
+        .detail-row td{background:#fafcff;padding:16px 20px;}
+        .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;font-size:13px;}
+        .detail-grid dt{color:#999;font-size:11px;margin-bottom:3px;text-transform:uppercase;letter-spacing:0.3px;}
+        .detail-grid dd{color:#333;white-space:pre-wrap;line-height:1.6;}
 
         /* ===== Review ===== */
-        .review-panel { background: #fffde7; border: 1px solid #ffe082; border-radius: 8px; padding: 16px; white-space: pre-wrap; line-height: 1.8; font-size: 13px; }
-        .review-actions { text-align: center; padding: 14px 20px; border-top: 1px solid #f0f0f0; }
+        .review-panel{background:#fffde7;border:1px solid #ffe082;border-radius:8px;padding:16px;white-space:pre-wrap;line-height:1.8;font-size:13px;}
+        .review-actions{text-align:center;padding:14px 20px;border-top:1px solid #f0f0f0;}
 
         /* ===== Diff ===== */
-        .diff-stats { display: flex; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #f0f0f0; }
-        .diff-stat { text-align: center; padding: 6px 14px; border-radius: 6px; min-width: 70px; }
-        .diff-stat .num { font-size: 18px; font-weight: 700; }
-        .diff-stat .label { font-size: 11px; color: #888; }
-        .diff-stat.add { background: #e6ffed; }
-        .diff-stat.add .num { color: #34a853; }
-        .diff-stat.mod { background: #fff8e1; }
-        .diff-stat.mod .num { color: #f57f17; }
-        .diff-stat.del { background: #ffeef0; }
-        .diff-stat.del .num { color: #d32f2f; }
-        .diff-content { padding: 16px 20px; max-height: 400px; overflow-y: auto; }
-        .diff-item { padding: 8px 12px; margin-bottom: 6px; border-radius: 6px; font-size: 12px; }
-        .diff-item .diff-label { font-weight: 600; margin-right: 6px; font-size: 11px; }
-        .diff-item .diff-detail { color: #666; margin-top: 2px; }
-        .diff-added { background: #e6ffed; border-left: 3px solid #34a853; }
-        .diff-added .diff-label { color: #34a853; }
-        .diff-modified { background: #fff8e1; border-left: 3px solid #f57f17; }
-        .diff-modified .diff-label { color: #f57f17; }
-        .diff-removed { background: #ffeef0; border-left: 3px solid #d32f2f; }
-        .diff-removed .diff-label { color: #d32f2f; }
+        .diff-stats{display:flex;gap:12px;padding:14px 20px;border-bottom:1px solid #f0f0f0;}
+        .diff-stat{text-align:center;padding:6px 14px;border-radius:6px;min-width:70px;}
+        .diff-stat .num{font-size:18px;font-weight:700;}
+        .diff-stat .lbl{font-size:11px;color:#888;}
+        .diff-stat.add{background:#e6ffed;} .diff-stat.add .num{color:#34a853;}
+        .diff-stat.mod{background:#fff8e1;} .diff-stat.mod .num{color:#f57f17;}
+        .diff-stat.del{background:#ffeef0;} .diff-stat.del .num{color:#d32f2f;}
+        .diff-content{padding:16px 20px;max-height:400px;overflow-y:auto;}
+        .diff-item{padding:8px 12px;margin-bottom:6px;border-radius:6px;font-size:12px;}
+        .diff-item .dl{font-weight:600;margin-right:6px;font-size:11px;}
+        .diff-item .dd{color:#666;margin-top:2px;}
+        .diff-added{background:#e6ffed;border-left:3px solid #34a853;} .diff-added .dl{color:#34a853;}
+        .diff-modified{background:#fff8e1;border-left:3px solid #f57f17;} .diff-modified .dl{color:#f57f17;}
+        .diff-removed{background:#ffeef0;border-left:3px solid #d32f2f;} .diff-removed .dl{color:#d32f2f;}
 
         /* ===== Preferences ===== */
-        .pref-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 5px; font-size: 12px; }
-        .pref-item.inactive { opacity: 0.45; }
-        .pref-cat { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: #e8f0fe; color: #1a73e8; white-space: nowrap; }
-        .pref-pattern { flex: 1; color: #333; }
-        .pref-weight { font-size: 10px; color: #aaa; white-space: nowrap; }
-        .pref-item button { font-size: 10px; padding: 2px 7px; border-radius: 3px; border: 1px solid #ddd; background: #fff; cursor: pointer; color: #666; }
-        .pref-item button:hover { border-color: #1a73e8; color: #1a73e8; }
-        .pref-item .pref-del:hover { border-color: #d32f2f; color: #d32f2f; }
+        .pref-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;margin-bottom:5px;font-size:12px;}
+        .pref-item.inactive{opacity:0.45;}
+        .pref-cat{display:inline-block;padding:1px 6px;border-radius:3px;font-size:10px;background:#e8f0fe;color:#1a73e8;white-space:nowrap;}
+        .pref-pattern{flex:1;color:#333;}
+        .pref-weight{font-size:10px;color:#aaa;white-space:nowrap;}
+        .pref-item button{font-size:10px;padding:2px 7px;border-radius:3px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#666;}
+        .pref-item button:hover{border-color:#1a73e8;color:#1a73e8;}
 
         /* ===== Edit ===== */
-        .edit-input { width: 100%; padding: 3px 6px; border: 1px solid #1a73e8; border-radius: 4px; font-size: 12px; font-family: inherit; background: #f0f6ff; }
-        .edit-textarea { width: 100%; padding: 5px 6px; border: 1px solid #1a73e8; border-radius: 4px; font-size: 12px; font-family: inherit; background: #f0f6ff; resize: vertical; min-height: 50px; }
-        .edit-actions button { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: none; cursor: pointer; margin-right: 3px; }
-        .edit-save { background: #34a853; color: #fff; }
-        .edit-cancel { background: #eee; color: #555; }
+        .edit-input{width:100%;padding:3px 6px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;font-family:inherit;background:#f0f6ff;}
+        .edit-textarea{width:100%;padding:5px 6px;border:1px solid #1a73e8;border-radius:4px;font-size:12px;font-family:inherit;background:#f0f6ff;resize:vertical;min-height:50px;}
+        .edit-actions button{font-size:11px;padding:3px 8px;border-radius:4px;border:none;cursor:pointer;margin-right:3px;}
+        .edit-save{background:#34a853;color:#fff;}
+        .edit-cancel{background:#eee;color:#555;}
 
         /* ===== Model Config ===== */
-        .config-section { margin-bottom: 20px; }
-        .config-section h4 { font-size: 14px; color: #333; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 6px; }
-        .config-section h4 .tag { font-size: 11px; background: #e8f0fe; color: #1a73e8; padding: 1px 6px; border-radius: 3px; font-weight: normal; }
-        .preset-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
-        .preset-btn { padding: 8px 18px; border: 1px solid #d9d9d9; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13px; transition: all 0.15s; }
-        .preset-btn:hover { border-color: #1a73e8; color: #1a73e8; }
-        .preset-btn.active { border-color: #1a73e8; background: #e8f0fe; color: #1a73e8; font-weight: 600; }
-        .config-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .config-grid .form-group { margin-bottom: 12px; }
-        .config-grid label { display: block; font-size: 12px; color: #666; margin-bottom: 4px; font-weight: 500; }
-        .config-grid input, .config-grid select { width: 100%; padding: 8px 10px; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 13px; }
-        .config-grid input:focus, .config-grid select:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.1); }
-        .config-grid .full { grid-column: 1 / -1; }
-        .config-actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 14px; border-top: 1px solid #f0f0f0; max-width: 1100px; }
+        .preset-bar{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;}
+        .preset-btn{padding:8px 18px;border:1px solid #d9d9d9;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;transition:all 0.15s;}
+        .preset-btn:hover{border-color:#1a73e8;color:#1a73e8;}
+        .preset-btn.active{border-color:#1a73e8;background:#e8f0fe;color:#1a73e8;font-weight:600;}
+        .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+        .config-grid .form-group{margin-bottom:12px;}
+        .config-grid label{display:block;font-size:12px;color:#666;margin-bottom:4px;font-weight:500;}
+        .config-grid input,.config-grid select{width:100%;padding:8px 10px;border:1px solid #d9d9d9;border-radius:6px;font-size:13px;}
+        .config-grid input:focus,.config-grid select:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,0.1);}
+        .config-grid .full{grid-column:1/-1;}
 
         /* ===== Toast ===== */
-        .toast { position: fixed; top: 68px; right: 20px; padding: 10px 20px; border-radius: 8px; color: #fff; font-size: 13px; z-index: 1000; transform: translateX(120%); transition: transform 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-        .toast.show { transform: translateX(0); }
-        .toast.success { background: #34a853; }
-        .toast.error { background: #d32f2f; }
+        .toast{position:fixed;top:68px;right:20px;padding:10px 20px;border-radius:8px;color:#fff;font-size:13px;z-index:1000;transform:translateX(120%);transition:transform 0.3s;box-shadow:0 4px 12px rgba(0,0,0,0.15);}
+        .toast.show{transform:translateX(0);}
+        .toast.success{background:#34a853;}
+        .toast.error{background:#d32f2f;}
 
         /* ===== Auth ===== */
-        .auth-page { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #e8f0fe 0%, #f0f2f5 100%); }
-        .auth-card { background: #fff; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 36px 32px; width: 100%; max-width: 380px; }
-        .auth-card .logo { text-align: center; margin-bottom: 28px; }
-        .auth-card .logo h2 { font-size: 20px; color: #1a73e8; margin-bottom: 4px; }
-        .auth-card .logo p { font-size: 12px; color: #999; }
-        .auth-card .form-group { margin-bottom: 14px; }
-        .auth-card label { display: block; font-size: 13px; color: #555; margin-bottom: 5px; font-weight: 500; }
-        .auth-card input[type="text"], .auth-card input[type="password"] { width: 100%; padding: 10px 12px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 14px; transition: border-color 0.2s; }
-        .auth-card input:focus { outline: none; border-color: #1a73e8; box-shadow: 0 0 0 2px rgba(26,115,232,0.1); }
-        .auth-card .btn { width: 100%; margin-top: 8px; padding: 11px; font-size: 15px; }
-        .auth-card .auth-footer { text-align: center; margin-top: 14px; font-size: 12px; color: #888; }
-        .auth-card .auth-footer a { color: #1a73e8; cursor: pointer; text-decoration: none; }
-        .auth-card .auth-footer a:hover { text-decoration: underline; }
-        .auth-error { color: #d32f2f; font-size: 12px; text-align: center; margin-bottom: 10px; display: none; background: #fff0f0; padding: 8px; border-radius: 6px; }
+        .auth-page{min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#e8f0fe 0%,#f0f2f5 100%);}
+        .auth-card{background:#fff;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.08);padding:36px 32px;width:100%;max-width:380px;}
+        .auth-card .logo{text-align:center;margin-bottom:28px;}
+        .auth-card .logo h2{font-size:20px;color:#1a73e8;margin-bottom:4px;}
+        .auth-card .logo p{font-size:12px;color:#999;}
+        .auth-card .form-group{margin-bottom:14px;}
+        .auth-card label{display:block;font-size:13px;color:#555;margin-bottom:5px;font-weight:500;}
+        .auth-card input[type="text"],.auth-card input[type="password"]{width:100%;padding:10px 12px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;transition:border-color 0.2s;}
+        .auth-card input:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,0.1);}
+        .auth-card .btn{width:100%;margin-top:8px;padding:11px;font-size:15px;}
+        .auth-card .auth-footer{text-align:center;margin-top:14px;font-size:12px;color:#888;}
+        .auth-card .auth-footer a{color:#1a73e8;cursor:pointer;text-decoration:none;}
+        .auth-card .auth-footer a:hover{text-decoration:underline;}
+        .auth-error{color:#d32f2f;font-size:12px;text-align:center;margin-bottom:10px;display:none;background:#fff0f0;padding:8px;border-radius:6px;}
 
         /* ===== History Sidebar ===== */
-        .sidebar-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.3); z-index: 198; }
-        .sidebar-overlay.show { display: block; }
-        .history-sidebar { position: fixed; top: 0; right: -380px; width: 380px; max-width: 90vw; height: 100vh; background: #fff; box-shadow: -4px 0 20px rgba(0,0,0,0.12); z-index: 199; transition: right 0.3s; display: flex; flex-direction: column; }
-        .history-sidebar.open { right: 0; }
-        .hs-header { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #eee; }
-        .hs-header h3 { font-size: 15px; color: #333; }
-        .hs-close { background: none; border: none; font-size: 20px; cursor: pointer; color: #999; padding: 2px 6px; border-radius: 4px; }
-        .hs-close:hover { color: #333; background: #f0f0f0; }
-        .hs-body { flex: 1; overflow-y: auto; padding: 10px; }
-        .history-item { padding: 10px 12px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 6px; cursor: pointer; transition: all 0.15s; }
-        .history-item:hover { border-color: #1a73e8; background: #f6f9ff; }
-        .history-item .h-time { font-size: 11px; color: #aaa; }
-        .history-item .h-preview { font-size: 12px; color: #333; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .history-item .h-meta { display: flex; gap: 10px; margin-top: 4px; font-size: 11px; color: #888; }
-        .history-item .h-actions { display: flex; gap: 5px; margin-top: 6px; }
-        .history-item .h-actions button { font-size: 11px; padding: 3px 8px; border-radius: 4px; border: 1px solid #ddd; background: #fff; cursor: pointer; color: #666; }
-        .history-item .h-actions button:hover { border-color: #1a73e8; color: #1a73e8; }
-        .history-item .h-actions .del-btn:hover { border-color: #d32f2f; color: #d32f2f; }
-        .history-empty { text-align: center; color: #bbb; padding: 40px 16px; font-size: 13px; }
+        .sidebar-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.3);z-index:198;}
+        .sidebar-overlay.show{display:block;}
+        .history-sidebar{position:fixed;top:0;right:-380px;width:380px;max-width:90vw;height:100vh;background:#fff;box-shadow:-4px 0 20px rgba(0,0,0,0.12);z-index:199;transition:right 0.3s;display:flex;flex-direction:column;}
+        .history-sidebar.open{right:0;}
+        .hs-header{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #eee;}
+        .hs-header h3{font-size:15px;color:#333;}
+        .hs-close{background:none;border:none;font-size:20px;cursor:pointer;color:#999;padding:2px 6px;border-radius:4px;}
+        .hs-close:hover{color:#333;background:#f0f0f0;}
+        .hs-body{flex:1;overflow-y:auto;padding:10px;}
+        .history-item{padding:10px 12px;border:1px solid #eee;border-radius:8px;margin-bottom:6px;cursor:pointer;transition:all 0.15s;}
+        .history-item:hover{border-color:#1a73e8;background:#f6f9ff;}
+        .history-item .h-time{font-size:11px;color:#aaa;}
+        .history-item .h-preview{font-size:12px;color:#333;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .history-item .h-meta{display:flex;gap:10px;margin-top:4px;font-size:11px;color:#888;}
+        .history-item .h-actions{display:flex;gap:5px;margin-top:6px;}
+        .history-item .h-actions button{font-size:11px;padding:3px 8px;border-radius:4px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#666;}
+        .history-item .h-actions button:hover{border-color:#1a73e8;color:#1a73e8;}
+        .history-item .h-actions .del-btn:hover{border-color:#d32f2f;color:#d32f2f;}
+        .history-empty{text-align:center;color:#bbb;padding:40px 16px;font-size:13px;}
 
-        @media (max-width: 768px) {
-            .sidebar-nav { width: 60px; }
-            .nav-item { padding: 10px 8px; font-size: 11px; justify-content: center; }
-            .nav-item svg { width: 20px; height: 20px; }
-            .main-content { padding: 12px 10px 32px; }
-            .config-grid { grid-template-columns: 1fr; }
-        }
+        @media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr);}.quick-actions{flex-direction:column;}.split-layout{flex-direction:column;height:auto;}.split-left,.split-right{width:100%;min-width:0;overflow:visible;}.config-grid{grid-template-columns:1fr;}.detail-grid{grid-template-columns:1fr;}}
     </style>
 </head>
 <body>
 
-    <!-- ==================== 登录页 ==================== -->
-    <div id="authPage" style="display:none;">
-        <div class="auth-page">
-            <div class="auth-card">
-                <div class="logo">
-                    <h2>&#129302; AI 测试用例生成器</h2>
-                    <p>智能生成测试用例，提升测试效率</p>
-                </div>
-                <div class="auth-error" id="authError"></div>
-                <div id="loginForm">
-                    <div class="form-group"><label>用户名</label><input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username"></div>
-                    <div class="form-group"><label>密码</label><input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password"></div>
-                    <button class="btn btn-primary" onclick="doLogin()">登 录</button>
-                    <div class="auth-footer">还没有账号？<a onclick="showRegister()">立即注册</a></div>
-                </div>
-                <div id="registerForm" style="display:none;">
-                    <div class="form-group"><label>用户名</label><input type="text" id="regUsername" placeholder="2-32 个字符" autocomplete="username"></div>
-                    <div class="form-group"><label>密码</label><input type="password" id="regPassword" placeholder="至少 4 个字符" autocomplete="new-password"></div>
-                    <div class="form-group"><label>确认密码</label><input type="password" id="regPassword2" placeholder="再次输入密码" autocomplete="new-password"></div>
-                    <button class="btn btn-primary" onclick="doRegister()">注 册</button>
-                    <div class="auth-footer">已有账号？<a onclick="showLogin()">返回登录</a></div>
-                </div>
+<!-- ==================== 登录页 ==================== -->
+<div id="authPage" style="display:none;">
+    <div class="auth-page">
+        <div class="auth-card">
+            <div class="logo"><h2>&#129302; AI 测试用例生成器</h2><p>智能生成测试用例，提升测试效率</p></div>
+            <div class="auth-error" id="authError"></div>
+            <div id="loginForm">
+                <div class="form-group"><label>用户名</label><input type="text" id="loginUsername" placeholder="请输入用户名" autocomplete="username"></div>
+                <div class="form-group"><label>密码</label><input type="password" id="loginPassword" placeholder="请输入密码" autocomplete="current-password"></div>
+                <button class="btn btn-primary" onclick="doLogin()">登 录</button>
+                <div class="auth-footer">还没有账号？<a onclick="showRegister()">立即注册</a></div>
+            </div>
+            <div id="registerForm" style="display:none;">
+                <div class="form-group"><label>用户名</label><input type="text" id="regUsername" placeholder="2-32 个字符" autocomplete="username"></div>
+                <div class="form-group"><label>密码</label><input type="password" id="regPassword" placeholder="至少 4 个字符" autocomplete="new-password"></div>
+                <div class="form-group"><label>确认密码</label><input type="password" id="regPassword2" placeholder="再次输入密码" autocomplete="new-password"></div>
+                <button class="btn btn-primary" onclick="doRegister()">注 册</button>
+                <div class="auth-footer">已有账号？<a onclick="showLogin()">返回登录</a></div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- ==================== 主应用 ==================== -->
-    <div id="appPage" style="display:none;">
+<!-- ==================== 主应用 ==================== -->
+<div id="appPage" style="display:none;">
 
-    <div class="header">
-        <div class="header-left">
-            <h1>&#129302; AI 测试用例生成器</h1>
-            <span class="badge">Beta</span>
-        </div>
-        <div class="header-right">
-            <span class="username" id="headerUsername"></span>
-            <button class="header-btn" onclick="toggleHistory()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
-                历史
-            </button>
-            <button class="header-btn" onclick="doLogout()">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-                退出
-            </button>
-        </div>
+<div class="header">
+    <div class="header-left">
+        <h1>&#129302; AI 测试用例生成器</h1>
+        <span class="badge">Beta</span>
     </div>
-
-    <!-- 历史记录侧边栏 -->
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistory()"></div>
-    <div class="history-sidebar" id="historySidebar">
-        <div class="hs-header">
-            <h3>&#128194; 历史记录</h3>
-            <button class="hs-close" onclick="toggleHistory()">&times;</button>
-        </div>
-        <div class="hs-body" id="historyList"><div class="history-empty">暂无历史记录</div></div>
+    <div class="header-right">
+        <span class="username" id="headerUsername"></span>
+        <button class="header-btn" onclick="toggleHistory()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+            历史
+        </button>
+        <button class="header-btn" onclick="doLogout()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            退出
+        </button>
     </div>
+</div>
 
-    <div class="app-layout">
-        <!-- 左侧导航 -->
-        <nav class="sidebar-nav">
-            <div class="nav-item active" onclick="switchPage('generator')" id="nav-generator">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-                需求编写
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistory()"></div>
+<div class="history-sidebar" id="historySidebar">
+    <div class="hs-header"><h3>&#128194; 历史记录</h3><button class="hs-close" onclick="toggleHistory()">&times;</button></div>
+    <div class="hs-body" id="historyList"><div class="history-empty">暂无历史记录</div></div>
+</div>
+
+<div class="app-layout">
+    <nav class="sidebar-nav">
+        <div class="nav-item active" onclick="switchPage('dashboard')" id="nav-dashboard">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+            工作台
+        </div>
+        <div class="nav-item" onclick="switchPage('generator')" id="nav-generator">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            需求编写
+        </div>
+        <div class="nav-item" onclick="switchPage('modelConfig')" id="nav-modelConfig">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+            模型配置
+        </div>
+    </nav>
+
+    <div class="main-content">
+
+        <!-- ====== 仪表盘 ====== -->
+        <div class="page active" id="page-dashboard">
+            <div class="dash-welcome">
+                <h2 id="dashGreeting">你好</h2>
+                <p>欢迎回来，今天也加油写用例吧</p>
             </div>
-            <div class="nav-item" onclick="switchPage('modelConfig')" id="nav-modelConfig">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
-                模型配置
+
+            <div class="stats-grid">
+                <div class="stat-card"><div class="num" id="dashSessions">0</div><div class="label">生成次数</div></div>
+                <div class="stat-card pink"><div class="num" id="dashTestcases">0</div><div class="label">用例总数</div></div>
+                <div class="stat-card green"><div class="num" id="dashPrefs">0</div><div class="label">偏好规则</div></div>
+                <div class="stat-card orange"><div class="num" id="dashModels">-</div><div class="label">当前模型</div></div>
             </div>
-        </nav>
 
-        <!-- 主内容区 -->
-        <div class="main-content">
-
-            <!-- ====== 需求编写页 ====== -->
-            <div class="page active" id="page-generator">
-
-                <div class="card">
-                    <div class="card-header"><h3>需求输入</h3></div>
-                    <div class="card-body">
-                        <textarea id="requirement" placeholder="请输入需求描述...&#10;&#10;例如：&#10;用户通过手机号+验证码登录系统&#10;1. 手机号为11位中国大陆手机号&#10;2. 验证码为6位数字，有效期5分钟&#10;3. 同一手机号每天发送上限10次"></textarea>
-                        <div class="upload-area" id="uploadArea">
-                            <div class="icon">&#128228;</div>
-                            <p>点击或拖拽文件到此处</p>
-                            <div class="hint">支持 .md / .txt / .xlsx 需求文档 + .png / .jpg / .gif / .webp 图片</div>
-                            <input type="file" id="fileInput" multiple accept=".md,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.bmp">
-                        </div>
-                        <div class="file-list" id="fileList"></div>
-                    </div>
-                    <div class="toolbar">
-                        <label>优先级:
-                            <select id="priority">
-                                <option value="P0">P0 阻塞</option>
-                                <option value="P1" selected>P1 严重</option>
-                                <option value="P2">P2 一般</option>
-                                <option value="P3">P3 轻微</option>
-                            </select>
-                        </label>
-                        <label>用例类型:
-                            <input type="text" id="caseTypes" value="功能测试,边界测试,异常测试" placeholder="逗号分隔" style="width:180px;">
-                        </label>
-                        <div class="spacer"></div>
-                        <button class="btn btn-primary" id="btnGenerate" onclick="generate()">&#9889; 生成测试用例</button>
-                    </div>
+            <div class="quick-actions">
+                <div class="quick-card" onclick="switchPage('generator')">
+                    <div class="qc-icon">&#9998;&#65039;</div>
+                    <div class="qc-title">新建测试用例</div>
+                    <div class="qc-desc">输入需求描述，AI 自动生成测试用例</div>
                 </div>
-
-                <div id="loading" class="card" style="display:none;">
-                    <div class="loading-card">
-                        <div class="spinner-lg"></div>
-                        <p id="loadingText">AI 正在分析需求...</p>
-                    </div>
+                <div class="quick-card" onclick="switchPage('generator');setTimeout(()=>document.getElementById('requirement').focus(),100);">
+                    <div class="qc-icon">&#128228;</div>
+                    <div class="qc-title">上传需求文档</div>
+                    <div class="qc-desc">支持 MD / TXT / Excel / 图片混合上传</div>
                 </div>
-
-                <div id="result" class="card" style="display:none;">
-                    <div class="stats-bar">
-                        <div class="stats-group">
-                            <div class="stat-chip"><span class="num" id="totalCount">0</span><span class="label">总数</span></div>
-                            <div class="stat-chip p0"><span class="num" id="p0Count">0</span><span class="label">P0</span></div>
-                            <div class="stat-chip p1"><span class="num" id="p1Count">0</span><span class="label">P1</span></div>
-                            <div class="stat-chip p2"><span class="num" id="p2Count">0</span><span class="label">P2</span></div>
-                            <div class="stat-chip p3"><span class="num" id="p3Count">0</span><span class="label">P3</span></div>
-                        </div>
-                        <div class="stats-actions">
-                            <button class="btn btn-outline btn-sm" onclick="downloadFile('excel')">&#128196; Excel</button>
-                            <button class="btn btn-outline btn-sm" onclick="downloadFile('markdown')">&#128221; MD</button>
-                            <button class="btn btn-success btn-sm" id="btnReview" onclick="review()">&#128269; AI 评审</button>
-                            <button class="btn btn-outline btn-sm" id="btnSavePref" onclick="savePreferences()" style="display:none;">&#128161; 保存偏好</button>
-                        </div>
-                    </div>
-                    <div class="input-info" id="inputInfo"></div>
-                    <table class="tc-table">
-                        <thead><tr>
-                            <th style="width:65px;">编号</th>
-                            <th style="width:85px;">模块</th>
-                            <th>标题</th>
-                            <th style="width:55px;">优先级</th>
-                            <th style="width:75px;">类型</th>
-                            <th style="width:80px;">操作</th>
-                        </tr></thead>
-                        <tbody id="tbody"></tbody>
-                    </table>
+                <div class="quick-card" onclick="switchPage('modelConfig')">
+                    <div class="qc-icon">&#9881;&#65039;</div>
+                    <div class="qc-title">模型配置</div>
+                    <div class="qc-desc">切换大模型，配置生成和评审参数</div>
                 </div>
+            </div>
 
-                <div id="reviewPanel" class="card" style="display:none;">
-                    <div class="card-header"><h3>AI 评审报告</h3></div>
-                    <div class="card-body"><div class="review-panel" id="reviewContent"></div></div>
-                    <div class="review-actions"><button class="btn btn-success" id="btnOptimize" onclick="optimize()">&#128640; 根据评审优化用例</button></div>
+            <div class="card">
+                <div class="card-header"><h3>最近生成</h3></div>
+                <div class="card-body">
+                    <ul class="recent-list" id="dashRecent"><li class="history-empty">暂无记录</li></ul>
                 </div>
+            </div>
+        </div>
 
-                <div id="diffPanel" class="card" style="display:none;">
-                    <div class="card-header"><h3>优化变更对比</h3></div>
-                    <div class="diff-stats" id="diffStats"></div>
-                    <div class="diff-content" id="diffContent"></div>
-                </div>
-
-                <div class="card" id="prefPanel">
-                    <div class="card-header" style="cursor:pointer;" onclick="togglePrefPanel()">
-                        <h3>偏好规则管理</h3>
-                        <span id="prefToggle" style="font-size:11px;color:#aaa;">展开 &#9662;</span>
-                    </div>
-                    <div id="prefContent" style="display:none;">
+        <!-- ====== 需求编写（左右分栏） ====== -->
+        <div class="page" id="page-generator">
+            <div class="split-layout">
+                <!-- 左侧：输入 -->
+                <div class="split-left">
+                    <div class="card">
+                        <div class="card-header"><h3>需求输入</h3></div>
                         <div class="card-body">
-                            <div id="prefList"></div>
-                            <div style="text-align:center;margin-top:8px;"><button class="btn btn-outline btn-sm" onclick="loadPreferences()">刷新</button></div>
+                            <textarea id="requirement" placeholder="请输入需求描述...&#10;&#10;例如：&#10;用户通过手机号+验证码登录系统&#10;1. 手机号为11位中国大陆手机号&#10;2. 验证码为6位数字，有效期5分钟"></textarea>
+                            <div class="upload-area" id="uploadArea">
+                                <p>&#128228; 点击或拖拽文件到此处</p>
+                                <div class="hint">支持 .md / .txt / .xlsx + .png / .jpg / .gif / .webp</div>
+                                <input type="file" id="fileInput" multiple accept=".md,.txt,.xlsx,.xls,.png,.jpg,.jpeg,.gif,.webp,.bmp">
+                            </div>
+                            <div class="file-list" id="fileList"></div>
+                        </div>
+                        <div class="card-body" style="border-top:1px solid #f0f0f0;">
+                            <div class="toolbar">
+                                <label>优先级:
+                                    <select id="priority">
+                                        <option value="P0">P0 阻塞</option>
+                                        <option value="P1" selected>P1 严重</option>
+                                        <option value="P2">P2 一般</option>
+                                        <option value="P3">P3 轻微</option>
+                                    </select>
+                                </label>
+                                <label>类型:
+                                    <input type="text" id="caseTypes" value="功能测试,边界测试,异常测试" style="width:160px;">
+                                </label>
+                                <div class="spacer"></div>
+                            </div>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn btn-outline btn-sm" onclick="analyzeRequirement()" id="btnAnalyze">&#128269; 需求分析</button>
+                                <button class="btn btn-primary btn-sm" onclick="generate()" id="btnGenerate">&#9889; 直接生成</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 需求分析结果 -->
+                    <div class="card" id="analysisCard" style="display:none;">
+                        <div class="card-header"><h3>需求分析结果</h3></div>
+                        <div class="card-body">
+                            <div id="analysisContent"></div>
+                            <div style="margin-top:12px;display:flex;gap:8px;">
+                                <button class="btn btn-primary btn-sm" onclick="generateFromAnalysis()">&#9889; 确认生成</button>
+                                <button class="btn btn-ghost btn-sm" onclick="document.getElementById('analysisCard').style.display='none'">取消</button>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-            </div><!-- /page-generator -->
-
-            <!-- ====== 模型配置页 ====== -->
-            <div class="page" id="page-modelConfig">
-
-                <div class="card">
-                    <div class="card-header"><h3>预设模型快速切换</h3></div>
-                    <div class="card-body">
-                        <div class="preset-bar" id="presetBar"></div>
-                        <p style="font-size:11px;color:#999;">选择预设会自动填充下方配置，API Key 需手动填写</p>
+                <!-- 右侧：结果 -->
+                <div class="split-right">
+                    <div id="loading" class="card" style="display:none;">
+                        <div class="loading-card"><div class="spinner-lg"></div><p id="loadingText">AI 正在分析需求...</p></div>
                     </div>
-                </div>
 
-                <div class="card">
-                    <div class="card-header"><h3>生成模型配置 <span class="tag">用于生成测试用例</span></h3></div>
-                    <div class="card-body">
-                        <div class="config-grid">
-                            <div class="form-group"><label>API 类型</label>
-                                <select id="cfg-gen-api_type"><option value="openai">OpenAI 兼容</option></select>
+                    <div id="result" class="card" style="display:none;">
+                        <div class="stats-bar">
+                            <div class="stats-group">
+                                <div class="stat-chip"><span class="num" id="totalCount">0</span><span class="lbl">总数</span></div>
+                                <div class="stat-chip p0"><span class="num" id="p0Count">0</span><span class="lbl">P0</span></div>
+                                <div class="stat-chip p1"><span class="num" id="p1Count">0</span><span class="lbl">P1</span></div>
+                                <div class="stat-chip p2"><span class="num" id="p2Count">0</span><span class="lbl">P2</span></div>
+                                <div class="stat-chip p3"><span class="num" id="p3Count">0</span><span class="lbl">P3</span></div>
                             </div>
-                            <div class="form-group"><label>模型名称</label><input type="text" id="cfg-gen-model" placeholder="如 deepseek-chat"></div>
-                            <div class="form-group full"><label>Base URL</label><input type="text" id="cfg-gen-base_url" placeholder="https://api.example.com/v1"></div>
-                            <div class="form-group"><label>API Key</label><input type="password" id="cfg-gen-api_key" placeholder="留空则不修改"></div>
-                            <div class="form-group"><label>图片模型（可选）</label><input type="text" id="cfg-gen-image_model" placeholder="如 mimo-v2.5"></div>
-                            <div class="form-group"><label>Temperature</label><input type="text" id="cfg-gen-temperature" placeholder="0.3"></div>
-                            <div class="form-group"><label>Max Tokens</label><input type="text" id="cfg-gen-max_tokens" placeholder="4096"></div>
-                            <div class="form-group"><label>Max Retries</label><input type="text" id="cfg-gen-max_retries" placeholder="3"></div>
-                            <div class="form-group"><label>深度思考</label>
-                                <select id="cfg-gen-enable_thinking"><option value="false">关闭</option><option value="true">开启</option></select>
+                            <div class="stats-actions">
+                                <button class="btn btn-outline btn-sm" onclick="downloadFile('excel')">&#128196; Excel</button>
+                                <button class="btn btn-outline btn-sm" onclick="downloadFile('markdown')">&#128221; MD</button>
+                                <button class="btn btn-outline btn-sm" onclick="downloadFile('json')">&#128196; JSON</button>
+                                <button class="btn btn-success btn-sm" id="btnReview" onclick="review()">&#128269; AI 评审</button>
+                                <button class="btn btn-outline btn-sm" id="btnSavePref" onclick="savePreferences()" style="display:none;">&#128161; 保存偏好</button>
+                            </div>
+                        </div>
+                        <div class="input-info" id="inputInfo"></div>
+
+                        <div class="batch-bar" id="batchBar" style="display:none;">
+                            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()">
+                            <label for="selectAll">全选</label>
+                            <span id="selectedCount">0 条已选</span>
+                            <div class="spacer"></div>
+                            <select id="batchPriority" style="padding:3px 8px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+                                <option value="">批量改优先级</option>
+                                <option value="P0">P0</option><option value="P1">P1</option><option value="P2">P2</option><option value="P3">P3</option>
+                            </select>
+                            <button class="btn btn-ghost btn-sm" onclick="batchChangePriority()">应用</button>
+                            <button class="btn btn-ghost btn-sm" onclick="batchDelete()" style="color:#d32f2f;">批量删除</button>
+                        </div>
+
+                        <table class="tc-table">
+                            <thead><tr>
+                                <th class="cb-cell"><input type="checkbox" id="thCheckbox" onchange="toggleSelectAll()" style="accent-color:#1a73e8;"></th>
+                                <th style="width:65px;">编号</th>
+                                <th style="width:85px;">模块</th>
+                                <th>标题</th>
+                                <th style="width:55px;">优先级</th>
+                                <th style="width:75px;">类型</th>
+                                <th style="width:80px;">来源</th>
+                                <th style="width:80px;">操作</th>
+                            </tr></thead>
+                            <tbody id="tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <div id="reviewPanel" class="card" style="display:none;">
+                        <div class="card-header"><h3>AI 评审报告</h3></div>
+                        <div class="card-body"><div class="review-panel" id="reviewContent"></div></div>
+                        <div class="review-actions"><button class="btn btn-success" id="btnOptimize" onclick="optimize()">&#128640; 根据评审优化用例</button></div>
+                    </div>
+
+                    <div id="diffPanel" class="card" style="display:none;">
+                        <div class="card-header"><h3>优化变更对比</h3></div>
+                        <div class="diff-stats" id="diffStats"></div>
+                        <div class="diff-content" id="diffContent"></div>
+                    </div>
+
+                    <div class="card" id="prefPanel">
+                        <div class="card-header" style="cursor:pointer;" onclick="togglePrefPanel()">
+                            <h3>偏好规则</h3>
+                            <span id="prefToggle" style="font-size:11px;color:#aaa;">展开 &#9662;</span>
+                        </div>
+                        <div id="prefContent" style="display:none;">
+                            <div class="card-body">
+                                <div id="prefList"></div>
+                                <div style="text-align:center;margin-top:8px;"><button class="btn btn-outline btn-sm" onclick="loadPreferences()">刷新</button></div>
                             </div>
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="card">
-                    <div class="card-header"><h3>评审模型配置 <span class="tag">用于 AI 评审用例</span></h3></div>
-                    <div class="card-body">
-                        <div class="config-grid">
-                            <div class="form-group"><label>启用独立评审模型</label>
-                                <select id="cfg-rev-enabled"><option value="false">关闭（复用生成模型）</option><option value="true">开启</option></select>
-                            </div>
-                            <div class="form-group"><label>API 类型</label>
-                                <select id="cfg-rev-api_type"><option value="openai">OpenAI 兼容</option></select>
-                            </div>
-                            <div class="form-group full"><label>Base URL</label><input type="text" id="cfg-rev-base_url" placeholder="https://api.example.com/v1"></div>
-                            <div class="form-group"><label>模型名称</label><input type="text" id="cfg-rev-model" placeholder="如 deepseek-chat"></div>
-                            <div class="form-group"><label>API Key</label><input type="password" id="cfg-rev-api_key" placeholder="留空则不修改"></div>
-                            <div class="form-group"><label>Temperature</label><input type="text" id="cfg-rev-temperature" placeholder="0.3"></div>
-                            <div class="form-group"><label>Max Tokens</label><input type="text" id="cfg-rev-max_tokens" placeholder="4096"></div>
-                        </div>
+        <!-- ====== 模型配置 ====== -->
+        <div class="page" id="page-modelConfig">
+            <div class="card">
+                <div class="card-header"><h3>预设模型快速切换</h3></div>
+                <div class="card-body">
+                    <div class="preset-bar" id="presetBar"></div>
+                    <p style="font-size:11px;color:#999;">选择预设会自动填充下方配置，API Key 需手动填写</p>
+                </div>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>生成模型 <span style="font-size:11px;background:#e8f0fe;color:#1a73e8;padding:1px 6px;border-radius:3px;font-weight:normal;margin-left:6px;">用于生成测试用例</span></h3></div>
+                <div class="card-body">
+                    <div class="config-grid">
+                        <div class="form-group"><label>API 类型</label><select id="cfg-gen-api_type"><option value="openai">OpenAI 兼容</option></select></div>
+                        <div class="form-group"><label>模型名称</label><input type="text" id="cfg-gen-model" placeholder="如 deepseek-chat"></div>
+                        <div class="form-group full"><label>Base URL</label><input type="text" id="cfg-gen-base_url" placeholder="https://api.example.com/v1"></div>
+                        <div class="form-group"><label>API Key</label><input type="password" id="cfg-gen-api_key" placeholder="留空则不修改"></div>
+                        <div class="form-group"><label>图片模型（可选）</label><input type="text" id="cfg-gen-image_model" placeholder="如 mimo-v2.5"></div>
+                        <div class="form-group"><label>Temperature</label><input type="text" id="cfg-gen-temperature" placeholder="0.3"></div>
+                        <div class="form-group"><label>Max Tokens</label><input type="text" id="cfg-gen-max_tokens" placeholder="4096"></div>
+                        <div class="form-group"><label>Max Retries</label><input type="text" id="cfg-gen-max_retries" placeholder="3"></div>
+                        <div class="form-group"><label>深度思考</label><select id="cfg-gen-enable_thinking"><option value="false">关闭</option><option value="true">开启</option></select></div>
                     </div>
                 </div>
-
-                <div class="config-actions" style="max-width:1100px;">
-                    <button class="btn btn-primary" onclick="saveModelConfig()">&#128190; 保存配置</button>
-                    <button class="btn btn-outline" onclick="loadModelConfig()">重新加载</button>
+            </div>
+            <div class="card">
+                <div class="card-header"><h3>评审模型 <span style="font-size:11px;background:#e8f0fe;color:#1a73e8;padding:1px 6px;border-radius:3px;font-weight:normal;margin-left:6px;">用于 AI 评审用例</span></h3></div>
+                <div class="card-body">
+                    <div class="config-grid">
+                        <div class="form-group"><label>启用独立评审模型</label><select id="cfg-rev-enabled"><option value="false">关闭（复用生成模型）</option><option value="true">开启</option></select></div>
+                        <div class="form-group"><label>API 类型</label><select id="cfg-rev-api_type"><option value="openai">OpenAI 兼容</option></select></div>
+                        <div class="form-group full"><label>Base URL</label><input type="text" id="cfg-rev-base_url" placeholder="https://api.example.com/v1"></div>
+                        <div class="form-group"><label>模型名称</label><input type="text" id="cfg-rev-model" placeholder="如 deepseek-chat"></div>
+                        <div class="form-group"><label>API Key</label><input type="password" id="cfg-rev-api_key" placeholder="留空则不修改"></div>
+                        <div class="form-group"><label>Temperature</label><input type="text" id="cfg-rev-temperature" placeholder="0.3"></div>
+                        <div class="form-group"><label>Max Tokens</label><input type="text" id="cfg-rev-max_tokens" placeholder="4096"></div>
+                    </div>
                 </div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px;">
+                <button class="btn btn-primary" onclick="saveModelConfig()">&#128190; 保存配置</button>
+                <button class="btn btn-outline" onclick="loadModelConfig()">重新加载</button>
+            </div>
+        </div>
 
-            </div><!-- /page-modelConfig -->
+    </div>
+</div>
+</div>
 
-        </div><!-- /main-content -->
-    </div><!-- /app-layout -->
-    </div><!-- /appPage -->
+<div class="toast" id="toast"></div>
 
-    <div class="toast" id="toast"></div>
+<script>
+// ============================================================
+// 认证
+// ============================================================
+function showAuthError(m){const e=document.getElementById('authError');e.textContent=m;e.style.display='block';}
+function hideAuthError(){document.getElementById('authError').style.display='none';}
+function showLogin(){hideAuthError();document.getElementById('loginForm').style.display='block';document.getElementById('registerForm').style.display='none';}
+function showRegister(){hideAuthError();document.getElementById('loginForm').style.display='none';document.getElementById('registerForm').style.display='block';}
+async function doLogin(){const u=document.getElementById('loginUsername').value.trim(),p=document.getElementById('loginPassword').value;if(!u||!p){showAuthError('请输入用户名和密码');return;}try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok){showAuthError(d.error||'登录失败');return;}enterApp(d.user);}catch(e){showAuthError('网络错误: '+e.message);}}
+async function doRegister(){const u=document.getElementById('regUsername').value.trim(),p=document.getElementById('regPassword').value,p2=document.getElementById('regPassword2').value;if(!u||!p){showAuthError('请输入用户名和密码');return;}if(p!==p2){showAuthError('两次密码不一致');return;}try{const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok){showAuthError(d.error||'注册失败');return;}enterApp(d.user);}catch(e){showAuthError('网络错误: '+e.message);}}
+async function doLogout(){await fetch('/api/logout',{method:'POST'});document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';showLogin();}
+function enterApp(u){document.getElementById('authPage').style.display='none';document.getElementById('appPage').style.display='block';document.getElementById('headerUsername').textContent=u.username;document.getElementById('dashGreeting').textContent=u.username+'，你好';}
+async function checkAuth(){try{const r=await fetch('/api/me');const d=await r.json();if(d.logged_in)enterApp(d.user);else{document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}catch(e){document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}
+document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('loginUsername').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+document.getElementById('regPassword2').addEventListener('keydown',e=>{if(e.key==='Enter')doRegister();});
+checkAuth();
+async function authFetch(u,o={}){const r=await fetch(u,o);if(r.status===401){doLogout();throw new Error('登录已过期');}return r;}
 
-    <script>
-        // ============================================================
-        // 认证
-        // ============================================================
-        function showAuthError(m){const e=document.getElementById('authError');e.textContent=m;e.style.display='block';}
-        function hideAuthError(){document.getElementById('authError').style.display='none';}
-        function showLogin(){hideAuthError();document.getElementById('loginForm').style.display='block';document.getElementById('registerForm').style.display='none';}
-        function showRegister(){hideAuthError();document.getElementById('loginForm').style.display='none';document.getElementById('registerForm').style.display='block';}
+// ============================================================
+// 页面切换
+// ============================================================
+let currentPage='dashboard';
+function switchPage(name){
+    currentPage=name;
+    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+    document.getElementById('page-'+name).classList.add('active');
+    document.getElementById('nav-'+name).classList.add('active');
+    if(name==='dashboard')loadDashboard();
+    if(name==='modelConfig')loadModelConfig();
+}
 
-        async function doLogin(){
-            const u=document.getElementById('loginUsername').value.trim(),p=document.getElementById('loginPassword').value;
-            if(!u||!p){showAuthError('请输入用户名和密码');return;}
-            try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
-            const d=await r.json();if(!r.ok){showAuthError(d.error||'登录失败');return;}enterApp(d.user);}
-            catch(e){showAuthError('网络错误: '+e.message);}
-        }
-        async function doRegister(){
-            const u=document.getElementById('regUsername').value.trim(),p=document.getElementById('regPassword').value,p2=document.getElementById('regPassword2').value;
-            if(!u||!p){showAuthError('请输入用户名和密码');return;}if(p!==p2){showAuthError('两次输入的密码不一致');return;}
-            try{const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
-            const d=await r.json();if(!r.ok){showAuthError(d.error||'注册失败');return;}enterApp(d.user);}
-            catch(e){showAuthError('网络错误: '+e.message);}
-        }
-        async function doLogout(){await fetch('/api/logout',{method:'POST'});document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';showLogin();}
-        function enterApp(u){document.getElementById('authPage').style.display='none';document.getElementById('appPage').style.display='block';document.getElementById('headerUsername').textContent=u.username;}
-        async function checkAuth(){try{const r=await fetch('/api/me');const d=await r.json();if(d.logged_in)enterApp(d.user);else{document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}catch(e){document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}
-        document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-        document.getElementById('loginUsername').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-        document.getElementById('regPassword2').addEventListener('keydown',e=>{if(e.key==='Enter')doRegister();});
-        checkAuth();
-        async function authFetch(u,o={}){const r=await fetch(u,o);if(r.status===401){doLogout();throw new Error('登录已过期');}return r;}
+// ============================================================
+// 仪表盘
+// ============================================================
+async function loadDashboard(){
+    try{
+        const r=await authFetch('/api/dashboard');
+        const d=await r.json();
+        document.getElementById('dashSessions').textContent=d.total_sessions;
+        document.getElementById('dashTestcases').textContent=d.total_testcases;
+        // 偏好数
+        try{const pr=await authFetch('/api/preferences');const pd=await pr.json();document.getElementById('dashPrefs').textContent=(pd.preferences||[]).length;}catch(e){}
+        // 当前模型
+        try{const cr=await authFetch('/api/model-config');const cd=await cr.json();const m=cd.config?.generate?.model||'-';document.getElementById('dashModels').textContent=m.length>12?m.substring(0,12)+'...':m;}catch(e){}
+        // 最近记录
+        const list=document.getElementById('dashRecent');
+        if(!d.recent||!d.recent.length){list.innerHTML='<li style="text-align:center;color:#bbb;padding:20px;font-size:13px;">暂无记录，开始生成你的第一份用例吧</li>';return;}
+        list.innerHTML=d.recent.map(s=>`<li class="recent-item" onclick="loadSessionFromDash(${s.id})"><span class="ri-text">${esc(s.requirement_preview)}</span><span class="ri-meta">${s.tc_count} 条用例 &middot; ${esc(s.created_at)}</span></li>`).join('');
+    }catch(e){}
+}
+async function loadSessionFromDash(id){switchPage('generator');setTimeout(()=>loadSession(id),200);}
 
-        // ============================================================
-        // 页面切换
-        // ============================================================
-        function switchPage(name) {
-            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-            document.getElementById('page-' + name).classList.add('active');
-            document.getElementById('nav-' + name).classList.add('active');
-            if (name === 'modelConfig') loadModelConfig();
-        }
+// ============================================================
+// 模型配置
+// ============================================================
+let currentPresets={};
+async function loadPresets(){try{const r=await authFetch('/api/model-presets');const d=await r.json();currentPresets=d.presets||{};const b=document.getElementById('presetBar');b.innerHTML=Object.entries(currentPresets).map(([k,v])=>`<button class="preset-btn" data-key="${k}" onclick="applyPreset('${k}')">${v.name}</button>`).join('');}catch(e){}}
+function applyPreset(k){document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));document.querySelector(`.preset-btn[data-key="${k}"]`)?.classList.add('active');authFetch('/api/model-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({preset:k})}).then(r=>r.json()).then(d=>{loadModelConfig();if(d.need_key){showToast('已切换到 '+currentPresets[k].name+'，请填写 API Key','error');setTimeout(()=>{const el=document.getElementById('cfg-gen-api_key');el.focus();el.style.boxShadow='0 0 0 2px #d32f2f';setTimeout(()=>el.style.boxShadow='',2000);},300);}else{showToast('已切换到 '+currentPresets[k].name);}});}
+async function loadModelConfig(){try{const r=await authFetch('/api/model-config');const d=await r.json();const c=d.config||{};const g=c.generate||{};const rv=c.review||{};document.getElementById('cfg-gen-api_type').value=g.api_type||'openai';document.getElementById('cfg-gen-model').value=g.model||'';document.getElementById('cfg-gen-base_url').value=g.base_url||'';document.getElementById('cfg-gen-api_key').value='';document.getElementById('cfg-gen-api_key').placeholder=g.api_key_hint||'留空则不修改';document.getElementById('cfg-gen-image_model').value=g.image_model||'';document.getElementById('cfg-gen-temperature').value=g.temperature??0.3;document.getElementById('cfg-gen-max_tokens').value=g.max_tokens??4096;document.getElementById('cfg-gen-max_retries').value=g.max_retries??3;document.getElementById('cfg-gen-enable_thinking').value=g.enable_thinking?'true':'false';document.getElementById('cfg-rev-enabled').value=rv.enabled?'true':'false';document.getElementById('cfg-rev-api_type').value=rv.api_type||'openai';document.getElementById('cfg-rev-base_url').value=rv.base_url||'';document.getElementById('cfg-rev-model').value=rv.model||'';document.getElementById('cfg-rev-api_key').value='';document.getElementById('cfg-rev-api_key').placeholder=rv.api_key_hint||'留空则不修改';document.getElementById('cfg-rev-temperature').value=rv.temperature??0.3;document.getElementById('cfg-rev-max_tokens').value=rv.max_tokens??4096;}catch(e){showToast('加载配置失败','error');}}
+async function saveModelConfig(){const cfg={generate:{api_type:document.getElementById('cfg-gen-api_type').value,model:document.getElementById('cfg-gen-model').value,base_url:document.getElementById('cfg-gen-base_url').value,api_key:document.getElementById('cfg-gen-api_key').value,image_model:document.getElementById('cfg-gen-image_model').value||undefined,temperature:parseFloat(document.getElementById('cfg-gen-temperature').value)||0.3,max_tokens:parseInt(document.getElementById('cfg-gen-max_tokens').value)||4096,max_retries:parseInt(document.getElementById('cfg-gen-max_retries').value)||3,enable_thinking:document.getElementById('cfg-gen-enable_thinking').value==='true'},review:{enabled:document.getElementById('cfg-rev-enabled').value==='true',api_type:document.getElementById('cfg-rev-api_type').value,base_url:document.getElementById('cfg-rev-base_url').value,model:document.getElementById('cfg-rev-model').value,api_key:document.getElementById('cfg-rev-api_key').value,temperature:parseFloat(document.getElementById('cfg-rev-temperature').value)||0.3,max_tokens:parseInt(document.getElementById('cfg-rev-max_tokens').value)||4096,max_retries:3}};try{const r=await authFetch('/api/model-config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({config:cfg})});const d=await r.json();if(d.success){showToast('配置已保存');document.querySelectorAll('.preset-btn').forEach(b=>b.classList.remove('active'));}else showToast('保存失败','error');}catch(e){showToast('保存失败','error');}}
+setTimeout(loadPresets,500);
 
-        // ============================================================
-        // 模型配置
-        // ============================================================
-        let currentPresets = {};
+// ============================================================
+// 文件上传
+// ============================================================
+let uploadedFiles=[];
+const uploadArea=document.getElementById('uploadArea'),fileInput=document.getElementById('fileInput'),fileList=document.getElementById('fileList');
+uploadArea.addEventListener('click',()=>fileInput.click());
+uploadArea.addEventListener('dragover',e=>{e.preventDefault();uploadArea.classList.add('dragover');});
+uploadArea.addEventListener('dragleave',()=>uploadArea.classList.remove('dragover'));
+uploadArea.addEventListener('drop',e=>{e.preventDefault();uploadArea.classList.remove('dragover');addFiles(e.dataTransfer.files);});
+fileInput.addEventListener('change',()=>{addFiles(fileInput.files);fileInput.value='';});
+document.getElementById('requirement').addEventListener('paste',e=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const f=item.getAsFile();if(f){const ext=f.type.split('/')[1]||'png';uploadedFiles.push(new File([f],`粘贴_${Date.now()}.${ext}`,{type:f.type}));renderFileList();showToast('已添加图片');}}}});
+function addFiles(fs){for(const f of fs){if(uploadedFiles.some(x=>x.name===f.name&&x.size===f.size))continue;uploadedFiles.push(f);}renderFileList();}
+function removeFile(i){uploadedFiles.splice(i,1);renderFileList();}
+function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${f.name}">${f.name}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
+function showToast(m,t='success'){const el=document.getElementById('toast');el.textContent=m;el.className='toast '+t+' show';setTimeout(()=>el.classList.remove('show'),3000);}
+function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
-        async function loadPresets() {
-            try {
-                const r = await authFetch('/api/model-presets');
-                const d = await r.json();
-                currentPresets = d.presets || {};
-                const bar = document.getElementById('presetBar');
-                bar.innerHTML = Object.entries(currentPresets).map(([k, v]) =>
-                    `<button class="preset-btn" data-key="${k}" onclick="applyPreset('${k}')">${v.name}</button>`
-                ).join('');
-            } catch(e) {}
-        }
+// ============================================================
+// SSE
+// ============================================================
+async function sseFetch(u,b,{onProgress,onDone}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.status===401){doLogout();throw new Error('登录已过期');}const rd=r.body.getReader(),dec=new TextDecoder();let buf='';while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress'&&onProgress)onProgress(ev.message);else if(ev.type==='done'&&onDone)onDone(ev.data);else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}}
 
-        function applyPreset(key) {
-            document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
-            document.querySelector(`.preset-btn[data-key="${key}"]`).classList.add('active');
-            // 通过 API 应用预设
-            authFetch('/api/model-config', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ preset: key })
-            }).then(() => { showToast('已切换到 ' + currentPresets[key].name); loadModelConfig(); });
-        }
+// ============================================================
+// 需求分析
+// ============================================================
+let analysisModules=null;
+async function analyzeRequirement(){
+    const req=document.getElementById('requirement').value.trim();
+    if(!req&&!uploadedFiles.length){showToast('请输入需求或上传文件','error');return;}
+    const btn=document.getElementById('btnAnalyze');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> 分析中...';
+    try{
+        await sseFetch('/api/analyze',{requirement:req,case_types:document.getElementById('caseTypes').value},{
+            onProgress:m=>{btn.innerHTML=`<span class="spinner"></span> ${m}`;},
+            onDone:d=>{
+                if(!d.modules||!d.modules.length){showToast('未能拆解模块，可直接生成','error');return;}
+                analysisModules=d.modules;
+                const comp=d.complexity||'medium';
+                const compLabel={simple:'简单',medium:'中等',complex:'复杂'}[comp]||'中等';
+                let html=`<div class="complexity-badge complexity-${comp}">复杂度: ${compLabel}</div>`;
+                html+=`<div class="module-list">${d.modules.map(m=>`<div class="module-item"><span class="mi-name">${esc(m.name)}</span><span class="mi-desc">${esc(m.description||'')}</span><span class="mi-cases">~${m.estimated_cases||'?'} 条</span></div>`).join('')}</div>`;
+                document.getElementById('analysisContent').innerHTML=html;
+                document.getElementById('analysisCard').style.display='block';
+                document.getElementById('analysisCard').scrollIntoView({behavior:'smooth'});
+            }
+        });
+    }catch(e){showToast(e.message,'error');}
+    finally{btn.disabled=false;btn.innerHTML='&#128269; 需求分析';}
+}
 
-        async function loadModelConfig() {
-            try {
-                const r = await authFetch('/api/model-config');
-                const d = await r.json();
-                const cfg = d.config || {};
-                const gen = cfg.generate || {};
-                const rev = cfg.review || {};
+// ============================================================
+// 生成
+// ============================================================
+let currentFiles={},currentRequirement='',currentTestcases=[],currentReview='',originalTestcases=[],currentSessionId=null,selectedRows=new Set();
+async function generate(){await doGenerate(false);}
+async function generateFromAnalysis(){await doGenerate(true);}
+async function doGenerate(useAnalysis){
+    const req=document.getElementById('requirement').value.trim();
+    if(!req&&!uploadedFiles.length){showToast('请输入需求或上传文件','error');return;}
+    const btn=document.getElementById('btnGenerate');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> 生成中...';
+    document.getElementById('loading').style.display='block';document.getElementById('loadingText').textContent='AI 正在分析需求...';
+    document.getElementById('result').style.display='none';document.getElementById('reviewPanel').style.display='none';document.getElementById('diffPanel').style.display='none';document.getElementById('analysisCard').style.display='none';
+    try{
+        const fd=new FormData();fd.append('requirement',req);fd.append('priority',document.getElementById('priority').value);fd.append('case_types',document.getElementById('caseTypes').value);for(const f of uploadedFiles)fd.append('files',f);
+        const resp=await fetch('/api/generate',{method:'POST',body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
+        const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
+        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
+    }catch(e){showToast(e.message,'error');}finally{btn.disabled=false;btn.innerHTML='&#9889; 直接生成';document.getElementById('loading').style.display='none';}
+}
+function renderResult(data){
+    const tc=data.testcases,c={P0:0,P1:0,P2:0,P3:0};tc.forEach(t=>{c[t.priority]=(c[t.priority]||0)+1;});
+    document.getElementById('totalCount').textContent=tc.length;
+    document.getElementById('p0Count').textContent=c.P0;document.getElementById('p1Count').textContent=c.P1;
+    document.getElementById('p2Count').textContent=c.P2;document.getElementById('p3Count').textContent=c.P3;
+    const info=data.input;let infoText='';if(info){const p=[];if(info.has_text)p.push('文字');if(info.image_count>0)p.push(info.image_count+'张图');if(p.length)infoText='输入: '+p.join('+');}
+    document.getElementById('inputInfo').textContent=infoText;
+    selectedRows.clear();updateBatchBar();
+    document.getElementById('tbody').innerHTML=tc.map((t,i)=>`
+        <tr id="row-${i}"><td class="cb-cell"><input type="checkbox" class="row-cb" data-idx="${i}" onchange="toggleRowSelect(${i})"></td>
+        <td><strong>${esc(t.id)}</strong></td><td>${esc(t.module)}</td><td>${esc(t.title)}</td>
+        <td><span class="priority priority-${esc(t.priority)}">${esc(t.priority)}</span></td>
+        <td><span class="type-tag">${esc(t.type)}</span></td>
+        <td><span class="src-tag" title="${esc(t.source||'')}">${esc(t.source||'-')}</span></td>
+        <td><button class="action-btn" onclick="toggleDetail(${i})">详情</button> <button class="action-btn" onclick="editCase(${i})">编辑</button></td></tr>
+        <tr class="detail-row" id="detail-${i}"><td colspan="8"><div class="detail-grid">
+        <div><dt>前置条件</dt><dd>${esc(t.precondition)||'无'}</dd></div>
+        <div><dt>预期结果</dt><dd>${esc(t.expected)}</dd></div>
+        <div style="grid-column:1/-1"><dt>测试步骤</dt><dd>${esc(t.steps).replace(/\\n/g,'<br>')}</dd></div>
+        </div></td></tr>
+    `).join('');
+    document.getElementById('result').style.display='block';
+    document.getElementById('batchBar').style.display='flex';
+}
+function toggleDetail(i){document.getElementById('detail-'+i).classList.toggle('show');}
+function downloadFile(type){
+    if(type==='json'){
+        const blob=new Blob([JSON.stringify(currentTestcases,null,2)],{type:'application/json'});
+        const url=URL.createObjectURL(blob);window.open(url,'_blank');URL.revokeObjectURL(url);return;
+    }
+    const p=type==='excel'?currentFiles.excel:currentFiles.markdown;if(!p)return;window.open('/api/download/'+p.split(/[/\\]/).pop(),'_blank');
+}
 
-                document.getElementById('cfg-gen-api_type').value = gen.api_type || 'openai';
-                document.getElementById('cfg-gen-model').value = gen.model || '';
-                document.getElementById('cfg-gen-base_url').value = gen.base_url || '';
-                document.getElementById('cfg-gen-api_key').value = '';
-                document.getElementById('cfg-gen-api_key').placeholder = gen.api_key_hint || '留空则不修改';
-                document.getElementById('cfg-gen-image_model').value = gen.image_model || '';
-                document.getElementById('cfg-gen-temperature').value = gen.temperature ?? 0.3;
-                document.getElementById('cfg-gen-max_tokens').value = gen.max_tokens ?? 4096;
-                document.getElementById('cfg-gen-max_retries').value = gen.max_retries ?? 3;
-                document.getElementById('cfg-gen-enable_thinking').value = gen.enable_thinking ? 'true' : 'false';
+// ============================================================
+// 批量操作
+// ============================================================
+function toggleRowSelect(i){if(selectedRows.has(i))selectedRows.delete(i);else selectedRows.add(i);updateBatchBar();}
+function toggleSelectAll(){const cb=document.getElementById('selectAll').checked;selectedRows.clear();if(cb)currentTestcases.forEach((_,i)=>selectedRows.add(i));document.querySelectorAll('.row-cb').forEach(c=>c.checked=cb);updateBatchBar();}
+function updateBatchBar(){document.getElementById('selectedCount').textContent=selectedRows.size+' 条已选';}
+function batchChangePriority(){
+    const val=document.getElementById('batchPriority').value;if(!val||!selectedRows.size){showToast('请先选择用例和优先级','error');return;}
+    selectedRows.forEach(i=>{currentTestcases[i].priority=val;});
+    renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});
+    showToast(`已将 ${selectedRows.size} 条用例改为 ${val}`);
+}
+function batchDelete(){
+    if(!selectedRows.size){showToast('请先选择用例','error');return;}
+    if(!confirm(`确定删除 ${selectedRows.size} 条用例？`))return;
+    const sorted=[...selectedRows].sort((a,b)=>b-a);sorted.forEach(i=>currentTestcases.splice(i,1));
+    // renumber
+    currentTestcases.forEach((t,j)=>{t.id='TC_'+String(j+1).padStart(3,'0');});
+    renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});
+    showToast(`已删除 ${sorted.length} 条用例`);
+}
 
-                document.getElementById('cfg-rev-enabled').value = rev.enabled ? 'true' : 'false';
-                document.getElementById('cfg-rev-api_type').value = rev.api_type || 'openai';
-                document.getElementById('cfg-rev-base_url').value = rev.base_url || '';
-                document.getElementById('cfg-rev-model').value = rev.model || '';
-                document.getElementById('cfg-rev-api_key').value = '';
-                document.getElementById('cfg-rev-api_key').placeholder = rev.api_key_hint || '留空则不修改';
-                document.getElementById('cfg-rev-temperature').value = rev.temperature ?? 0.3;
-                document.getElementById('cfg-rev-max_tokens').value = rev.max_tokens ?? 4096;
-            } catch(e) { showToast('加载配置失败','error'); }
-        }
+// ============================================================
+// 评审 / 优化
+// ============================================================
+async function review(){const b=document.getElementById('btnReview');b.disabled=true;b.innerHTML='<span class="spinner"></span> 评审中...';try{await sseFetch('/api/review',{requirement:currentRequirement,testcases:currentTestcases},{onProgress:m=>{b.innerHTML=`<span class="spinner"></span> ${m}`;},onDone:d=>{currentReview=d.review;document.getElementById('reviewContent').textContent=d.review;document.getElementById('reviewPanel').style.display='block';document.getElementById('reviewPanel').scrollIntoView({behavior:'smooth'});showToast('评审完成');}});}catch(e){showToast(e.message,'error');}finally{b.disabled=false;b.innerHTML='&#128269; AI 评审';}}
+async function optimize(){const b=document.getElementById('btnOptimize');b.disabled=true;b.innerHTML='<span class="spinner"></span> 优化中...';originalTestcases=JSON.parse(JSON.stringify(currentTestcases));try{await sseFetch('/api/optimize',{requirement:currentRequirement,testcases:currentTestcases,review:currentReview},{onProgress:m=>{b.innerHTML=`<span class="spinner"></span> ${m}`;},onDone:d=>{currentTestcases=d.testcases;currentFiles=d.files;renderResult(d);showDiff(originalTestcases,d.testcases);showToast(`优化完成！共 ${d.count} 条用例`);}});}catch(e){showToast(e.message,'error');}finally{b.disabled=false;b.innerHTML='&#128640; 根据评审优化用例';}}
+function showDiff(oc,nc){
+    const TH=0.4;function sim(a,b){if(!a||!b)return 0;const n=s=>s.replace(/\s+/g,'').toLowerCase(),na=n(a),nb=n(b);if(na===nb)return 1;const[sh,lo]=na.length<=nb.length?[na,nb]:[nb,na];let m=0;for(const c of sh)if(lo.includes(c))m++;return sh.length?m/sh.length:0;}
+    function tcSim(a,b){return sim(a.title,b.title)*.4+sim(a.steps,b.steps)*.3+sim(a.expected,b.expected)*.3;}
+    const add=[],mod=[],rem=[],mo=new Set(),mn=new Set(),pairs=[];
+    nc.forEach((n,ni)=>{oc.forEach((o,oi)=>{const s=tcSim(n,o);if(s>=TH)pairs.push({ni,oi,s,n,o});});});
+    pairs.sort((a,b)=>b.s-a.s);pairs.forEach(p=>{if(mn.has(p.ni)||mo.has(p.oi))return;mn.add(p.ni);mo.add(p.oi);if(p.s<0.95){const ch=[];if(p.o.title!==p.n.title)ch.push('标题变更');if(p.o.steps!==p.n.steps)ch.push('步骤更新');if(p.o.expected!==p.n.expected)ch.push('预期更新');if(p.o.priority!==p.n.priority)ch.push(`${p.o.priority}→${p.n.priority}`);if(ch.length)mod.push({tc:p.n,changes:ch});}});
+    nc.forEach((t,i)=>{if(!mn.has(i))add.push(t);});oc.forEach((t,i)=>{if(!mo.has(i))rem.push(t);});
+    if(!add.length&&!mod.length&&!rem.length){document.getElementById('diffPanel').style.display='none';return;}
+    document.getElementById('diffStats').innerHTML=`<div class="diff-stat add"><div class="num">+${add.length}</div><div class="lbl">新增</div></div><div class="diff-stat mod"><div class="num">${mod.length}</div><div class="lbl">修改</div></div><div class="diff-stat del"><div class="num">-${rem.length}</div><div class="lbl">删除</div></div>`;
+    let h='';add.forEach(t=>{h+=`<div class="diff-item diff-added"><span class="dl">新增</span> ${esc(t.title)}</div>`;});mod.forEach(({tc,c})=>{h+=`<div class="diff-item diff-modified"><span class="dl">修改</span> ${esc(tc.title)} — ${esc(c.join(', '))}</div>`;});rem.forEach(t=>{h+=`<div class="diff-item diff-removed"><span class="dl">删除</span> ${esc(t.title)}</div>`;});
+    document.getElementById('diffContent').innerHTML=h;document.getElementById('diffPanel').style.display='block';document.getElementById('diffPanel').scrollIntoView({behavior:'smooth'});
+}
 
-        async function saveModelConfig() {
-            const config = {
-                generate: {
-                    api_type: document.getElementById('cfg-gen-api_type').value,
-                    model: document.getElementById('cfg-gen-model').value,
-                    base_url: document.getElementById('cfg-gen-base_url').value,
-                    api_key: document.getElementById('cfg-gen-api_key').value,
-                    image_model: document.getElementById('cfg-gen-image_model').value || undefined,
-                    temperature: parseFloat(document.getElementById('cfg-gen-temperature').value) || 0.3,
-                    max_tokens: parseInt(document.getElementById('cfg-gen-max_tokens').value) || 4096,
-                    max_retries: parseInt(document.getElementById('cfg-gen-max_retries').value) || 3,
-                    enable_thinking: document.getElementById('cfg-gen-enable_thinking').value === 'true',
-                },
-                review: {
-                    enabled: document.getElementById('cfg-rev-enabled').value === 'true',
-                    api_type: document.getElementById('cfg-rev-api_type').value,
-                    base_url: document.getElementById('cfg-rev-base_url').value,
-                    model: document.getElementById('cfg-rev-model').value,
-                    api_key: document.getElementById('cfg-rev-api_key').value,
-                    temperature: parseFloat(document.getElementById('cfg-rev-temperature').value) || 0.3,
-                    max_tokens: parseInt(document.getElementById('cfg-rev-max_tokens').value) || 4096,
-                    max_retries: 3,
-                }
-            };
-            try {
-                const r = await authFetch('/api/model-config', {
-                    method: 'POST',
-                    headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ config })
-                });
-                const d = await r.json();
-                if (d.success) { showToast('配置已保存'); document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active')); }
-                else showToast('保存失败','error');
-            } catch(e) { showToast('保存失败: '+e.message,'error'); }
-        }
+// ============================================================
+// 历史记录
+// ============================================================
+function toggleHistory(){const s=document.getElementById('historySidebar'),o=document.getElementById('sidebarOverlay');if(s.classList.contains('open')){s.classList.remove('open');o.classList.remove('show');}else{s.classList.add('open');o.classList.add('show');loadHistory();}}
+async function loadHistory(){const l=document.getElementById('historyList');try{const r=await authFetch('/api/history?limit=50');const d=await r.json();const ss=d.sessions||[];if(!ss.length){l.innerHTML='<div class="history-empty">暂无历史记录</div>';return;}l.innerHTML=ss.map(s=>`<div class="history-item"><div class="h-time">${esc(s.created_at)}</div><div class="h-preview" title="${esc(s.requirement)}">${esc(s.requirement_preview)}</div><div class="h-meta"><span>${s.tc_count} 条</span>${s.priority?'<span>'+esc(s.priority)+'</span>':''}</div><div class="h-actions"><button onclick="loadSession(${s.id})">加载</button><button class="del-btn" onclick="deleteSession(${s.id},event)">删除</button></div></div>`).join('');}catch(e){l.innerHTML='<div class="history-empty">加载失败</div>';}}
+async function loadSession(id){try{const r=await authFetch('/api/history/'+id);if(!r.ok)throw new Error('记录不存在');const s=await r.json();document.getElementById('requirement').value=s.requirement||'';if(s.priority)document.getElementById('priority').value=s.priority;if(s.case_types)document.getElementById('caseTypes').value=s.case_types.join(',');currentTestcases=s.testcases;currentRequirement=s.requirement;currentSessionId=s.id;currentReview=s.review_report||'';currentFiles={};renderResult({testcases:s.testcases,count:s.testcases.length,files:{},session_id:s.id,input:{has_text:!!s.requirement,image_count:s.images?s.images.length:0,image_names:s.images?s.images.map(i=>i.filename||''):[]}});if(currentReview){document.getElementById('reviewContent').textContent=currentReview;document.getElementById('reviewPanel').style.display='block';}toggleHistory();showToast('已加载 #'+id);document.getElementById('result').scrollIntoView({behavior:'smooth'});}catch(e){showToast(e.message,'error');}}
+async function deleteSession(id,ev){ev.stopPropagation();if(!confirm('确定删除？'))return;try{await authFetch('/api/history/'+id,{method:'DELETE'});showToast('已删除');loadHistory();}catch(e){showToast(e.message,'error');}}
 
-        // ============================================================
-        // 主应用
-        // ============================================================
-        let currentFiles={},currentRequirement='',currentTestcases=[],currentReview='',originalTestcases=[],uploadedFiles=[],currentSessionId=null;
+// ============================================================
+// 内联编辑
+// ============================================================
+function editCase(i){const tc=currentTestcases[i],row=document.getElementById('row-'+i),dr=document.getElementById('detail-'+i);row.innerHTML=`<td class="cb-cell"><input type="checkbox" class="row-cb" data-idx="${i}"></td><td><strong>${esc(tc.id)}</strong></td><td><input class="edit-input" id="edit-module-${i}" value="${esc(tc.module)}" style="width:75px;"></td><td><input class="edit-input" id="edit-title-${i}" value="${esc(tc.title)}"></td><td><select id="edit-priority-${i}" style="padding:2px;border:1px solid #1a73e8;border-radius:4px;font-size:11px;"><option value="P0" ${tc.priority==='P0'?'selected':''}>P0</option><option value="P1" ${tc.priority==='P1'?'selected':''}>P1</option><option value="P2" ${tc.priority==='P2'?'selected':''}>P2</option><option value="P3" ${tc.priority==='P3'?'selected':''}>P3</option></select></td><td><input class="edit-input" id="edit-type-${i}" value="${esc(tc.type)}" style="width:65px;font-size:11px;"></td><td><span class="src-tag">${esc(tc.source||'-')}</span></td><td class="edit-actions"><button class="edit-save" onclick="saveEdit(${i})">保存</button><button class="edit-cancel" onclick="cancelEdit(${i})">取消</button></td>`;dr.classList.add('show');dr.innerHTML=`<td colspan="8" style="background:#f8fbff;"><div class="detail-grid"><div><dt>前置条件</dt><textarea class="edit-textarea" id="edit-precondition-${i}" rows="2">${esc(tc.precondition)}</textarea></div><div><dt>预期结果</dt><textarea class="edit-textarea" id="edit-expected-${i}" rows="2">${esc(tc.expected)}</textarea></div><div style="grid-column:1/-1"><dt>测试步骤</dt><textarea class="edit-textarea" id="edit-steps-${i}" rows="3">${esc(tc.steps)}</textarea></div></div></td>`;}
+function saveEdit(i){const tc=currentTestcases[i];if(!originalTestcases.length)originalTestcases=JSON.parse(JSON.stringify(currentTestcases));tc.module=document.getElementById('edit-module-'+i).value;tc.title=document.getElementById('edit-title-'+i).value;tc.priority=document.getElementById('edit-priority-'+i).value;tc.type=document.getElementById('edit-type-'+i).value;tc.precondition=document.getElementById('edit-precondition-'+i).value;tc.expected=document.getElementById('edit-expected-'+i).value;tc.steps=document.getElementById('edit-steps-'+i).value;renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});document.getElementById('btnSavePref').style.display='';showToast('已保存');}
+function cancelEdit(i){renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});}
 
-        const uploadArea=document.getElementById('uploadArea'),fileInput=document.getElementById('fileInput'),fileList=document.getElementById('fileList');
-        uploadArea.addEventListener('click',()=>fileInput.click());
-        uploadArea.addEventListener('dragover',e=>{e.preventDefault();uploadArea.classList.add('dragover');});
-        uploadArea.addEventListener('dragleave',()=>uploadArea.classList.remove('dragover'));
-        uploadArea.addEventListener('drop',e=>{e.preventDefault();uploadArea.classList.remove('dragover');addFiles(e.dataTransfer.files);});
-        fileInput.addEventListener('change',()=>{addFiles(fileInput.files);fileInput.value='';});
-        document.getElementById('requirement').addEventListener('paste',e=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const f=item.getAsFile();if(f){const ext=f.type.split('/')[1]||'png';uploadedFiles.push(new File([f],`粘贴_${Date.now()}.${ext}`,{type:f.type}));renderFileList();showToast('已添加图片');}}}});
-        function addFiles(fs){for(const f of fs){if(uploadedFiles.some(x=>x.name===f.name&&x.size===f.size))continue;uploadedFiles.push(f);}renderFileList();}
-        function removeFile(i){uploadedFiles.splice(i,1);renderFileList();}
-        function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}">`:'';return`<div class="file-item">${pre}<div><div class="file-name" title="${f.name}">${f.name}</div><span class="file-type">${isImg?'图片':ext}</span></div><button class="remove-btn" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
-
-        function showToast(m,t='success'){const el=document.getElementById('toast');el.textContent=m;el.className='toast '+t+' show';setTimeout(()=>el.classList.remove('show'),3000);}
-
-        async function sseFetch(u,b,{onProgress,onDone}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.status===401){doLogout();throw new Error('登录已过期');}const rd=r.body.getReader(),dec=new TextDecoder();let buf='';while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress'&&onProgress)onProgress(ev.message);else if(ev.type==='done'&&onDone)onDone(ev.data);else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}}
-
-        async function generate(){
-            const req=document.getElementById('requirement').value.trim();
-            if(!req&&!uploadedFiles.length){showToast('请输入需求或上传文件','error');return;}
-            const btn=document.getElementById('btnGenerate');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> 生成中...';
-            document.getElementById('loading').style.display='block';document.getElementById('loadingText').textContent='AI 正在分析需求...';
-            document.getElementById('result').style.display='none';document.getElementById('reviewPanel').style.display='none';document.getElementById('diffPanel').style.display='none';
-            try{
-                const fd=new FormData();fd.append('requirement',req);fd.append('priority',document.getElementById('priority').value);fd.append('case_types',document.getElementById('caseTypes').value);for(const f of uploadedFiles)fd.append('files',f);
-                const resp=await fetch('/api/generate',{method:'POST',body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
-                const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
-                while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;renderResult(d);let m=`生成成功！共 ${d.count} 条用例`;if(d.input?.image_count>0)m+=`（含 ${d.input.image_count} 张图片）`;showToast(m);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
-            }catch(e){showToast(e.message,'error');}finally{btn.disabled=false;btn.innerHTML='&#9889; 生成测试用例';document.getElementById('loading').style.display='none';}
-        }
-
-        function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-
-        function renderResult(data){
-            const tc=data.testcases,c={P0:0,P1:0,P2:0,P3:0};tc.forEach(t=>{c[t.priority]=(c[t.priority]||0)+1;});
-            document.getElementById('totalCount').textContent=tc.length;
-            document.getElementById('p0Count').textContent=c.P0;document.getElementById('p1Count').textContent=c.P1;
-            document.getElementById('p2Count').textContent=c.P2;document.getElementById('p3Count').textContent=c.P3;
-            const info=data.input;let infoText='';if(info){const p=[];if(info.has_text)p.push('文字');if(info.image_count>0)p.push(info.image_count+'张图');if(p.length)infoText='输入: '+p.join('+');}
-            document.getElementById('inputInfo').textContent=infoText;
-            document.getElementById('tbody').innerHTML=tc.map((t,i)=>`
-                <tr id="row-${i}"><td><strong>${esc(t.id)}</strong></td><td>${esc(t.module)}</td><td>${esc(t.title)}</td><td><span class="priority priority-${esc(t.priority)}">${esc(t.priority)}</span></td><td><span class="type-tag">${esc(t.type)}</span></td><td><button class="action-btn" onclick="toggleDetail(${i})">详情</button> <button class="action-btn" onclick="editCase(${i})">编辑</button></td></tr>
-                <tr class="detail-row" id="detail-${i}"><td colspan="6"><div class="detail-grid"><div><dt>前置条件</dt><dd>${esc(t.precondition)||'无'}</dd></div><div><dt>预期结果</dt><dd>${esc(t.expected)}</dd></div><div style="grid-column:1/-1"><dt>测试步骤</dt><dd>${esc(t.steps).replace(/\\n/g,'<br>')}</dd></div></div></td></tr>
-            `).join('');
-            document.getElementById('result').style.display='block';
-        }
-
-        function toggleDetail(i){document.getElementById('detail-'+i).classList.toggle('show');}
-        function downloadFile(t){const p=t==='excel'?currentFiles.excel:currentFiles.markdown;if(!p)return;window.open('/api/download/'+p.split(/[/\\]/).pop(),'_blank');}
-
-        async function review(){const b=document.getElementById('btnReview');b.disabled=true;b.innerHTML='<span class="spinner"></span> 评审中...';try{await sseFetch('/api/review',{requirement:currentRequirement,testcases:currentTestcases},{onProgress:m=>{b.innerHTML=`<span class="spinner"></span> ${m}`;},onDone:d=>{currentReview=d.review;document.getElementById('reviewContent').textContent=d.review;document.getElementById('reviewPanel').style.display='block';document.getElementById('reviewPanel').scrollIntoView({behavior:'smooth'});showToast('评审完成');}});}catch(e){showToast(e.message,'error');}finally{b.disabled=false;b.innerHTML='&#128269; AI 评审';}}
-
-        async function optimize(){const b=document.getElementById('btnOptimize');b.disabled=true;b.innerHTML='<span class="spinner"></span> 优化中...';originalTestcases=JSON.parse(JSON.stringify(currentTestcases));try{await sseFetch('/api/optimize',{requirement:currentRequirement,testcases:currentTestcases,review:currentReview},{onProgress:m=>{b.innerHTML=`<span class="spinner"></span> ${m}`;},onDone:d=>{currentTestcases=d.testcases;currentFiles=d.files;renderResult(d);showDiff(originalTestcases,d.testcases);showToast(`优化完成！共 ${d.count} 条用例`);}});}catch(e){showToast(e.message,'error');}finally{b.disabled=false;b.innerHTML='&#128640; 根据评审优化用例';}}
-
-        function showDiff(oc,nc){
-            const TH=0.4;function sim(a,b){if(!a||!b)return 0;const n=s=>s.replace(/\s+/g,'').toLowerCase(),na=n(a),nb=n(b);if(na===nb)return 1;const[sh,lo]=na.length<=nb.length?[na,nb]:[nb,na];let m=0;for(const c of sh)if(lo.includes(c))m++;return sh.length?m/sh.length:0;}
-            function tcSim(a,b){return sim(a.title,b.title)*.4+sim(a.steps,b.steps)*.3+sim(a.expected,b.expected)*.3;}
-            const add=[],mod=[],rem=[],mo=new Set(),mn=new Set();const pairs=[];
-            nc.forEach((n,ni)=>{oc.forEach((o,oi)=>{const s=tcSim(n,o);if(s>=TH)pairs.push({ni,oi,s,n,o});});});
-            pairs.sort((a,b)=>b.s-a.s);pairs.forEach(p=>{if(mn.has(p.ni)||mo.has(p.oi))return;mn.add(p.ni);mo.add(p.oi);if(p.s<0.95){const ch=[];if(p.o.title!==p.n.title)ch.push(`标题变更`);if(p.o.steps!==p.n.steps)ch.push('步骤更新');if(p.o.expected!==p.n.expected)ch.push('预期更新');if(p.o.priority!==p.n.priority)ch.push(`${p.o.priority}→${p.n.priority}`);if(ch.length)mod.push({tc:p.n,changes:ch});}});
-            nc.forEach((t,i)=>{if(!mn.has(i))add.push(t);});oc.forEach((t,i)=>{if(!mo.has(i))rem.push(t);});
-            if(!add.length&&!mod.length&&!rem.length){document.getElementById('diffPanel').style.display='none';return;}
-            document.getElementById('diffStats').innerHTML=`<div class="diff-stat add"><div class="num">+${add.length}</div><div class="label">新增</div></div><div class="diff-stat mod"><div class="num">${mod.length}</div><div class="label">修改</div></div><div class="diff-stat del"><div class="num">-${rem.length}</div><div class="label">删除</div></div>`;
-            let h='';add.forEach(t=>{h+=`<div class="diff-item diff-added"><span class="diff-label">新增</span> ${esc(t.title)}<div class="diff-detail">${esc(t.steps).substring(0,80)}</div></div>`;});mod.forEach(({tc,c})=>{h+=`<div class="diff-item diff-modified"><span class="diff-label">修改</span> ${esc(tc.title)}<div class="diff-detail">${esc(c.join(' | '))}</div></div>`;});rem.forEach(t=>{h+=`<div class="diff-item diff-removed"><span class="diff-label">删除</span> ${esc(t.title)}<div class="diff-detail">${esc(t.steps).substring(0,80)}</div></div>`;});
-            document.getElementById('diffContent').innerHTML=h;document.getElementById('diffPanel').style.display='block';document.getElementById('diffPanel').scrollIntoView({behavior:'smooth'});
-        }
-
-        // ============================================================
-        // 历史记录
-        // ============================================================
-        function toggleHistory(){const s=document.getElementById('historySidebar'),o=document.getElementById('sidebarOverlay');if(s.classList.contains('open')){s.classList.remove('open');o.classList.remove('show');}else{s.classList.add('open');o.classList.add('show');loadHistory();}}
-        async function loadHistory(){const l=document.getElementById('historyList');try{const r=await authFetch('/api/history?limit=50');const d=await r.json();const ss=d.sessions||[];if(!ss.length){l.innerHTML='<div class="history-empty">暂无历史记录</div>';return;}l.innerHTML=ss.map(s=>`<div class="history-item"><div class="h-time">${esc(s.created_at)}</div><div class="h-preview" title="${esc(s.requirement)}">${esc(s.requirement_preview)}</div><div class="h-meta"><span>${s.tc_count} 条</span>${s.priority?'<span>'+esc(s.priority)+'</span>':''}</div><div class="h-actions"><button onclick="loadSession(${s.id})">加载</button><button class="del-btn" onclick="deleteSession(${s.id},event)">删除</button></div></div>`).join('');}catch(e){l.innerHTML='<div class="history-empty">加载失败</div>';}}
-        async function loadSession(id){try{const r=await authFetch('/api/history/'+id);if(!r.ok)throw new Error('记录不存在');const s=await r.json();document.getElementById('requirement').value=s.requirement||"";if(s.priority)document.getElementById('priority').value=s.priority;if(s.case_types)document.getElementById('caseTypes').value=s.case_types.join(",");currentTestcases=s.testcases;currentRequirement=s.requirement;currentSessionId=s.id;currentReview=s.review_report||"";currentFiles={};const imgs=s.images||[];renderResult({testcases:s.testcases,count:s.testcases.length,files:{},session_id:s.id,input:{has_text:!!s.requirement,image_count:imgs.length,image_names:imgs.map(i=>i.filename||"")}});if(currentReview){document.getElementById('reviewContent').textContent=currentReview;document.getElementById('reviewPanel').style.display='block';}toggleHistory();showToast('已加载 #'+id);document.getElementById('result').scrollIntoView({behavior:'smooth'});}catch(e){showToast(e.message,'error');}}
-        async function deleteSession(id,ev){ev.stopPropagation();if(!confirm('确定删除？'))return;try{await authFetch('/api/history/'+id,{method:'DELETE'});showToast('已删除');loadHistory();}catch(e){showToast(e.message,'error');}}
-
-        // ============================================================
-        // 内联编辑
-        // ============================================================
-        function editCase(i){const tc=currentTestcases[i],row=document.getElementById('row-'+i),dr=document.getElementById('detail-'+i);
-            row.innerHTML=`<td><strong>${esc(tc.id)}</strong></td><td><input class="edit-input" id="edit-module-${i}" value="${esc(tc.module)}" style="width:75px;"></td><td><input class="edit-input" id="edit-title-${i}" value="${esc(tc.title)}"></td><td><select id="edit-priority-${i}" style="padding:2px;border:1px solid #1a73e8;border-radius:3px;font-size:10px;"><option value="P0" ${tc.priority==='P0'?'selected':''}>P0</option><option value="P1" ${tc.priority==='P1'?'selected':''}>P1</option><option value="P2" ${tc.priority==='P2'?'selected':''}>P2</option><option value="P3" ${tc.priority==='P3'?'selected':''}>P3</option></select></td><td><input class="edit-input" id="edit-type-${i}" value="${esc(tc.type)}" style="width:65px;font-size:10px;"></td><td class="edit-actions"><button class="edit-save" onclick="saveEdit(${i})">保存</button><button class="edit-cancel" onclick="cancelEdit(${i})">取消</button></td>`;
-            dr.classList.add('show');dr.innerHTML=`<td colspan="6" style="background:#f8fbff;"><div class="detail-grid"><div><dt>前置条件</dt><textarea class="edit-textarea" id="edit-precondition-${i}" rows="2">${esc(tc.precondition)}</textarea></div><div><dt>预期结果</dt><textarea class="edit-textarea" id="edit-expected-${i}" rows="2">${esc(tc.expected)}</textarea></div><div style="grid-column:1/-1"><dt>测试步骤</dt><textarea class="edit-textarea" id="edit-steps-${i}" rows="3">${esc(tc.steps)}</textarea></div></div></td>`;
-        }
-        function saveEdit(i){const tc=currentTestcases[i];if(!originalTestcases.length)originalTestcases=JSON.parse(JSON.stringify(currentTestcases));
-            tc.module=document.getElementById('edit-module-'+i).value;tc.title=document.getElementById('edit-title-'+i).value;tc.priority=document.getElementById('edit-priority-'+i).value;tc.type=document.getElementById('edit-type-'+i).value;tc.precondition=document.getElementById('edit-precondition-'+i).value;tc.expected=document.getElementById('edit-expected-'+i).value;tc.steps=document.getElementById('edit-steps-'+i).value;
-            renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});document.getElementById('btnSavePref').style.display='';showToast('已保存');}
-        function cancelEdit(i){renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});}
-
-        async function savePreferences(){if(!originalTestcases.length){showToast('没有修改','error');return;}const b=document.getElementById('btnSavePref');b.disabled=true;b.innerHTML='<span class="spinner"></span> 分析中...';try{await sseFetch('/api/preferences/extract',{original:originalTestcases,edited:currentTestcases,session_id:currentSessionId},{onProgress:m=>{b.innerHTML=`<span class="spinner"></span> ${m}`;},onDone:d=>{if(d.preferences?.length){showToast(`提取 ${d.count} 条偏好`);loadPreferences();}else showToast('未提取到偏好');originalTestcases=[];b.style.display='none';}});}catch(e){showToast(e.message,'error');}finally{b.disabled=false;b.innerHTML='&#128161; 保存偏好';}}
-
-        function togglePrefPanel(){const c=document.getElementById('prefContent'),t=document.getElementById('prefToggle');if(c.style.display==='none'){c.style.display='block';t.innerHTML='收起 &#9652;';loadPreferences();}else{c.style.display='none';t.innerHTML='展开 &#9662;';}}
-        async function loadPreferences(){const l=document.getElementById('prefList');try{const r=await authFetch('/api/preferences');const d=await r.json();const ps=d.preferences||[];if(!ps.length){l.innerHTML='<div style="text-align:center;color:#bbb;padding:16px;font-size:11px;">暂无偏好规则</div>';return;}l.innerHTML=ps.map(p=>`<div class="pref-item ${p.active?'':'inactive'}"><span class="pref-cat">${esc(p.category)}</span><span class="pref-pattern">${esc(p.pattern)}</span><span class="pref-weight">权重 ${p.weight.toFixed(1)}</span><button onclick="togglePref(${p.id},${p.active?0:1})">${p.active?'禁用':'启用'}</button><button class="pref-del" onclick="deletePref(${p.id})">删除</button></div>`).join('');}catch(e){l.innerHTML='<div style="text-align:center;color:#d32f2f;padding:16px;">加载失败</div>';}}
-        async function togglePref(id,a){try{await authFetch('/api/preferences/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:a})});showToast(a?'已启用':'已禁用');loadPreferences();}catch(e){showToast(e.message,'error');}}
-        async function deletePref(id){if(!confirm('确定删除？'))return;try{await authFetch('/api/preferences/'+id,{method:'DELETE'});showToast('已删除');loadPreferences();}catch(e){showToast(e.message,'error');}}
-
-        // 页面加载时拉取预设列表
-        setTimeout(loadPresets, 500);
-    </script>
+// ============================================================
+// 偏好
+// ============================================================
+async function savePreferences(){if(!originalTestcases.length){showToast('没有修改','error');return;}const b=document.getElementById('btnSavePref');b.disabled=true;b.innerHTML='<span class="spinner"></span> 分析中...';try{await sseFetch('/api/preferences/extract',{original:originalTestcases,edited:currentTestcases,session_id:currentSessionId},{onProgress:m=>{b.innerHTML=`<span class="spinner"></span> ${m}`;},onDone:d=>{if(d.preferences?.length){showToast(`提取 ${d.count} 条偏好`);loadPreferences();}else showToast('未提取到偏好');originalTestcases=[];b.style.display='none';}});}catch(e){showToast(e.message,'error');}finally{b.disabled=false;b.innerHTML='&#128161; 保存偏好';}}
+function togglePrefPanel(){const c=document.getElementById('prefContent'),t=document.getElementById('prefToggle');if(c.style.display==='none'){c.style.display='block';t.innerHTML='收起 &#9652;';loadPreferences();}else{c.style.display='none';t.innerHTML='展开 &#9662;';}}
+async function loadPreferences(){const l=document.getElementById('prefList');try{const r=await authFetch('/api/preferences');const d=await r.json();const ps=d.preferences||[];if(!ps.length){l.innerHTML='<div style="text-align:center;color:#bbb;padding:16px;font-size:12px;">暂无偏好规则</div>';return;}l.innerHTML=ps.map(p=>`<div class="pref-item ${p.active?'':'inactive'}"><span class="pref-cat">${esc(p.category)}</span><span class="pref-pattern">${esc(p.pattern)}</span><span class="pref-weight">权重 ${p.weight.toFixed(1)}</span><button onclick="togglePref(${p.id},${p.active?0:1})">${p.active?'禁用':'启用'}</button><button onclick="deletePref(${p.id})" style="color:#d32f2f;">删除</button></div>`).join('');}catch(e){l.innerHTML='<div style="text-align:center;color:#d32f2f;padding:16px;">加载失败</div>';}}
+async function togglePref(id,a){try{await authFetch('/api/preferences/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:a})});showToast(a?'已启用':'已禁用');loadPreferences();}catch(e){showToast(e.message,'error');}}
+async function deletePref(id){if(!confirm('确定删除？'))return;try{await authFetch('/api/preferences/'+id,{method:'DELETE'});showToast('已删除');loadPreferences();}catch(e){showToast(e.message,'error');}}
+</script>
 </body>
 </html>

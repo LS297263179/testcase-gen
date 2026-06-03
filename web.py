@@ -113,21 +113,37 @@ def api_me():
 # ============================================================
 
 # 预设模型
+# provider 字段用于判断 Key 是否可复用（同 provider 共享 Key）
 MODEL_PRESETS = {
     "mimo": {
         "name": "MiMo",
+        "provider": "mimo",
         "generate": {"api_type": "openai", "base_url": "https://token-plan-cn.xiaomimimo.com/v1", "model": "mimo-v2.5-pro", "image_model": "mimo-v2.5", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": True},
         "review":    {"api_type": "openai", "base_url": "https://token-plan-cn.xiaomimimo.com/v1", "model": "mimo-v2.5-pro", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
     },
-    "deepseek": {
-        "name": "DeepSeek",
-        "generate": {"api_type": "openai", "base_url": "https://api.deepseek.com", "model": "deepseek-chat", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
-        "review":    {"api_type": "openai", "base_url": "https://api.deepseek.com", "model": "deepseek-chat", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+    "dashscope-deepseek": {
+        "name": "DeepSeek (阿里云)",
+        "provider": "dashscope",
+        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v3", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v3", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
     },
     "qwen": {
-        "name": "通义千问",
+        "name": "通义千问 (阿里云)",
+        "provider": "dashscope",
         "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
         "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+    },
+    "kimi": {
+        "name": "Kimi (月之暗面)",
+        "provider": "moonshot",
+        "generate": {"api_type": "openai", "base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+    },
+    "openai": {
+        "name": "OpenAI GPT",
+        "provider": "openai",
+        "generate": {"api_type": "openai", "base_url": "https://api.openai.com/v1", "model": "gpt-4o", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://api.openai.com/v1", "model": "gpt-4o", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
     },
 }
 
@@ -162,18 +178,29 @@ def api_model_config_set():
     """保存模型配置"""
     data = request.get_json()
     preset = data.get("preset")
+    need_key = False
 
     if preset and preset in MODEL_PRESETS:
+        preset_data = MODEL_PRESETS[preset]
         config = {
-            "generate": {**MODEL_PRESETS[preset]["generate"]},
-            "review": {**MODEL_PRESETS[preset]["review"]},
+            "generate": {**preset_data["generate"]},
+            "review": {**preset_data["review"]},
         }
-        # 保留用户已有的 api_key
+        # 智能保留 API Key：同 provider 复用，不同 provider 需要用户输入
         old = db.get_model_config()
-        for section in ("generate", "review"):
-            old_key = old.get(section, {}).get("api_key", "")
-            if old_key:
-                config[section]["api_key"] = old_key
+        old_provider = old.get("_provider", "")
+        new_provider = preset_data.get("provider", "")
+        need_key = old_provider != new_provider  # provider 变了就需要重新填 key
+
+        if not need_key:
+            # 同 provider，复用旧 key
+            for section in ("generate", "review"):
+                old_key = old.get(section, {}).get("api_key", "")
+                if old_key:
+                    config[section]["api_key"] = old_key
+        # 不同 provider 时不填 key，让前端提示用户输入
+
+        config["_provider"] = new_provider
     else:
         # 自定义配置
         config = data.get("config", {})
@@ -187,7 +214,60 @@ def api_model_config_set():
                     config[section]["api_key"] = old_key
 
     db.save_model_config(config)
-    return jsonify({"success": True})
+    return jsonify({"success": True, "need_key": need_key if preset and preset in MODEL_PRESETS else False})
+
+
+@app.route("/api/dashboard")
+@login_required
+def api_dashboard():
+    """仪表盘统计"""
+    stats = db.get_dashboard_stats(session["user_id"])
+    return jsonify(stats)
+
+
+@app.route("/api/analyze", methods=["POST"])
+@login_required
+def api_analyze():
+    """需求分析 - 拆解模块和测试点（SSE 流式）"""
+    try:
+        data = request.get_json()
+        requirement = data.get("requirement", "")
+        case_types = data.get("case_types")
+        if not requirement.strip():
+            return jsonify({"error": "需求内容不能为空"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            from generator import _analyze_modules
+            client = get_generate_client()
+            _ct = case_types or load_config("config.yaml")["testcase"]["case_types"]
+
+            yield _sse({"type": "progress", "message": "正在分析需求，拆解功能模块..."})
+            complexity, modules = _analyze_modules(client, requirement, _ct, None)
+
+            if not modules:
+                yield _sse({"type": "done", "data": {
+                    "success": True, "complexity": complexity, "modules": [],
+                    "message": "模块分析失败，请直接生成"
+                }})
+                return
+
+            yield _sse({"type": "done", "data": {
+                "success": True,
+                "complexity": complexity,
+                "modules": modules,
+            }})
+        except Exception as e:
+            traceback.print_exc()
+            yield _sse({"type": "error", "message": str(e)})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def build_client(cfg: dict) -> LLMClient:

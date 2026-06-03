@@ -356,6 +356,44 @@ def set_setting(key: str, value: str):
     conn.close()
 
 
+def get_dashboard_stats(user_id: int) -> dict:
+    """获取仪表盘统计"""
+    conn = _conn()
+    # 总生成次数
+    row = conn.execute(
+        "SELECT COUNT(*) as cnt FROM sessions WHERE is_deleted = 0 AND user_id = ?",
+        (user_id,),
+    ).fetchone()
+    total_sessions = row["cnt"]
+
+    # 总用例数
+    row = conn.execute(
+        "SELECT COALESCE(SUM(tc_count), 0) as total FROM sessions WHERE is_deleted = 0 AND user_id = ?",
+        (user_id,),
+    ).fetchone()
+    total_testcases = row["total"]
+
+    # 最近 5 条记录
+    rows = conn.execute(
+        "SELECT id, created_at, requirement, tc_count, priority "
+        "FROM sessions WHERE is_deleted = 0 AND user_id = ? "
+        "ORDER BY id DESC LIMIT 5",
+        (user_id,),
+    ).fetchall()
+    recent = []
+    for r in rows:
+        s = dict(r)
+        s["requirement_preview"] = s["requirement"][:60]
+        recent.append(s)
+
+    conn.close()
+    return {
+        "total_sessions": total_sessions,
+        "total_testcases": total_testcases,
+        "recent": recent,
+    }
+
+
 def get_model_config() -> dict:
     """获取模型配置（优先数据库，fallback 到 config.yaml）"""
     import yaml
