@@ -124,14 +124,14 @@ MODEL_PRESETS = {
     "dashscope-deepseek": {
         "name": "DeepSeek (阿里云)",
         "provider": "dashscope",
-        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v3", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
-        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v3", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v4", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v4", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
     },
     "qwen": {
         "name": "通义千问 (阿里云)",
         "provider": "dashscope",
-        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
-        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-max", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-max", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
     },
     "kimi": {
         "name": "Kimi (月之暗面)",
