@@ -124,8 +124,8 @@ MODEL_PRESETS = {
     "dashscope-deepseek": {
         "name": "DeepSeek (阿里云)",
         "provider": "dashscope",
-        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v4", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
-        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v4", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v4-pro", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "deepseek-v4-pro", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
     },
     "qwen": {
         "name": "通义千问 (阿里云)",
