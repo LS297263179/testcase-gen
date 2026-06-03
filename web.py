@@ -380,10 +380,16 @@ def api_generate_points():
             else:
                 points = json.loads(text)
 
+            total = sum(len(m.get("points", [])) for m in points)
+            # 自动保存到数据库
+            title = (requirement or "测试点").strip()[:30]
+            tp_id = db.save_test_points(session["user_id"], title, requirement, points, total)
+
             yield _sse({"type": "done", "data": {
                 "success": True,
                 "points": points,
-                "total": sum(len(m.get("points", [])) for m in points),
+                "total": total,
+                "tp_id": tp_id,
             }})
         except Exception as e:
             traceback.print_exc()
@@ -506,6 +512,36 @@ def api_materials_get(mid):
 def api_materials_delete(mid):
     """删除项目资料"""
     db.delete_material(mid)
+    return jsonify({"success": True})
+
+
+# ============================================================
+# 测试点历史 API
+# ============================================================
+
+@app.route("/api/test-points", methods=["GET"])
+@login_required
+def api_test_points_list():
+    """列出当前用户的测试点记录"""
+    points = db.list_test_points(session["user_id"])
+    return jsonify({"test_points": points})
+
+
+@app.route("/api/test-points/<int:tp_id>", methods=["GET"])
+@login_required
+def api_test_points_get(tp_id):
+    """获取单条测试点记录"""
+    tp = db.get_test_points(tp_id)
+    if not tp or tp["user_id"] != session["user_id"]:
+        return jsonify({"error": "记录不存在"}), 404
+    return jsonify(tp)
+
+
+@app.route("/api/test-points/<int:tp_id>", methods=["DELETE"])
+@login_required
+def api_test_points_delete(tp_id):
+    """删除测试点记录"""
+    db.delete_test_points(tp_id)
     return jsonify({"success": True})
 
 

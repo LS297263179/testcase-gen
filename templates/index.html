@@ -595,6 +595,16 @@
                         </div>
                         <div class="tp-tree" id="tpTree"></div>
                     </div>
+
+                    <div class="card" id="tpHistoryPanel">
+                        <div class="card-header" style="cursor:pointer;" onclick="toggleTpHistory()">
+                            <h3>历史记录</h3>
+                            <span id="tpHistToggle" style="font-size:11px;color:#aaa;">展开 &#9662;</span>
+                        </div>
+                        <div id="tpHistContent" style="display:none;">
+                            <div class="card-body" id="tpHistList"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -725,7 +735,7 @@ function switchPage(name){
     document.getElementById('nav-'+name).classList.add('active');
     if(name==='dashboard')loadDashboard();
     if(name==='modelConfig')loadModelConfig();
-    if(name==='testpoints')loadTpMaterials();
+    if(name==='testpoints'){loadTpMaterials();loadTpHistory();}
     if(name==='generator')loadGenMaterials();
     if(name==='materials')loadMaterials();
 }
@@ -843,6 +853,44 @@ async function exportPoints(fmt){
             showToast('导出成功');
         }else showToast(d.error||'导出失败','error');
     }catch(e){showToast(e.message,'error');}
+}
+
+// 测试点历史
+function toggleTpHistory(){
+    const c=document.getElementById('tpHistContent'),t=document.getElementById('tpHistToggle');
+    if(c.style.display==='none'){c.style.display='block';t.innerHTML='收起 &#9652;';loadTpHistory();}
+    else{c.style.display='none';t.innerHTML='展开 &#9662;';}
+}
+async function loadTpHistory(){
+    const l=document.getElementById('tpHistList');
+    try{
+        const r=await authFetch('/api/test-points');
+        const d=await r.json();
+        const list=d.test_points||[];
+        if(!list.length){l.innerHTML='<div style="text-align:center;color:#bbb;padding:16px;font-size:12px;">暂无历史记录</div>';return;}
+        l.innerHTML=list.map(t=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f5f5f5;">
+                <div style="flex:1;min-width:0;cursor:pointer;" onclick="loadTpRecord(${t.id})">
+                    <div style="font-size:13px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(t.title)}</div>
+                    <div style="font-size:11px;color:#999;margin-top:2px;">${t.total} 个测试点 &middot; ${esc(t.created_at)}</div>
+                </div>
+                <button style="font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#999;margin-left:8px;" onclick="event.stopPropagation();deleteTpRecord(${t.id})">删除</button>
+            </div>
+        `).join('');
+    }catch(e){l.innerHTML='<div style="text-align:center;color:#d32f2f;padding:16px;">加载失败</div>';}
+}
+async function loadTpRecord(id){
+    try{
+        const r=await authFetch('/api/test-points/'+id);
+        const tp=await r.json();
+        testPointsData=tp.points||[];
+        renderTestPoints(testPointsData);
+        showToast('已加载历史记录');
+    }catch(e){showToast(e.message,'error');}
+}
+async function deleteTpRecord(id){
+    if(!confirm('确定删除？'))return;
+    try{await authFetch('/api/test-points/'+id,{method:'DELETE'});showToast('已删除');loadTpHistory();}catch(e){showToast(e.message,'error');}
 }
 
 // ============================================================

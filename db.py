@@ -94,6 +94,16 @@ def init_db():
             data        TEXT NOT NULL,
             sort_order  INTEGER NOT NULL DEFAULT 0
         );
+
+        CREATE TABLE IF NOT EXISTS test_points (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id     INTEGER REFERENCES users(id),
+            title       TEXT NOT NULL,
+            requirement TEXT,
+            points      TEXT NOT NULL,
+            total       INTEGER NOT NULL DEFAULT 0,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
     """)
     # 兼容已有数据库：为 sessions 表添加 user_id 列
     try:
@@ -507,6 +517,56 @@ def delete_material(material_id: int):
     conn = _conn()
     conn.execute("DELETE FROM material_images WHERE material_id = ?", (material_id,))
     conn.execute("DELETE FROM materials WHERE id = ?", (material_id,))
+    conn.commit()
+    conn.close()
+
+
+# ============================================================
+# Test Points CRUD
+# ============================================================
+
+def save_test_points(user_id: int, title: str, requirement: str,
+                     points: list[dict], total: int) -> int:
+    """保存测试点，返回 id"""
+    conn = _conn()
+    cur = conn.execute(
+        "INSERT INTO test_points (user_id, title, requirement, points, total) VALUES (?, ?, ?, ?, ?)",
+        (user_id, title, requirement, json.dumps(points, ensure_ascii=False), total),
+    )
+    tp_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return tp_id
+
+
+def list_test_points(user_id: int) -> list[dict]:
+    """列出用户的测试点记录"""
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT id, title, total, created_at FROM test_points WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_test_points(tp_id: int) -> dict | None:
+    """获取单条测试点记录"""
+    conn = _conn()
+    row = conn.execute("SELECT * FROM test_points WHERE id = ?", (tp_id,)).fetchone()
+    if not row:
+        conn.close()
+        return None
+    d = dict(row)
+    d["points"] = json.loads(d["points"])
+    conn.close()
+    return d
+
+
+def delete_test_points(tp_id: int):
+    """删除测试点记录"""
+    conn = _conn()
+    conn.execute("DELETE FROM test_points WHERE id = ?", (tp_id,))
     conn.commit()
     conn.close()
 
