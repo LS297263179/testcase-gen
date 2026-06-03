@@ -77,6 +77,23 @@ def init_db():
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS materials (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id    INTEGER REFERENCES users(id),
+            title      TEXT NOT NULL,
+            content    TEXT,
+            created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
+        CREATE TABLE IF NOT EXISTS material_images (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            material_id INTEGER NOT NULL REFERENCES materials(id),
+            filename    TEXT,
+            media_type  TEXT,
+            data        TEXT NOT NULL,
+            sort_order  INTEGER NOT NULL DEFAULT 0
+        );
     """)
     # 兼容已有数据库：为 sessions 表添加 user_id 列
     try:
@@ -392,6 +409,106 @@ def get_dashboard_stats(user_id: int) -> dict:
         "total_testcases": total_testcases,
         "recent": recent,
     }
+
+
+# ============================================================
+# Materials CRUD
+# ============================================================
+
+def create_material(user_id: int, title: str, content: str = "",
+                    images: list[dict] | None = None) -> int:
+    """创建项目资料，返回 material_id"""
+    conn = _conn()
+    cur = conn.execute(
+        "INSERT INTO materials (user_id, title, content) VALUES (?, ?, ?)",
+        (user_id, title, content),
+    )
+    mid = cur.lastrowid
+    if images:
+        for i, img in enumerate(images):
+            conn.execute(
+                "INSERT INTO material_images (material_id, filename, media_type, data, sort_order) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (mid, img.get("filename"), img.get("media_type"), img["data"], i),
+            )
+    conn.commit()
+    conn.close()
+    return mid
+
+
+def list_materials(user_id: int) -> list[dict]:
+    """列出用户的所有项目资料（不含图片数据）"""
+    conn = _conn()
+    rows = conn.execute(
+        "SELECT id, title, content, created_at FROM materials WHERE user_id = ? ORDER BY id DESC",
+        (user_id,),
+    ).fetchall()
+    result = []
+    for r in rows:
+        d = dict(r)
+        # 获取图片数量
+        img_count = conn.execute(
+            "SELECT COUNT(*) as cnt FROM material_images WHERE material_id = ?",
+            (d["id"],),
+        ).fetchone()["cnt"]
+        d["image_count"] = img_count
+        d["content_preview"] = (d["content"] or "")[:60]
+        result.append(d)
+    conn.close()
+    return result
+
+
+def get_material(material_id: int) -> dict | None:
+    """获取单条项目资料（含图片）"""
+    conn = _conn()
+    row = conn.execute(
+        "SELECT * FROM materials WHERE id = ?", (material_id,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return None
+    m = dict(row)
+    images = conn.execute(
+        "SELECT filename, media_type, data FROM material_images "
+        "WHERE material_id = ? ORDER BY sort_order", (material_id,)
+    ).fetchall()
+    m["images"] = [dict(img) for img in images]
+    conn.close()
+    return m
+
+
+def get_materials_for_prompt(user_id: int, material_ids: list[int] | None = None) -> str:
+    """格式化项目资料为 prompt 注入文本"""
+    conn = _conn()
+    if material_ids:
+        placeholders = ",".join("?" * len(material_ids))
+        rows = conn.execute(
+            f"SELECT id, title, content FROM materials WHERE id IN ({placeholders}) AND user_id = ?",
+            (*material_ids, user_id),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, title, content FROM materials WHERE user_id = ? ORDER BY id DESC LIMIT 5",
+            (user_id,),
+        ).fetchall()
+    conn.close()
+    if not rows:
+        return ""
+    lines = []
+    for r in rows:
+        lines.append(f"【{r['title']}】")
+        if r["content"]:
+            lines.append(r["content"])
+    return "\n".join(lines)
+
+
+def delete_material(material_id: int):
+    """删除项目资料"""
+    conn = _conn()
+    conn.execute("DELETE FROM material_images WHERE material_id = ?", (material_id,))
+    conn.execute("DELETE FROM materials WHERE id = ?", (material_id,))
+    conn.commit()
+    conn.close()
 
 
 def get_model_config() -> dict:

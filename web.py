@@ -296,6 +296,7 @@ TEST_POINTS_PROMPT = """你是一位资深测试专家。请根据以下需求�
 
 需求内容：
 {requirement}
+{materials}
 
 请返回 JSON 格式的测试点树，结构如下：
 [
@@ -312,7 +313,8 @@ TEST_POINTS_PROMPT = """你是一位资深测试专家。请根据以下需求�
 1. 按功能模块分组
 2. 每个模块下列出关键测试点（正常流程、边界、异常）
 3. 测试点要具体可执行
-4. 只返回 JSON，不要其他内容"""
+4. 结合项目资料中的信息补充测试点
+5. 只返回 JSON，不要其他内容"""
 
 
 @app.route("/api/generate-points", methods=["POST"])
@@ -322,10 +324,13 @@ def api_generate_points():
     try:
         requirement = ""
         images = []
+        material_ids = None
         is_multipart = request.content_type and "multipart/form-data" in request.content_type
 
         if is_multipart:
             requirement = request.form.get("requirement", "")
+            material_ids_raw = request.form.get("material_ids", "")
+            material_ids = [int(x) for x in material_ids_raw.split(",") if x.strip()] if material_ids_raw else None
             files = request.files.getlist("files")
             for f in files:
                 if not f.filename:
@@ -358,7 +363,10 @@ def api_generate_points():
             image_client = get_image_client() if images else None
             active_client = image_client if (images and image_client) else client
 
-            prompt = TEST_POINTS_PROMPT.format(requirement=requirement or "（见图片）")
+            prompt = TEST_POINTS_PROMPT.format(
+                requirement=requirement or "（见图片）",
+                materials=db.get_materials_for_prompt(session["user_id"], material_ids),
+            )
 
             yield _sse({"type": "progress", "message": "正在分析需求，生成测试点..."})
             response = active_client.chat("你是一位资深测试专家。", prompt, images=images if images else None)
@@ -439,6 +447,68 @@ def api_export_points():
     return jsonify({"error": "不支持的格式"}), 400
 
 
+# ============================================================
+# 项目资料 API
+# ============================================================
+
+@app.route("/api/materials", methods=["GET"])
+@login_required
+def api_materials_list():
+    """列出当前用户的项目资料"""
+    materials = db.list_materials(session["user_id"])
+    return jsonify({"materials": materials})
+
+
+@app.route("/api/materials", methods=["POST"])
+@login_required
+def api_materials_create():
+    """创建项目资料（支持图片上传）"""
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "")
+    if not title:
+        return jsonify({"error": "标题不能为空"}), 400
+
+    images = []
+    files = request.files.getlist("images")
+    for f in files:
+        if not f.filename:
+            continue
+        suffix = Path(f.filename).suffix.lower()
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = tmp.name
+        f.save(tmp_path)
+        try:
+            if is_image(tmp_path):
+                images.append({
+                    "data": image_to_base64(tmp_path),
+                    "media_type": get_image_media_type(tmp_path),
+                    "filename": f.filename,
+                })
+        finally:
+            os.unlink(tmp_path)
+
+    mid = db.create_material(session["user_id"], title, content, images)
+    return jsonify({"success": True, "id": mid})
+
+
+@app.route("/api/materials/<int:mid>", methods=["GET"])
+@login_required
+def api_materials_get(mid):
+    """获取单条项目资料"""
+    m = db.get_material(mid)
+    if not m or m["user_id"] != session["user_id"]:
+        return jsonify({"error": "资料不存在"}), 404
+    return jsonify(m)
+
+
+@app.route("/api/materials/<int:mid>", methods=["DELETE"])
+@login_required
+def api_materials_delete(mid):
+    """删除项目资料"""
+    db.delete_material(mid)
+    return jsonify({"success": True})
+
+
 def build_client(cfg: dict) -> LLMClient:
     return LLMClient(
         base_url=cfg["base_url"],
@@ -498,12 +568,16 @@ def api_generate():
     is_multipart = request.content_type and "multipart/form-data" in request.content_type
 
     try:
+        material_ids = None
         if is_multipart:
             requirement = request.form.get("requirement", "")
             priority = request.form.get("priority")
             ct = request.form.get("case_types")
             if ct:
                 case_types = [x.strip() for x in ct.split(",") if x.strip()]
+            material_ids_raw = request.form.get("material_ids", "")
+            if material_ids_raw:
+                material_ids = [int(x) for x in material_ids_raw.split(",") if x.strip()]
 
             files = request.files.getlist("files")
             for f in files:
@@ -549,6 +623,11 @@ def api_generate():
 
             # 加载用户偏好
             pref_context = db.get_preference_context()
+
+            # 加载项目材料
+            mat_context = db.get_materials_for_prompt(session.get("user_id"), material_ids) if material_ids else ""
+            if mat_context:
+                requirement = requirement + "\n\n【参考项目材料】\n" + mat_context
 
             # Step 1: 分析模块
             from concurrent.futures import ThreadPoolExecutor, as_completed

@@ -342,6 +342,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             测试点
         </div>
+        <div class="nav-item" onclick="switchPage('materials')" id="nav-materials">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            项目材料
+        </div>
         <div class="nav-item" onclick="switchPage('modelConfig')" id="nav-modelConfig">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             模型配置
@@ -375,10 +379,10 @@
                     <div class="qc-title">新建测试用例</div>
                     <div class="qc-desc">输入需求描述，AI 自动生成完整测试用例</div>
                 </div>
-                <div class="quick-card" onclick="switchPage('generator');setTimeout(()=>document.getElementById('requirement').focus(),100);">
+                <div class="quick-card" onclick="switchPage('materials')">
                     <div class="qc-icon">&#128228;</div>
-                    <div class="qc-title">上传需求文档</div>
-                    <div class="qc-desc">支持 MD / TXT / Excel / 图片混合上传</div>
+                    <div class="qc-title">项目材料</div>
+                    <div class="qc-desc">上传项目资料（标题+图片+文本），生成时可引用</div>
                 </div>
             </div>
 
@@ -421,7 +425,11 @@
                                 </label>
                                 <div class="spacer"></div>
                             </div>
-                            <div style="display:flex;gap:8px;">
+                            <div id="genMatSelect" style="margin-top:8px;display:none;">
+                                <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">引用项目材料（可选）</label>
+                                <div id="genMatList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                            </div>
+                            <div style="display:flex;gap:8px;margin-top:8px;">
                                 <button class="btn btn-outline btn-sm" onclick="analyzeRequirement()" id="btnAnalyze">&#128269; 需求分析</button>
                                 <button class="btn btn-primary btn-sm" onclick="generate()" id="btnGenerate">&#9889; 直接生成</button>
                             </div>
@@ -540,6 +548,10 @@
                                 <input type="file" id="tpFileInput" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.bmp">
                             </div>
                             <div class="file-list" id="tpFileList"></div>
+                            <div id="tpMatSelect" style="margin-top:10px;display:none;">
+                                <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">引用项目材料（可选）</label>
+                                <div id="tpMatList" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                            </div>
                             <div style="margin-top:12px;display:flex;gap:8px;">
                                 <button class="btn btn-primary btn-sm" onclick="generatePoints()" id="btnGenPoints">&#128209; 生成测试点</button>
                             </div>
@@ -565,6 +577,50 @@
                             </div>
                         </div>
                         <div class="tp-tree" id="tpTree"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== 项目材料 ====== -->
+        <div class="page" id="page-materials">
+            <div class="split-layout">
+                <!-- 左侧：新建资料 -->
+                <div class="split-left">
+                    <div class="card">
+                        <div class="card-header"><h3>新建项目材料</h3></div>
+                        <div class="card-body">
+                            <div style="margin-bottom:10px;">
+                                <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">标题 *</label>
+                                <input type="text" id="matTitle" placeholder="如：登录模块 PRD" style="width:100%;padding:8px 10px;border:1px solid #d9d9d9;border-radius:6px;font-size:13px;">
+                            </div>
+                            <div style="margin-bottom:10px;">
+                                <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">文本内容</label>
+                                <textarea id="matContent" style="height:120px;" placeholder="粘贴需求文档、PRD 内容等..."></textarea>
+                            </div>
+                            <div class="upload-area" id="matUploadArea">
+                                <p>&#128228; 上传图片（可多张）</p>
+                                <div class="hint">UI 截图、原型图、流程图等</div>
+                                <input type="file" id="matFileInput" multiple accept=".png,.jpg,.jpeg,.gif,.webp,.bmp">
+                            </div>
+                            <div class="file-list" id="matFileList"></div>
+                            <div style="margin-top:12px;">
+                                <button class="btn btn-primary btn-sm" onclick="saveMaterial()" id="btnSaveMat">&#128190; 保存材料</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：材料列表 -->
+                <div class="split-right">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>已有材料</h3>
+                            <button class="btn btn-outline btn-sm" onclick="loadMaterials()">刷新</button>
+                        </div>
+                        <div class="card-body" id="matList" style="min-height:200px;">
+                            <div style="text-align:center;color:#bbb;padding:30px;font-size:13px;">暂无材料</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -652,6 +708,9 @@ function switchPage(name){
     document.getElementById('nav-'+name).classList.add('active');
     if(name==='dashboard')loadDashboard();
     if(name==='modelConfig')loadModelConfig();
+    if(name==='testpoints')loadTpMaterials();
+    if(name==='generator')loadGenMaterials();
+    if(name==='materials')loadMaterials();
 }
 
 // ============================================================
@@ -659,6 +718,27 @@ function switchPage(name){
 // ============================================================
 let testPointsData = [];
 let tpUploadedFiles = [];
+let tpSelectedMats = new Set();
+
+async function loadTpMaterials() {
+    try {
+        const r = await authFetch('/api/materials');
+        const d = await r.json();
+        const mats = d.materials || [];
+        const sel = document.getElementById('tpMatSelect');
+        const list = document.getElementById('tpMatList');
+        if (!mats.length) { sel.style.display = 'none'; return; }
+        sel.style.display = 'block';
+        tpSelectedMats.clear();
+        list.innerHTML = mats.map(m => `
+            <label style="display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:11px;cursor:pointer;">
+                <input type="checkbox" value="${m.id}" onchange="tpToggleMat(${m.id})" style="accent-color:#1a73e8;">
+                ${esc(m.title)}
+            </label>
+        `).join('');
+    } catch (e) {}
+}
+function tpToggleMat(id) { if (tpSelectedMats.has(id)) tpSelectedMats.delete(id); else tpSelectedMats.add(id); }
 const tpUploadArea = document.getElementById('tpUploadArea');
 const tpFileInput = document.getElementById('tpFileInput');
 const tpFileList = document.getElementById('tpFileList');
@@ -697,6 +777,7 @@ async function generatePoints(){
     document.getElementById('tpResult').style.display='none';
     try{
         const fd=new FormData();fd.append('requirement',req);
+        if(tpSelectedMats.size>0)fd.append('material_ids',[...tpSelectedMats].join(','));
         for(const f of tpUploadedFiles)fd.append('files',f);
         const resp=await fetch('/api/generate-points',{method:'POST',body:fd});
         if(resp.status===401){doLogout();throw new Error('登录已过期');}
@@ -745,6 +826,84 @@ async function exportPoints(fmt){
             showToast('导出成功');
         }else showToast(d.error||'导出失败','error');
     }catch(e){showToast(e.message,'error');}
+}
+
+// ============================================================
+// 项目材料
+// ============================================================
+let matUploadedFiles = [];
+const matUploadArea = document.getElementById('matUploadArea');
+const matFileInput = document.getElementById('matFileInput');
+const matFileList = document.getElementById('matFileList');
+matUploadArea.addEventListener('click', () => matFileInput.click());
+matUploadArea.addEventListener('dragover', e => { e.preventDefault(); matUploadArea.classList.add('dragover'); });
+matUploadArea.addEventListener('dragleave', () => matUploadArea.classList.remove('dragover'));
+matUploadArea.addEventListener('drop', e => { e.preventDefault(); matUploadArea.classList.remove('dragover'); matAddFiles(e.dataTransfer.files); });
+matFileInput.addEventListener('change', () => { matAddFiles(matFileInput.files); matFileInput.value = ''; });
+function matAddFiles(fs) { for (const f of fs) { if (matUploadedFiles.some(x => x.name === f.name && x.size === f.size)) continue; matUploadedFiles.push(f); } matRenderFileList(); }
+function matRemoveFile(i) { matUploadedFiles.splice(i, 1); matRenderFileList(); }
+function matRenderFileList() {
+    if (!matUploadedFiles.length) { matFileList.innerHTML = ''; return; }
+    matFileList.innerHTML = matUploadedFiles.map((f, i) => {
+        const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
+        const ext = f.name.split('.').pop().toUpperCase();
+        const pre = isImg ? `<img src="${URL.createObjectURL(f)}">` : '';
+        return `<div class="file-item">${pre}<div><div class="fn" title="${f.name}">${f.name}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="matRemoveFile(${i})">&times;</button></div>`;
+    }).join('');
+}
+async function saveMaterial() {
+    const title = document.getElementById('matTitle').value.trim();
+    const content = document.getElementById('matContent').value.trim();
+    if (!title) { showToast('请输入标题', 'error'); return; }
+    const btn = document.getElementById('btnSaveMat'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 保存中...';
+    try {
+        const fd = new FormData(); fd.append('title', title); fd.append('content', content);
+        for (const f of matUploadedFiles) fd.append('images', f);
+        const r = await authFetch('/api/materials', { method: 'POST', body: fd });
+        const d = await r.json();
+        if (d.success) {
+            showToast('保存成功');
+            document.getElementById('matTitle').value = '';
+            document.getElementById('matContent').value = '';
+            matUploadedFiles = []; matRenderFileList();
+            loadMaterials();
+        } else showToast(d.error || '保存失败', 'error');
+    } catch (e) { showToast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.innerHTML = '&#128190; 保存材料'; }
+}
+async function loadMaterials() {
+    const list = document.getElementById('matList');
+    try {
+        const r = await authFetch('/api/materials');
+        const d = await r.json();
+        const mats = d.materials || [];
+        if (!mats.length) { list.innerHTML = '<div style="text-align:center;color:#bbb;padding:30px;font-size:13px;">暂无材料，创建后可在生成时引用</div>'; return; }
+        list.innerHTML = mats.map(m => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border:1px solid #eee;border-radius:8px;margin-bottom:6px;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;font-weight:500;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(m.title)}</div>
+                    <div style="font-size:11px;color:#999;margin-top:2px;">${m.image_count ? m.image_count + ' 张图片' : ''} ${m.content_preview ? '&middot; ' + esc(m.content_preview) : ''}</div>
+                </div>
+                <div style="display:flex;gap:4px;margin-left:8px;">
+                    <button class="btn btn-ghost btn-sm" onclick="viewMaterial(${m.id})" style="font-size:11px;padding:3px 8px;">查看</button>
+                    <button class="btn btn-ghost btn-sm" onclick="deleteMaterial(${m.id})" style="font-size:11px;padding:3px 8px;color:#d32f2f;">删除</button>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) { list.innerHTML = '<div style="text-align:center;color:#d32f2f;padding:20px;">加载失败</div>'; }
+}
+async function viewMaterial(id) {
+    try {
+        const r = await authFetch('/api/materials/' + id);
+        const m = await r.json();
+        let msg = `标题: ${m.title}\n\n${m.content || '(无文本内容)'}\n\n${m.images ? m.images.length + ' 张图片' : ''}`;
+        alert(msg);
+    } catch (e) { showToast(e.message, 'error'); }
+}
+async function deleteMaterial(id) {
+    if (!confirm('确定删除这条材料？')) return;
+    try { await authFetch('/api/materials/' + id, { method: 'DELETE' }); showToast('已删除'); loadMaterials(); }
+    catch (e) { showToast(e.message, 'error'); }
 }
 
 // ============================================================
@@ -831,6 +990,27 @@ async function analyzeRequirement(){
 // 生成
 // ============================================================
 let currentFiles={},currentRequirement='',currentTestcases=[],currentReview='',originalTestcases=[],currentSessionId=null,selectedRows=new Set();
+let genSelectedMats = new Set();
+
+async function loadGenMaterials() {
+    try {
+        const r = await authFetch('/api/materials');
+        const d = await r.json();
+        const mats = d.materials || [];
+        const sel = document.getElementById('genMatSelect');
+        const list = document.getElementById('genMatList');
+        if (!mats.length) { sel.style.display = 'none'; return; }
+        sel.style.display = 'block';
+        genSelectedMats.clear();
+        list.innerHTML = mats.map(m => `
+            <label style="display:flex;align-items:center;gap:4px;padding:4px 8px;border:1px solid #ddd;border-radius:5px;font-size:11px;cursor:pointer;">
+                <input type="checkbox" value="${m.id}" onchange="genToggleMat(${m.id})" style="accent-color:#1a73e8;">
+                ${esc(m.title)}
+            </label>
+        `).join('');
+    } catch (e) {}
+}
+function genToggleMat(id) { if (genSelectedMats.has(id)) genSelectedMats.delete(id); else genSelectedMats.add(id); }
 async function generate(){await doGenerate(false);}
 async function generateFromAnalysis(){await doGenerate(true);}
 async function doGenerate(useAnalysis){
@@ -840,7 +1020,9 @@ async function doGenerate(useAnalysis){
     document.getElementById('loading').style.display='block';document.getElementById('loadingText').textContent='AI 正在分析需求...';
     document.getElementById('result').style.display='none';document.getElementById('reviewPanel').style.display='none';document.getElementById('diffPanel').style.display='none';document.getElementById('analysisCard').style.display='none';
     try{
-        const fd=new FormData();fd.append('requirement',req);fd.append('priority',document.getElementById('priority').value);fd.append('case_types',document.getElementById('caseTypes').value);for(const f of uploadedFiles)fd.append('files',f);
+        const fd=new FormData();fd.append('requirement',req);fd.append('priority',document.getElementById('priority').value);fd.append('case_types',document.getElementById('caseTypes').value);
+        if(genSelectedMats.size>0)fd.append('material_ids',[...genSelectedMats].join(','));
+        for(const f of uploadedFiles)fd.append('files',f);
         const resp=await fetch('/api/generate',{method:'POST',body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
         while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
