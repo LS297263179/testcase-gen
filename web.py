@@ -186,19 +186,28 @@ def api_model_config_set():
             "generate": {**preset_data["generate"]},
             "review": {**preset_data["review"]},
         }
-        # 智能保留 API Key：同 provider 复用，不同 provider 需要用户输入
-        old = db.get_model_config()
-        old_provider = old.get("_provider", "")
+        # 智能 API Key 查找：
+        # 1. 从已保存的 provider_keys 中查找（用户之前配置过的 key）
+        # 2. 从当前配置的同 provider key 中复用
+        # 3. 都没有则提示用户输入
         new_provider = preset_data.get("provider", "")
-        need_key = old_provider != new_provider  # provider 变了就需要重新填 key
+        stored_keys = db.get_setting("provider_keys")
+        stored_keys = json.loads(stored_keys) if stored_keys else {}
 
-        if not need_key:
-            # 同 provider，复用旧 key
+        # 优先从 provider_keys 查找
+        found_key = stored_keys.get(new_provider, "")
+
+        # 如果 provider_keys 没有，从当前配置的同 provider 复用
+        if not found_key:
+            old = db.get_model_config()
+            if old.get("_provider") == new_provider:
+                found_key = old.get("generate", {}).get("api_key", "")
+
+        need_key = not found_key
+
+        if found_key:
             for section in ("generate", "review"):
-                old_key = old.get(section, {}).get("api_key", "")
-                if old_key:
-                    config[section]["api_key"] = old_key
-        # 不同 provider 时不填 key，让前端提示用户输入
+                config[section]["api_key"] = found_key
 
         config["_provider"] = new_provider
     else:
@@ -214,6 +223,15 @@ def api_model_config_set():
                     config[section]["api_key"] = old_key
 
     db.save_model_config(config)
+
+    # 用户手动填写 key 时，同步保存到 provider_keys 以便后续复用
+    gen_key = config.get("generate", {}).get("api_key", "")
+    prov = config.get("_provider", "")
+    if gen_key and "****" not in gen_key and prov:
+        stored = json.loads(db.get_setting("provider_keys") or "{}")
+        stored[prov] = gen_key
+        db.set_setting("provider_keys", json.dumps(stored))
+
     return jsonify({"success": True, "need_key": need_key if preset and preset in MODEL_PRESETS else False})
 
 
