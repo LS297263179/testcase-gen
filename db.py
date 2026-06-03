@@ -1,9 +1,11 @@
-"""数据库模块 - SQLite 持久化：历史记录 + 偏好规则"""
+"""数据库模块 - SQLite 持久化：用户 + 历史记录 + 偏好规则"""
 
 import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+from werkzeug.security import check_password_hash, generate_password_hash
 
 _DB_PATH = "data.db"
 
@@ -25,9 +27,17 @@ def init_db():
     """建表（幂等，可重复调用）"""
     conn = _conn()
     conn.executescript("""
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+        );
+
         CREATE TABLE IF NOT EXISTS sessions (
             id            INTEGER PRIMARY KEY AUTOINCREMENT,
             created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+            user_id       INTEGER REFERENCES users(id),
             requirement   TEXT NOT NULL,
             priority      TEXT,
             case_types    TEXT,
@@ -62,8 +72,64 @@ def init_db():
             session_id    INTEGER NOT NULL REFERENCES sessions(id),
             testcase_id   TEXT
         );
+
+        CREATE TABLE IF NOT EXISTS settings (
+            key   TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
     """)
+    # 兼容已有数据库：为 sessions 表添加 user_id 列
+    try:
+        conn.execute("ALTER TABLE sessions ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     conn.close()
+
+
+# ============================================================
+# Users CRUD
+# ============================================================
+
+def create_user(username: str, password: str) -> int:
+    """注册新用户，返回 user_id"""
+    conn = _conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO users (username, password_hash) VALUES (?, ?)",
+            (username, generate_password_hash(password)),
+        )
+        user_id = cur.lastrowid
+        conn.commit()
+        return user_id
+    except sqlite3.IntegrityError:
+        raise ValueError("用户名已存在")
+    finally:
+        conn.close()
+
+
+def verify_user(username: str, password: str) -> dict | None:
+    """验证用户名密码，成功返回 {"id": ..., "username": ...}，失败返回 None"""
+    conn = _conn()
+    row = conn.execute(
+        "SELECT id, username, password_hash FROM users WHERE username = ?",
+        (username,),
+    ).fetchone()
+    conn.close()
+    if row and check_password_hash(row["password_hash"], password):
+        return {"id": row["id"], "username": row["username"]}
+    return None
+
+
+def get_user_by_id(user_id: int) -> dict | None:
+    """根据 ID 获取用户信息"""
+    conn = _conn()
+    row = conn.execute(
+        "SELECT id, username, created_at FROM users WHERE id = ?",
+        (user_id,),
+    ).fetchone()
+    conn.close()
+    return dict(row) if row else None
 
 
 # ============================================================
@@ -74,13 +140,15 @@ def create_session(requirement: str, testcases: list[dict],
                    priority: str | None = None,
                    case_types: list[str] | None = None,
                    images: list[dict] | None = None,
-                   review_report: str | None = None) -> int:
+                   review_report: str | None = None,
+                   user_id: int | None = None) -> int:
     """保存一次生成记录，返回 session_id"""
     conn = _conn()
     cur = conn.execute(
-        "INSERT INTO sessions (requirement, priority, case_types, testcases, tc_count, review_report) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO sessions (user_id, requirement, priority, case_types, testcases, tc_count, review_report) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
         (
+            user_id,
             requirement,
             priority,
             json.dumps(case_types, ensure_ascii=False) if case_types else None,
@@ -129,15 +197,24 @@ def get_session(session_id: int) -> dict | None:
     return session
 
 
-def list_sessions(limit: int = 50, offset: int = 0) -> list[dict]:
+def list_sessions(limit: int = 50, offset: int = 0,
+                  user_id: int | None = None) -> list[dict]:
     """列出历史记录摘要（不含 testcases 和 image data）"""
     conn = _conn()
-    rows = conn.execute(
-        "SELECT id, created_at, requirement, priority, tc_count, is_deleted "
-        "FROM sessions WHERE is_deleted = 0 "
-        "ORDER BY id DESC LIMIT ? OFFSET ?",
-        (limit, offset),
-    ).fetchall()
+    if user_id is not None:
+        rows = conn.execute(
+            "SELECT id, created_at, requirement, priority, tc_count, is_deleted "
+            "FROM sessions WHERE is_deleted = 0 AND user_id = ? "
+            "ORDER BY id DESC LIMIT ? OFFSET ?",
+            (user_id, limit, offset),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT id, created_at, requirement, priority, tc_count, is_deleted "
+            "FROM sessions WHERE is_deleted = 0 "
+            "ORDER BY id DESC LIMIT ? OFFSET ?",
+            (limit, offset),
+        ).fetchall()
     conn.close()
     result = []
     for row in rows:
@@ -251,3 +328,52 @@ def list_all_preferences() -> list[dict]:
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+# ============================================================
+# Settings (key-value)
+# ============================================================
+
+def get_setting(key: str) -> str | None:
+    """获取单个设置值"""
+    conn = _conn()
+    row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+    conn.close()
+    if row:
+        return row["value"]
+    return None
+
+
+def set_setting(key: str, value: str):
+    """写入/更新设置"""
+    conn = _conn()
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?, ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (key, value),
+    )
+    conn.commit()
+    conn.close()
+
+
+def get_model_config() -> dict:
+    """获取模型配置（优先数据库，fallback 到 config.yaml）"""
+    import yaml
+    raw = get_setting("model_config")
+    if raw:
+        return json.loads(raw)
+    # fallback
+    try:
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f)
+        return {
+            "generate": cfg.get("generate", {}),
+            "review": cfg.get("review", {}),
+        }
+    except Exception:
+        return {}
+
+
+def save_model_config(config: dict):
+    """保存模型配置到数据库"""
+    set_setting("model_config", json.dumps(config, ensure_ascii=False))

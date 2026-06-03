@@ -1,5 +1,6 @@
 """Flask Web 应用"""
 
+import functools
 import json
 import os
 import tempfile
@@ -7,10 +8,10 @@ import traceback
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, render_template, request, send_file, stream_with_context
+from flask import (Flask, Response, jsonify, render_template,
+                   request, send_file, session, stream_with_context)
 
 import db
-from generator import generate_testcases
 from llm_client import LLMClient, load_config
 from output import to_excel, to_markdown
 from preferences import compute_diffs, extract_preferences
@@ -19,12 +20,174 @@ from reader import (get_image_media_type, image_to_base64, is_image,
 from reviewer import optimize_testcases, review_testcases
 
 app = Flask(__name__)
+app.secret_key = os.urandom(24)
+
+
+# ============================================================
+# 认证
+# ============================================================
+
+def login_required(f):
+    """登录校验装饰器"""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return jsonify({"error": "未登录，请先登录"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
 
 # 初始化数据库
 db.init_db()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片）
 
 OUTPUT_DIR = "./output"
+
+
+# ============================================================
+# 认证 API
+# ============================================================
+
+@app.route("/api/register", methods=["POST"])
+def api_register():
+    """用户注册"""
+    data = request.get_json()
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"error": "用户名和密码不能为空"}), 400
+    if len(username) < 2 or len(username) > 32:
+        return jsonify({"error": "用户名长度需在 2-32 个字符之间"}), 400
+    if len(password) < 4:
+        return jsonify({"error": "密码长度至少 4 个字符"}), 400
+
+    try:
+        user_id = db.create_user(username, password)
+        session["user_id"] = user_id
+        session["username"] = username
+        return jsonify({"success": True, "user": {"id": user_id, "username": username}})
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 409
+
+
+@app.route("/api/login", methods=["POST"])
+def api_login():
+    """用户登录"""
+    data = request.get_json()
+    username = (data.get("username") or "").strip()
+    password = data.get("password") or ""
+
+    if not username or not password:
+        return jsonify({"error": "用户名和密码不能为空"}), 400
+
+    user = db.verify_user(username, password)
+    if not user:
+        return jsonify({"error": "用户名或密码错误"}), 401
+
+    session["user_id"] = user["id"]
+    session["username"] = user["username"]
+    return jsonify({"success": True, "user": user})
+
+
+@app.route("/api/logout", methods=["POST"])
+def api_logout():
+    """用户登出"""
+    session.clear()
+    return jsonify({"success": True})
+
+
+@app.route("/api/me")
+def api_me():
+    """获取当前登录用户信息"""
+    if "user_id" in session:
+        return jsonify({"logged_in": True, "user": {
+            "id": session["user_id"],
+            "username": session["username"],
+        }})
+    return jsonify({"logged_in": False})
+
+
+# ============================================================
+# 模型配置 API
+# ============================================================
+
+# 预设模型
+MODEL_PRESETS = {
+    "mimo": {
+        "name": "MiMo",
+        "generate": {"api_type": "openai", "base_url": "https://token-plan-cn.xiaomimimo.com/v1", "model": "mimo-v2.5-pro", "image_model": "mimo-v2.5", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": True},
+        "review":    {"api_type": "openai", "base_url": "https://token-plan-cn.xiaomimimo.com/v1", "model": "mimo-v2.5-pro", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "generate": {"api_type": "openai", "base_url": "https://api.deepseek.com", "model": "deepseek-chat", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://api.deepseek.com", "model": "deepseek-chat", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+    },
+    "qwen": {
+        "name": "通义千问",
+        "generate": {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enable_thinking": False},
+        "review":    {"api_type": "openai", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus", "temperature": 0.3, "max_tokens": 4096, "max_retries": 3, "enabled": True},
+    },
+}
+
+
+@app.route("/api/model-presets")
+@login_required
+def api_model_presets():
+    """返回预设模型列表"""
+    presets = {k: {"name": v["name"]} for k, v in MODEL_PRESETS.items()}
+    return jsonify({"presets": presets})
+
+
+@app.route("/api/model-config", methods=["GET"])
+@login_required
+def api_model_config_get():
+    """获取当前模型配置"""
+    config = db.get_model_config()
+    # 去掉 api_key 的中间部分，只显示头尾
+    for section in ("generate", "review"):
+        if section in config and "api_key" in config[section]:
+            key = config[section]["api_key"]
+            if key and len(key) > 8:
+                config[section]["api_key_hint"] = key[:4] + "****" + key[-4:]
+            else:
+                config[section]["api_key_hint"] = "****"
+    return jsonify({"config": config, "presets": {k: v["name"] for k, v in MODEL_PRESETS.items()}})
+
+
+@app.route("/api/model-config", methods=["POST"])
+@login_required
+def api_model_config_set():
+    """保存模型配置"""
+    data = request.get_json()
+    preset = data.get("preset")
+
+    if preset and preset in MODEL_PRESETS:
+        config = {
+            "generate": {**MODEL_PRESETS[preset]["generate"]},
+            "review": {**MODEL_PRESETS[preset]["review"]},
+        }
+        # 保留用户已有的 api_key
+        old = db.get_model_config()
+        for section in ("generate", "review"):
+            old_key = old.get(section, {}).get("api_key", "")
+            if old_key:
+                config[section]["api_key"] = old_key
+    else:
+        # 自定义配置
+        config = data.get("config", {})
+        # 如果 api_key 为空或含 ****，保留旧值
+        old = db.get_model_config()
+        for section in ("generate", "review"):
+            if section in config:
+                key = config[section].get("api_key", "")
+                if not key or "****" in key:
+                    old_key = old.get(section, {}).get("api_key", "")
+                    config[section]["api_key"] = old_key
+
+    db.save_model_config(config)
+    return jsonify({"success": True})
 
 
 def build_client(cfg: dict) -> LLMClient:
@@ -40,13 +203,18 @@ def build_client(cfg: dict) -> LLMClient:
     )
 
 
+def _load_model_config() -> dict:
+    """加载模型配置（数据库优先，fallback config.yaml）"""
+    return db.get_model_config()
+
+
 def get_generate_client() -> LLMClient:
-    config = load_config("config.yaml")
+    config = _load_model_config()
     return build_client(config["generate"])
 
 
 def get_review_client() -> LLMClient:
-    config = load_config("config.yaml")
+    config = _load_model_config()
     review_cfg = config.get("review", {})
     if review_cfg.get("enabled", False):
         return build_client(review_cfg)
@@ -54,7 +222,7 @@ def get_review_client() -> LLMClient:
 
 
 def get_image_client() -> LLMClient | None:
-    config = load_config("config.yaml")
+    config = _load_model_config()
     gen_cfg = config["generate"]
     image_model = gen_cfg.get("image_model")
     if not image_model:
@@ -69,6 +237,7 @@ def index():
 
 
 @app.route("/api/generate", methods=["POST"])
+@login_required
 def api_generate():
     """生成测试用例（SSE 流式返回进度 + 结果）"""
     # 先解析请求参数
@@ -124,10 +293,10 @@ def api_generate():
             def on_progress(msg: str):
                 print(f"[进度] {msg}")
 
-            config = load_config("config.yaml")
-            default_priority = priority or config["testcase"]["default_priority"]
-            _case_types = case_types or config["testcase"]["case_types"]
-            max_testcases = config["testcase"].get("max_testcases", 100)
+            file_config = load_config("config.yaml")
+            default_priority = priority or file_config["testcase"]["default_priority"]
+            _case_types = case_types or file_config["testcase"]["case_types"]
+            max_testcases = file_config["testcase"].get("max_testcases", 100)
 
             # 加载用户偏好
             pref_context = db.get_preference_context()
@@ -205,6 +374,7 @@ def api_generate():
                 priority=default_priority,
                 case_types=list(_case_types) if _case_types else None,
                 images=images if images else None,
+                user_id=session.get("user_id"),
             )
 
             result = {
@@ -237,6 +407,7 @@ def _sse(data: dict) -> str:
 
 
 @app.route("/api/review", methods=["POST"])
+@login_required
 def api_review():
     """评审测试用例（SSE 流式返回进度）"""
     try:
@@ -279,6 +450,7 @@ def api_review():
 
 
 @app.route("/api/optimize", methods=["POST"])
+@login_required
 def api_optimize():
     """根据评审报告优化测试用例（SSE 流式返回进度）"""
     try:
@@ -324,6 +496,7 @@ def api_optimize():
 
 
 @app.route("/api/download/<path:filename>")
+@login_required
 def api_download(filename):
     """下载文件"""
     filepath = os.path.realpath(os.path.join(OUTPUT_DIR, filename))
@@ -340,15 +513,17 @@ def api_download(filename):
 # ============================================================
 
 @app.route("/api/history")
+@login_required
 def api_history():
     """列出历史记录"""
     limit = request.args.get("limit", 50, type=int)
     offset = request.args.get("offset", 0, type=int)
-    sessions = db.list_sessions(limit=limit, offset=offset)
+    sessions = db.list_sessions(limit=limit, offset=offset, user_id=session["user_id"])
     return jsonify({"sessions": sessions})
 
 
 @app.route("/api/history/<int:session_id>")
+@login_required
 def api_history_detail(session_id):
     """获取单条历史记录"""
     session = db.get_session(session_id)
@@ -358,6 +533,7 @@ def api_history_detail(session_id):
 
 
 @app.route("/api/history/<int:session_id>", methods=["DELETE"])
+@login_required
 def api_history_delete(session_id):
     """删除历史记录"""
     db.delete_session(session_id)
@@ -365,6 +541,7 @@ def api_history_delete(session_id):
 
 
 @app.route("/api/history/<int:session_id>/review", methods=["POST"])
+@login_required
 def api_history_save_review(session_id):
     """为历史记录保存评审报告"""
     data = request.get_json()
@@ -380,6 +557,7 @@ def api_history_save_review(session_id):
 # ============================================================
 
 @app.route("/api/preferences")
+@login_required
 def api_preferences():
     """列出所有偏好规则"""
     prefs = db.list_all_preferences()
@@ -387,6 +565,7 @@ def api_preferences():
 
 
 @app.route("/api/preferences/extract", methods=["POST"])
+@login_required
 def api_preferences_extract():
     """从用户编辑中提取偏好规则（SSE 流式）"""
     try:
@@ -435,6 +614,7 @@ def api_preferences_extract():
 
 
 @app.route("/api/preferences/<int:pref_id>", methods=["PUT"])
+@login_required
 def api_preferences_update(pref_id):
     """更新偏好规则（启用/禁用/修改）"""
     data = request.get_json()
@@ -445,6 +625,7 @@ def api_preferences_update(pref_id):
 
 
 @app.route("/api/preferences/<int:pref_id>", methods=["DELETE"])
+@login_required
 def api_preferences_delete(pref_id):
     """删除偏好规则"""
     db.delete_preference(pref_id)
