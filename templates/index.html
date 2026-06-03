@@ -67,13 +67,8 @@
         /* ===== Split Layout ===== */
         .split-layout{display:flex;gap:16px;height:calc(100vh - 94px);overflow:hidden;}
         .split-left{width:42%;min-width:360px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;padding-right:8px;padding-bottom:20px;}
-        .split-right{flex:1;display:flex;flex-direction:column;gap:0;overflow-y:auto;padding-left:8px;padding-bottom:20px;}
+        .split-right{flex:1;overflow-y:auto;padding-left:8px;padding-bottom:20px;}
         .split-left .card{flex-shrink:0;}
-        .split-right #result{flex:1;display:flex;flex-direction:column;overflow:hidden;}
-        .split-right #result .stats-bar{flex-shrink:0;}
-        .split-right #result .batch-bar{flex-shrink:0;}
-        .split-right #result .tc-table-wrap{flex:1;overflow-y:auto;}
-        .split-right #result .tc-table{margin:0;}
         textarea{width:100%;height:200px;padding:10px 12px;border:1px solid #d9d9d9;border-radius:8px;font-size:14px;resize:vertical;font-family:inherit;transition:border-color 0.2s;line-height:1.6;}
         textarea:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,115,232,0.12);}
         .upload-area{border:2px dashed #d9d9d9;border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all 0.2s;margin-top:10px;}
