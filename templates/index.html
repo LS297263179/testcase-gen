@@ -274,19 +274,19 @@
         .history-empty{text-align:center;color:#bbb;padding:40px 16px;font-size:13px;}
 
         /* ===== Material Card ===== */
-        .mat-card{border:1px solid #eee;border-radius:8px;margin-bottom:8px;overflow:hidden;}
-        .mat-card-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;transition:background 0.15s;}
+        .mat-card{margin-bottom:6px;}
+        .mat-card-header{display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-radius:6px;transition:background 0.15s;}
         .mat-card-header:hover{background:#f6f9ff;}
         .mat-card-header .mat-arrow{transition:transform 0.2s;font-size:12px;color:#999;}
         .mat-card-header .mat-arrow.open{transform:rotate(90deg);}
-        .mat-card-header .mat-name{flex:1;font-size:13px;font-weight:500;color:#333;margin-left:8px;}
-        .mat-card-header .mat-meta{font-size:11px;color:#aaa;margin-right:8px;}
-        .mat-card-header .mat-del{font-size:11px;padding:2px 8px;border-radius:4px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#999;}
+        .mat-card-header .mat-name{flex:1;font-size:13px;font-weight:500;color:#333;}
+        .mat-card-header .mat-meta{font-size:11px;color:#aaa;white-space:nowrap;}
+        .mat-card-header .mat-del{font-size:10px;padding:2px 7px;border-radius:4px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#999;}
         .mat-card-header .mat-del:hover{border-color:#d32f2f;color:#d32f2f;}
-        .mat-card-body{display:none;padding:12px 14px;border-top:1px solid #f0f0f0;background:#fafcff;}
+        .mat-card-body{display:none;padding:8px 12px 8px 28px;}
         .mat-card-body.show{display:block;}
-        .mat-card-body .mat-text{font-size:13px;color:#444;line-height:1.7;white-space:pre-wrap;margin-bottom:10px;}
-        .mat-card-body .mat-imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+        .mat-card-body .mat-text{font-size:12px;color:#555;line-height:1.7;white-space:pre-wrap;margin-bottom:8px;}
+        .mat-card-body .mat-imgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:6px;}
         .mat-card-body .mat-imgs img{width:100%;border-radius:6px;border:1px solid #e8e8e8;cursor:pointer;transition:transform 0.2s;}
         .mat-card-body .mat-imgs img:hover{transform:scale(1.02);box-shadow:0 2px 8px rgba(0,0,0,0.1);}
 
