@@ -610,6 +610,7 @@ def api_generate():
 
     is_multipart = request.content_type and "multipart/form-data" in request.content_type
 
+    requirement = ""
     try:
         material_ids = None
         test_point_id = None
@@ -662,6 +663,7 @@ def api_generate():
         return jsonify({"error": str(e)}), 500
 
     def sse_stream():
+        nonlocal requirement
         try:
             def on_progress(msg: str):
                 print(f"[进度] {msg}")
