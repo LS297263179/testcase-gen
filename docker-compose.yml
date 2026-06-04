@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: testcase-gen
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data.db:/app/data.db
+      - ./output:/app/output
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped

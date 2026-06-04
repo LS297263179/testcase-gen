@@ -1,0 +1,12 @@
+__pycache__
+*.pyc
+.git
+.gitignore
+.vscode
+*.md
+!requirements.txt
+data.db
+output/
+.env
+.claude/
+worktrees/
