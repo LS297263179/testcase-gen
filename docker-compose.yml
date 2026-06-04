@@ -5,7 +5,7 @@ services:
     ports:
       - "5000:5000"
     volumes:
-      - ./data.db:/app/data.db
+      - ./data:/app/data
       - ./output:/app/output
     environment:
       - TZ=Asia/Shanghai
