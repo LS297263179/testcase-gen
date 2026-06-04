@@ -238,8 +238,15 @@ def api_model_config_set():
 @app.route("/api/dashboard")
 @login_required
 def api_dashboard():
-    """仪表盘统计"""
-    stats = db.get_dashboard_stats(session["user_id"])
+    """仪表盘统计（一次性返回所有数据，避免多次请求）"""
+    user_id = session["user_id"]
+    stats = db.get_dashboard_stats(user_id)
+    # 合并偏好数量
+    prefs = db.list_all_preferences()
+    stats["preference_count"] = len(prefs)
+    # 合并当前模型名
+    config = db.get_model_config()
+    stats["current_model"] = config.get("generate", {}).get("model", "-")
     return jsonify(stats)
 
 
@@ -605,6 +612,7 @@ def api_generate():
 
     try:
         material_ids = None
+        test_point_id = None
         if is_multipart:
             requirement = request.form.get("requirement", "")
             priority = request.form.get("priority")
@@ -614,6 +622,12 @@ def api_generate():
             material_ids_raw = request.form.get("material_ids", "")
             if material_ids_raw:
                 material_ids = [int(x) for x in material_ids_raw.split(",") if x.strip()]
+            tp_id_raw = request.form.get("test_point_id", "")
+            if tp_id_raw and tp_id_raw.strip():
+                try:
+                    test_point_id = int(tp_id_raw)
+                except ValueError:
+                    pass
 
             files = request.files.getlist("files")
             for f in files:
@@ -664,6 +678,11 @@ def api_generate():
             mat_context = db.get_materials_for_prompt(session.get("user_id"), material_ids) if material_ids else ""
             if mat_context:
                 requirement = requirement + "\n\n【参考项目材料】\n" + mat_context
+
+            # 加载测试点
+            tp_context = db.get_test_points_for_prompt(test_point_id) if test_point_id else ""
+            if tp_context:
+                requirement = requirement + "\n\n【参考测试点】\n" + tp_context
 
             # Step 1: 分析模块
             from concurrent.futures import ThreadPoolExecutor, as_completed

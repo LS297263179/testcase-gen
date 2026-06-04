@@ -47,6 +47,9 @@ def init_db():
             is_deleted    INTEGER NOT NULL DEFAULT 0
         );
 
+        CREATE INDEX IF NOT EXISTS idx_sessions_user_deleted
+            ON sessions(user_id, is_deleted);
+
         CREATE TABLE IF NOT EXISTS session_images (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id INTEGER NOT NULL REFERENCES sessions(id),
@@ -86,6 +89,9 @@ def init_db():
             created_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
 
+        CREATE INDEX IF NOT EXISTS idx_materials_user
+            ON materials(user_id);
+
         CREATE TABLE IF NOT EXISTS material_images (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             material_id INTEGER NOT NULL REFERENCES materials(id),
@@ -104,6 +110,9 @@ def init_db():
             total       INTEGER NOT NULL DEFAULT 0,
             created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
         );
+
+        CREATE INDEX IF NOT EXISTS idx_test_points_user
+            ON test_points(user_id);
     """)
     # 兼容已有数据库：为 sessions 表添加 user_id 列
     try:
@@ -384,34 +393,25 @@ def set_setting(key: str, value: str):
 
 
 def get_dashboard_stats(user_id: int) -> dict:
-    """获取仪表盘统计"""
+    """获取仪表盘统计（单次查询）"""
     conn = _conn()
-    # 总生成次数
+    # 一条 SQL 同时拿到 count 和 sum
     row = conn.execute(
-        "SELECT COUNT(*) as cnt FROM sessions WHERE is_deleted = 0 AND user_id = ?",
+        "SELECT COUNT(*) as cnt, COALESCE(SUM(tc_count), 0) as total "
+        "FROM sessions WHERE is_deleted = 0 AND user_id = ?",
         (user_id,),
     ).fetchone()
     total_sessions = row["cnt"]
-
-    # 总用例数
-    row = conn.execute(
-        "SELECT COALESCE(SUM(tc_count), 0) as total FROM sessions WHERE is_deleted = 0 AND user_id = ?",
-        (user_id,),
-    ).fetchone()
     total_testcases = row["total"]
 
-    # 最近 5 条记录
+    # 最近 5 条记录（只查需要的列，不取 testcases 大字段）
     rows = conn.execute(
-        "SELECT id, created_at, requirement, tc_count, priority "
+        "SELECT id, created_at, substr(requirement,1,60) as req_preview, tc_count "
         "FROM sessions WHERE is_deleted = 0 AND user_id = ? "
         "ORDER BY id DESC LIMIT 5",
         (user_id,),
     ).fetchall()
-    recent = []
-    for r in rows:
-        s = dict(r)
-        s["requirement_preview"] = s["requirement"][:60]
-        recent.append(s)
+    recent = [dict(r) for r in rows]
 
     conn.close()
     return {
@@ -569,6 +569,29 @@ def delete_test_points(tp_id: int):
     conn.execute("DELETE FROM test_points WHERE id = ?", (tp_id,))
     conn.commit()
     conn.close()
+
+
+def get_test_points_for_prompt(tp_id: int) -> str:
+    """格式化测试点为 prompt 注入文本"""
+    tp = get_test_points(tp_id)
+    if not tp:
+        return ""
+    points = tp.get("points", [])
+    if not points:
+        return ""
+    lines = []
+    for module in points:
+        mod_name = module.get("module", "未分类")
+        lines.append(f"模块：{mod_name}")
+        for p in module.get("points", []):
+            title = p.get("title", "")
+            desc = p.get("description", "")
+            if desc:
+                lines.append(f"- {title}：{desc}")
+            else:
+                lines.append(f"- {title}")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def get_model_config() -> dict:
