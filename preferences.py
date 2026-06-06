@@ -1,6 +1,8 @@
 """偏好学习模块 - 从用户编辑中提取偏好规则"""
 
 import json
+import re
+
 from llm_client import LLMClient
 
 # 比较字段列表
@@ -93,7 +95,7 @@ def extract_preferences(diffs: list[dict], client: LLMClient) -> list[dict]:
 
     # 解析 JSON
     try:
-        match = __import__("re").search(r"```json\s*(.*?)\s*```", raw, __import__("re").DOTALL)
+        match = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
         json_str = match.group(1) if match else raw
         start = json_str.find("{")
         end = json_str.rfind("}") + 1

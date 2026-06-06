@@ -1,6 +1,9 @@
-"""数据库模块 - SQLite 持久化：用户 + 历史记录 + 偏好规则"""
+"""数据库模块 - SQLite 持久化：用户 + 历史记录 + 偏好规则 + API Key 加密"""
 
+import base64
+import hashlib
 import json
+import os
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -9,8 +12,75 @@ from pathlib import Path
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
+
+# ============================================================
+# API Key 加密/解密（基于 Fernet 对称加密）
+# ============================================================
+
+def _get_fernet_key() -> bytes:
+    """从环境变量或配置文件获取/生成加密密钥"""
+    # 优先从环境变量获取
+    key = os.environ.get("FERNET_KEY", "")
+    if key:
+        return key.encode() if isinstance(key, str) else key
+
+    # 从 settings 表获取或生成
+    stored = get_setting("_fernet_key")
+    if stored:
+        return stored.encode()
+
+    # 生成新密钥并保存
+    try:
+        from cryptography.fernet import Fernet
+        new_key = Fernet.generate_key().decode()
+    except ImportError:
+        # cryptography 未安装时，使用基于 secret_key 的确定性密钥（32 字节 base64）
+        import yaml
+        cfg_path = Path(__file__).parent / "config.yaml"
+        secret = ""
+        if cfg_path.exists():
+            with open(cfg_path, encoding="utf-8") as f:
+                secret = yaml.safe_load(f).get("secret_key", "")
+        if not secret:
+            secret = os.environ.get("FLASK_SECRET_KEY", "default-key-change-me")
+        # 确保生成合法的 32 字节 URL-safe base64 密钥
+        derived = hashlib.sha256(secret.encode()).digest()
+        new_key = base64.urlsafe_b64encode(derived).decode()
+
+    set_setting("_fernet_key", new_key)
+    return new_key.encode()
+
+
+def encrypt_api_key(plaintext: str) -> str:
+    """加密 API Key。如果已加密（以 gAAAAA 开头）或为空则直接返回"""
+    if not plaintext or plaintext.startswith("gAAAAA"):
+        return plaintext
+    try:
+        from cryptography.fernet import Fernet
+        f = Fernet(_get_fernet_key())
+        return f.encrypt(plaintext.encode()).decode()
+    except ImportError:
+        # cryptography 未安装时不做加密，返回原文
+        print("[WARN] cryptography 未安装，API Key 将以明文存储。建议: pip install cryptography")
+        return plaintext
+    except Exception:
+        return plaintext  # 加密失败时返回原文，不阻断流程
+
+
+def decrypt_api_key(ciphertext: str) -> str:
+    """解密 API Key。如果不是加密格式则直接返回（向后兼容）"""
+    if not ciphertext or not ciphertext.startswith("gAAAAA"):
+        return ciphertext
+    try:
+        from cryptography.fernet import Fernet
+        f = Fernet(_get_fernet_key())
+        return f.decrypt(ciphertext.encode()).decode()
+    except Exception:
+        return ciphertext  # 解密失败时返回原文（可能是旧的明文 key）
+
 _DB_PATH = str(Path(__file__).parent / "data" / "data.db")
 _conn_lock = threading.Lock()
+_write_lock = threading.Lock()  # 写操作互斥锁，防止 SQLite 写冲突
 _conn_instance: sqlite3.Connection | None = None
 
 
@@ -28,23 +98,36 @@ def _get_conn() -> sqlite3.Connection:
             if _conn_instance is None:
                 Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
                 _conn_instance = sqlite3.connect(
-                    _DB_PATH, check_same_thread=False
+                    _DB_PATH, check_same_thread=False,
+                    timeout=30,  # 等待锁释放的超时时间
                 )
                 _conn_instance.row_factory = sqlite3.Row
                 _conn_instance.execute("PRAGMA journal_mode=WAL")
                 _conn_instance.execute("PRAGMA foreign_keys=ON")
+                _conn_instance.execute("PRAGMA busy_timeout=10000")  # 10s 忙等待
     return _conn_instance
 
 
 @contextmanager
 def db_conn():
-    """数据库上下文管理器，自动处理 commit/rollback"""
+    """数据库上下文管理器，自动处理 commit/rollback（写操作互斥）"""
+    conn = _get_conn()
+    with _write_lock:
+        try:
+            yield conn
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+
+
+@contextmanager
+def db_read_conn():
+    """只读上下文管理器（不需要写锁，允许并发读）"""
     conn = _get_conn()
     try:
         yield conn
-        conn.commit()
     except Exception:
-        conn.rollback()
         raise
 
 
@@ -145,6 +228,12 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # 列已存在
 
+        # 兼容已有数据库：为 preferences 表添加 user_id 列
+        try:
+            conn.execute("ALTER TABLE preferences ADD COLUMN user_id INTEGER REFERENCES users(id)")
+        except sqlite3.OperationalError:
+            pass  # 列已存在
+
 
 # ============================================================
 # Users CRUD
@@ -165,7 +254,7 @@ def create_user(username: str, password: str) -> int:
 
 def verify_user(username: str, password: str) -> dict | None:
     """验证用户名密码，成功返回 {"id": ..., "username": ...}，失败返回 None"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         row = conn.execute(
             "SELECT id, username, password_hash FROM users WHERE username = ?",
             (username,),
@@ -177,7 +266,7 @@ def verify_user(username: str, password: str) -> dict | None:
 
 def get_user_by_id(user_id: int) -> dict | None:
     """根据 ID 获取用户信息"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         row = conn.execute(
             "SELECT id, username, created_at FROM users WHERE id = ?",
             (user_id,),
@@ -225,7 +314,7 @@ def create_session(requirement: str, testcases: list[dict],
 
 def get_session(session_id: int) -> dict | None:
     """获取单条历史记录（含图片）"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         row = conn.execute(
             "SELECT * FROM sessions WHERE id = ? AND is_deleted = 0", (session_id,)
         ).fetchone()
@@ -249,7 +338,7 @@ def get_session(session_id: int) -> dict | None:
 def list_sessions(limit: int = 50, offset: int = 0,
                   user_id: int | None = None) -> list[dict]:
     """列出历史记录摘要（不含 testcases 和 image data）"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         if user_id is not None:
             rows = conn.execute(
                 "SELECT id, created_at, requirement, priority, tc_count, is_deleted "
@@ -291,20 +380,28 @@ def delete_session(session_id: int):
 # Preferences CRUD
 # ============================================================
 
-def get_active_preferences(limit: int = 10) -> list[dict]:
-    """获取活跃偏好规则，按权重降序"""
-    with db_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, category, pattern, weight FROM preferences "
-            "WHERE active = 1 ORDER BY weight DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+def get_active_preferences(limit: int = 10, user_id: int | None = None) -> list[dict]:
+    """获取活跃偏好规则，按权重降序。user_id 不为 None 时只返回该用户的偏好"""
+    with db_read_conn() as conn:
+        if user_id is not None:
+            rows = conn.execute(
+                "SELECT id, category, pattern, weight FROM preferences "
+                "WHERE active = 1 AND (user_id = ? OR user_id IS NULL) "
+                "ORDER BY weight DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, category, pattern, weight FROM preferences "
+                "WHERE active = 1 ORDER BY weight DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
     return [dict(r) for r in rows]
 
 
-def get_preference_context(max_prefs: int = 10) -> str:
+def get_preference_context(max_prefs: int = 10, user_id: int | None = None) -> str:
     """格式化偏好规则为 prompt 注入文本"""
-    prefs = get_active_preferences(limit=max_prefs)
+    prefs = get_active_preferences(limit=max_prefs, user_id=user_id)
     if not prefs:
         return ""
     lines = [f"- [{p['category']}] {p['pattern']}" for p in prefs]
@@ -312,25 +409,41 @@ def get_preference_context(max_prefs: int = 10) -> str:
 
 
 def save_preferences(preferences: list[dict], session_id: int,
-                     source_diffs: list[dict] | None = None):
+                     source_diffs: list[dict] | None = None,
+                     user_id: int | None = None):
     """保存新偏好规则，同时衰减同 category 的旧规则"""
     with db_conn() as conn:
+        # 如果未指定 user_id，从 session 中获取
+        if user_id is None:
+            row = conn.execute("SELECT user_id FROM sessions WHERE id = ?", (session_id,)).fetchone()
+            if row:
+                user_id = row["user_id"]
+
         for i, pref in enumerate(preferences):
             category = pref["category"]
-            # 衰减同 category 旧规则
-            conn.execute(
-                "UPDATE preferences SET weight = weight * 0.8 WHERE category = ? AND active = 1",
-                (category,),
-            )
-            # 停用低权重规则
-            conn.execute(
-                "UPDATE preferences SET active = 0 WHERE weight < 0.2 AND active = 1",
-            )
+            # 衰减同 category 旧规则（同用户范围内）
+            if user_id is not None:
+                conn.execute(
+                    "UPDATE preferences SET weight = weight * 0.8 WHERE category = ? AND active = 1 AND (user_id = ? OR user_id IS NULL)",
+                    (category, user_id),
+                )
+                conn.execute(
+                    "UPDATE preferences SET active = 0 WHERE weight < 0.2 AND active = 1 AND (user_id = ? OR user_id IS NULL)",
+                    (user_id,),
+                )
+            else:
+                conn.execute(
+                    "UPDATE preferences SET weight = weight * 0.8 WHERE category = ? AND active = 1",
+                    (category,),
+                )
+                conn.execute(
+                    "UPDATE preferences SET active = 0 WHERE weight < 0.2 AND active = 1",
+                )
             # 插入新规则
             source_diff = json.dumps(source_diffs[i], ensure_ascii=False) if source_diffs and i < len(source_diffs) else None
             cur = conn.execute(
-                "INSERT INTO preferences (category, pattern, source_diff, weight) VALUES (?, ?, ?, 1.0)",
-                (category, pref["pattern"], source_diff),
+                "INSERT INTO preferences (category, pattern, source_diff, weight, user_id) VALUES (?, ?, ?, 1.0, ?)",
+                (category, pref["pattern"], source_diff, user_id),
             )
             pref_id = cur.lastrowid
             # 关联记录
@@ -356,12 +469,19 @@ def delete_preference(pref_id: int):
         conn.execute("DELETE FROM preferences WHERE id = ?", (pref_id,))
 
 
-def list_all_preferences() -> list[dict]:
+def list_all_preferences(user_id: int | None = None) -> list[dict]:
     """列出所有偏好（含停用的），用于管理面板"""
-    with db_conn() as conn:
-        rows = conn.execute(
-            "SELECT id, created_at, category, pattern, weight, active FROM preferences ORDER BY id DESC"
-        ).fetchall()
+    with db_read_conn() as conn:
+        if user_id is not None:
+            rows = conn.execute(
+                "SELECT id, created_at, category, pattern, weight, active FROM preferences "
+                "WHERE (user_id = ? OR user_id IS NULL) ORDER BY id DESC",
+                (user_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, created_at, category, pattern, weight, active FROM preferences ORDER BY id DESC"
+            ).fetchall()
     return [dict(r) for r in rows]
 
 
@@ -371,7 +491,7 @@ def list_all_preferences() -> list[dict]:
 
 def get_setting(key: str) -> str | None:
     """获取单个设置值"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         row = conn.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
     if row:
         return row["value"]
@@ -390,7 +510,7 @@ def set_setting(key: str, value: str):
 
 def get_dashboard_stats(user_id: int) -> dict:
     """获取仪表盘统计（单次查询）"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         # 一条 SQL 同时拿到 count 和 sum
         row = conn.execute(
             "SELECT COUNT(*) as cnt, COALESCE(SUM(tc_count), 0) as total "
@@ -441,7 +561,7 @@ def create_material(user_id: int, title: str, content: str = "",
 
 def list_materials(user_id: int) -> list[dict]:
     """列出用户的所有项目资料（不含图片数据）"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         rows = conn.execute(
             "SELECT id, title, content, created_at FROM materials WHERE user_id = ? ORDER BY id DESC",
             (user_id,),
@@ -462,7 +582,7 @@ def list_materials(user_id: int) -> list[dict]:
 
 def get_material(material_id: int) -> dict | None:
     """获取单条项目资料（含图片）"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         row = conn.execute(
             "SELECT * FROM materials WHERE id = ?", (material_id,)
         ).fetchone()
@@ -479,7 +599,7 @@ def get_material(material_id: int) -> dict | None:
 
 def get_materials_for_prompt(user_id: int, material_ids: list[int] | None = None) -> str:
     """格式化项目资料为 prompt 注入文本"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         if material_ids:
             placeholders = ",".join("?" * len(material_ids))
             rows = conn.execute(
@@ -525,7 +645,7 @@ def save_test_points(user_id: int, title: str, requirement: str,
 
 def list_test_points(user_id: int) -> list[dict]:
     """列出用户的测试点记录"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         rows = conn.execute(
             "SELECT id, title, total, created_at FROM test_points WHERE user_id = ? ORDER BY id DESC",
             (user_id,),
@@ -535,7 +655,7 @@ def list_test_points(user_id: int) -> list[dict]:
 
 def get_test_points(tp_id: int) -> dict | None:
     """获取单条测试点记录"""
-    with db_conn() as conn:
+    with db_read_conn() as conn:
         row = conn.execute("SELECT * FROM test_points WHERE id = ?", (tp_id,)).fetchone()
         if not row:
             return None
@@ -578,10 +698,16 @@ def get_model_config() -> dict:
     import yaml
     raw = get_setting("model_config")
     if raw:
-        return json.loads(raw)
-    # fallback
+        config = json.loads(raw)
+        # 解密 API Key
+        for section in ("generate", "review"):
+            if section in config and "api_key" in config[section]:
+                config[section]["api_key"] = decrypt_api_key(config[section]["api_key"])
+        return config
+    # fallback 到 config.yaml（使用绝对路径）
     try:
-        with open("config.yaml", "r", encoding="utf-8") as f:
+        cfg_path = Path(__file__).parent / "config.yaml"
+        with open(cfg_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         return {
             "generate": cfg.get("generate", {}),
@@ -592,5 +718,9 @@ def get_model_config() -> dict:
 
 
 def save_model_config(config: dict):
-    """保存模型配置到数据库"""
-    set_setting("model_config", json.dumps(config, ensure_ascii=False))
+    """保存模型配置到数据库（API Key 加密存储）"""
+    config_to_save = json.loads(json.dumps(config))  # deep copy
+    for section in ("generate", "review"):
+        if section in config_to_save and "api_key" in config_to_save[section]:
+            config_to_save[section]["api_key"] = encrypt_api_key(config_to_save[section]["api_key"])
+    set_setting("model_config", json.dumps(config_to_save, ensure_ascii=False))

@@ -58,23 +58,74 @@ OUTPUT_DIR = "./output"
 
 
 # ============================================================
+# 全局异常处理
+# ============================================================
+
+@app.errorhandler(404)
+def not_found(e):
+    """404 统一返回 JSON"""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "接口不存在"}), 404
+    return e
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    """500 统一返回 JSON"""
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "服务器内部错误"}), 500
+    return e
+
+
+@app.errorhandler(413)
+def too_large(e):
+    """文件过大"""
+    return jsonify({"error": "上传文件过大，最大支持 32MB"}), 413
+
+
+# ============================================================
 # 速率限制（基于 IP，保护登录/注册接口）
 # ============================================================
 
-_rate_limit_store = defaultdict(list)  # {ip: [timestamp, ...]}
+_rate_limit_store: dict[str, list[float]] = {}  # {ip: [timestamp, ...]}
 RATE_LIMIT_MAX = 10    # 每个窗口最多 10 次
 RATE_LIMIT_WINDOW = 60 # 窗口大小：60 秒
+_rate_limit_last_cleanup = 0.0
+
+
+def _get_real_ip() -> str:
+    """获取真实客户端 IP（兼容反向代理）"""
+    # 优先从 X-Forwarded-For 获取（反向代理场景）
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        # 取第一个 IP（最上游的客户端 IP）
+        return forwarded_for.split(",")[0].strip()
+    return request.remote_addr or "unknown"
 
 
 def _check_rate_limit(ip: str) -> bool:
     """检查 IP 是否超过速率限制，返回 True 表示允许，False 表示拒绝"""
+    global _rate_limit_last_cleanup
     now = time.time()
     window_start = now - RATE_LIMIT_WINDOW
-    # 清理过期记录
-    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if t > window_start]
-    if len(_rate_limit_store[ip]) >= RATE_LIMIT_MAX:
+
+    # 定期清理所有过期条目（每 60 秒一次），防止内存泄漏
+    if now - _rate_limit_last_cleanup > RATE_LIMIT_WINDOW:
+        _rate_limit_last_cleanup = now
+        expired_ips = [
+            k for k, v in _rate_limit_store.items()
+            if not v or v[-1] <= window_start
+        ]
+        for k in expired_ips:
+            del _rate_limit_store[k]
+
+    # 清理当前 IP 的过期时间戳
+    timestamps = _rate_limit_store.get(ip, [])
+    timestamps = [t for t in timestamps if t > window_start]
+    if len(timestamps) >= RATE_LIMIT_MAX:
         return False
-    _rate_limit_store[ip].append(now)
+    timestamps.append(now)
+    _rate_limit_store[ip] = timestamps
     return True
 
 
@@ -85,7 +136,7 @@ def _check_rate_limit(ip: str) -> bool:
 @app.route("/api/register", methods=["POST"])
 def api_register():
     """用户注册"""
-    if not _check_rate_limit(request.remote_addr):
+    if not _check_rate_limit(_get_real_ip()):
         return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
     data = request.get_json()
     username = (data.get("username") or "").strip()
@@ -110,7 +161,7 @@ def api_register():
 @app.route("/api/login", methods=["POST"])
 def api_login():
     """用户登录"""
-    if not _check_rate_limit(request.remote_addr):
+    if not _check_rate_limit(_get_real_ip()):
         return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
     data = request.get_json()
     username = (data.get("username") or "").strip()
@@ -280,7 +331,7 @@ def api_dashboard():
     user_id = session["user_id"]
     stats = db.get_dashboard_stats(user_id)
     # 合并偏好数量
-    prefs = db.list_all_preferences()
+    prefs = db.list_all_preferences(user_id=user_id)
     stats["preference_count"] = len(prefs)
     # 合并当前模型名
     config = db.get_model_config()
@@ -305,7 +356,7 @@ def api_analyze():
         try:
             from generator import _analyze_modules
             client = get_generate_client()
-            _ct = case_types or load_config("config.yaml")["testcase"]["case_types"]
+            _ct = case_types or load_config()["testcase"]["case_types"]
 
             yield _sse({"type": "progress", "message": "正在分析需求，拆解功能模块..."})
             complexity, modules = _analyze_modules(client, requirement, _ct, None)
@@ -476,24 +527,9 @@ def api_export_points():
         return jsonify({"success": True, "file": path})
 
     elif fmt == "xmind":
-        import xmind
-        path = os.path.join(OUTPUT_DIR, f"testpoints_{timestamp}.xmind")
-        os.makedirs(OUTPUT_DIR, exist_ok=True)
-        workbook = xmind.Workbook(path)
-        sheet = workbook.getPrimarySheet()
-        sheet.setTitle(title)
-        root = sheet.getRootTopic()
-        root.setTitle(title)
-        for module in points:
-            mod_topic = root.addSubTopic()
-            mod_topic.setTitle(module.get("module", "未分类"))
-            for p in module.get("points", []):
-                pt_topic = mod_topic.addSubTopic()
-                pt_topic.setTitle(p.get("title", ""))
-                if p.get("description"):
-                    pt_topic.setPlainNotes(p["description"])
-        xmind.save(workbook, path)
-        return jsonify({"success": True, "file": path})
+        # XMind 导出暂不可用（xmind 库 API 不兼容）
+        # 如需启用，请安装兼容的 xmind 库并更新此段代码
+        return jsonify({"error": "XMind 导出暂不可用，请使用 Markdown 格式导出"}), 501
 
     return jsonify({"error": "不支持的格式"}), 400
 
@@ -629,6 +665,12 @@ def index():
     return render_template("index.html")
 
 
+@app.route("/api/health")
+def api_health():
+    """健康检查端点"""
+    return jsonify({"status": "ok"})
+
+
 @app.route("/api/generate", methods=["POST"])
 @login_required
 def api_generate():
@@ -699,13 +741,13 @@ def api_generate():
             def on_progress(msg: str):
                 print(f"[进度] {msg}")
 
-            file_config = load_config("config.yaml")
+            file_config = load_config()
             default_priority = priority or file_config["testcase"]["default_priority"]
             _case_types = case_types or file_config["testcase"]["case_types"]
             max_testcases = file_config["testcase"].get("max_testcases", 100)
 
             # 加载用户偏好
-            pref_context = db.get_preference_context()
+            pref_context = db.get_preference_context(user_id=session.get("user_id"))
 
             # 加载项目材料
             mat_context = db.get_materials_for_prompt(session.get("user_id"), material_ids) if material_ids else ""
@@ -982,7 +1024,7 @@ def api_history_save_review(session_id):
 @login_required
 def api_preferences():
     """列出所有偏好规则"""
-    prefs = db.list_all_preferences()
+    prefs = db.list_all_preferences(user_id=session.get("user_id"))
     return jsonify({"preferences": prefs})
 
 
@@ -1017,7 +1059,8 @@ def api_preferences_extract():
             prefs = extract_preferences(diffs, client)
 
             if prefs and session_id:
-                db.save_preferences(prefs, session_id, source_diffs=diffs)
+                db.save_preferences(prefs, session_id, source_diffs=diffs,
+                                    user_id=session.get("user_id"))
 
             yield _sse({"type": "done", "data": {
                 "success": True,

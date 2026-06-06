@@ -1,12 +1,18 @@
 """LLM 调用客户端 - 支持 Anthropic 和 OpenAI 两种 API 格式，支持多模态"""
 
 import time
+from pathlib import Path
 
 import yaml
 
+# 项目根目录（此文件所在目录）
+_PROJECT_ROOT = Path(__file__).parent
 
-def load_config(path: str = "config.yaml") -> dict:
-    """加载配置文件"""
+
+def load_config(path: str | None = None) -> dict:
+    """加载配置文件（默认使用项目根目录下的 config.yaml）"""
+    if path is None:
+        path = str(_PROJECT_ROOT / "config.yaml")
     with open(path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
