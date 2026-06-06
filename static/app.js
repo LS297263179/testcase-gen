@@ -180,7 +180,9 @@ async function loadTpRecord(id){
     try{
         const r=await authFetch('/api/test-points/'+id);
         const tp=await r.json();
+        console.log('[测试点] 加载记录 id='+id, tp);
         testPointsData=tp.points||[];
+        console.log('[测试点] points模块数='+testPointsData.length, testPointsData);
         renderTestPoints(testPointsData);
         // 自动展开所有模块
         testPointsData.forEach((_,i)=>{
