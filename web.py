@@ -46,8 +46,16 @@ app.secret_key = _secret_from_env or _secret_from_cfg or os.urandom(24)
 
 
 # ============================================================
-# 认证
+# 认证 & CSRF
 # ============================================================
+
+def _generate_csrf_token() -> str:
+    """生成 CSRF token 并存入 session"""
+    import secrets
+    token = secrets.token_hex(32)
+    session["csrf_token"] = token
+    return token
+
 
 def login_required(f):
     """登录校验装饰器"""
@@ -55,6 +63,19 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return jsonify({"error": "未登录，请先登录"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+
+def csrf_protect(f):
+    """CSRF 保护装饰器（POST/PUT/DELETE 请求必须携带有效 token）"""
+    @functools.wraps(f)
+    def decorated(*args, **kwargs):
+        if request.method in ("POST", "PUT", "DELETE"):
+            token = request.headers.get("X-CSRF-Token", "")
+            expected = session.get("csrf_token", "")
+            if not token or not expected or token != expected:
+                return jsonify({"error": "CSRF token 无效，请刷新页面"}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -232,7 +253,8 @@ def api_register():
         user_id = db.create_user(username, password)
         session["user_id"] = user_id
         session["username"] = username
-        return jsonify({"success": True, "user": {"id": user_id, "username": username}})
+        csrf_token = _generate_csrf_token()
+        return jsonify({"success": True, "user": {"id": user_id, "username": username}, "csrf_token": csrf_token})
     except ValueError as e:
         return jsonify({"error": str(e)}), 409
 
@@ -257,7 +279,8 @@ def api_login():
 
     session["user_id"] = user["id"]
     session["username"] = user["username"]
-    return jsonify({"success": True, "user": user})
+    csrf_token = _generate_csrf_token()
+    return jsonify({"success": True, "user": user, "csrf_token": csrf_token})
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -271,10 +294,12 @@ def api_logout():
 def api_me():
     """获取当前登录用户信息"""
     if "user_id" in session:
+        # 确保有 CSRF token
+        csrf_token = session.get("csrf_token") or _generate_csrf_token()
         return jsonify({"logged_in": True, "user": {
             "id": session["user_id"],
             "username": session["username"],
-        }})
+        }, "csrf_token": csrf_token})
     return jsonify({"logged_in": False})
 
 
@@ -344,6 +369,7 @@ def api_model_config_get():
 
 @app.route("/api/model-config", methods=["POST"])
 @login_required
+@csrf_protect
 def api_model_config_set():
     """保存模型配置"""
     data = request.get_json()
@@ -422,6 +448,7 @@ def api_dashboard():
 
 @app.route("/api/analyze", methods=["POST"])
 @login_required
+@csrf_protect
 def api_analyze():
     """需求分析 - 拆解模块和测试点（SSE 流式）"""
     try:
@@ -496,6 +523,7 @@ TEST_POINTS_PROMPT = """你是一位资深测试专家。请根据以下需求�
 
 @app.route("/api/generate-points", methods=["POST"])
 @login_required
+@csrf_protect
 def api_generate_points():
     """生成测试点（SSE 流式）"""
     try:
@@ -567,6 +595,7 @@ def api_generate_points():
 
 @app.route("/api/export-points", methods=["POST"])
 @login_required
+@csrf_protect
 def api_export_points():
     """导出测试点为 MD 或 XMIND"""
     data = request.get_json()
@@ -615,6 +644,7 @@ def api_materials_list():
 
 @app.route("/api/materials", methods=["POST"])
 @login_required
+@csrf_protect
 def api_materials_create():
     """创建项目资料（支持图片上传）"""
     title = request.form.get("title", "").strip()
@@ -639,6 +669,7 @@ def api_materials_get(mid):
 
 @app.route("/api/materials/<int:mid>", methods=["DELETE"])
 @login_required
+@csrf_protect
 def api_materials_delete(mid):
     """删除项目资料"""
     m = db.get_material(mid)
@@ -672,6 +703,7 @@ def api_test_points_get(tp_id):
 
 @app.route("/api/test-points/<int:tp_id>", methods=["DELETE"])
 @login_required
+@csrf_protect
 def api_test_points_delete(tp_id):
     """删除测试点记录"""
     tp = db.get_test_points(tp_id)
@@ -725,6 +757,7 @@ def api_health():
 
 @app.route("/api/generate", methods=["POST"])
 @login_required
+@csrf_protect
 def api_generate():
     """生成测试用例（SSE 流式返回进度 + 结果）"""
     # 先解析请求参数
@@ -916,6 +949,7 @@ def _sse(data: dict) -> str:
 
 @app.route("/api/review", methods=["POST"])
 @login_required
+@csrf_protect
 def api_review():
     """评审测试用例（SSE 流式返回进度）"""
     try:
@@ -959,6 +993,7 @@ def api_review():
 
 @app.route("/api/optimize", methods=["POST"])
 @login_required
+@csrf_protect
 def api_optimize():
     """根据评审报告优化测试用例（SSE 流式返回进度）"""
     try:
@@ -1063,6 +1098,7 @@ def api_history_detail(session_id):
 
 @app.route("/api/history/<int:session_id>", methods=["DELETE"])
 @login_required
+@csrf_protect
 def api_history_delete(session_id):
     """删除历史记录"""
     record = db.get_session(session_id)
@@ -1074,6 +1110,7 @@ def api_history_delete(session_id):
 
 @app.route("/api/history/<int:session_id>/review", methods=["POST"])
 @login_required
+@csrf_protect
 def api_history_save_review(session_id):
     """为历史记录保存评审报告"""
     record = db.get_session(session_id)
@@ -1101,6 +1138,7 @@ def api_preferences():
 
 @app.route("/api/preferences/extract", methods=["POST"])
 @login_required
+@csrf_protect
 def api_preferences_extract():
     """从用户编辑中提取偏好规则（SSE 流式）"""
     try:
@@ -1151,6 +1189,7 @@ def api_preferences_extract():
 
 @app.route("/api/preferences/<int:pref_id>", methods=["PUT"])
 @login_required
+@csrf_protect
 def api_preferences_update(pref_id):
     """更新偏好规则（启用/禁用/修改）"""
     pref = db.get_preference(pref_id)
@@ -1168,6 +1207,7 @@ def api_preferences_update(pref_id):
 
 @app.route("/api/preferences/<int:pref_id>", methods=["DELETE"])
 @login_required
+@csrf_protect
 def api_preferences_delete(pref_id):
     """删除偏好规则"""
     pref = db.get_preference(pref_id)

@@ -79,40 +79,29 @@ def decrypt_api_key(ciphertext: str) -> str:
         return ciphertext  # 解密失败时返回原文（可能是旧的明文 key）
 
 _DB_PATH = str(Path(__file__).parent / "data" / "data.db")
-_conn_lock = threading.Lock()
 _write_lock = threading.Lock()  # 写操作互斥锁，防止 SQLite 写冲突
-_conn_instance: sqlite3.Connection | None = None
 
 
 def set_db_path(path: str):
-    global _DB_PATH, _conn_instance
-    with _conn_lock:
-        _DB_PATH = path
-        _conn_instance = None  # 重置连接，下次使用时重新创建
+    global _DB_PATH
+    _DB_PATH = path
 
 
-def _get_conn() -> sqlite3.Connection:
-    """获取模块级单例连接（线程安全，惰性初始化）"""
-    global _conn_instance
-    if _conn_instance is None:
-        with _conn_lock:
-            if _conn_instance is None:
-                Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
-                _conn_instance = sqlite3.connect(
-                    _DB_PATH, check_same_thread=False,
-                    timeout=30,  # 等待锁释放的超时时间
-                )
-                _conn_instance.row_factory = sqlite3.Row
-                _conn_instance.execute("PRAGMA journal_mode=WAL")
-                _conn_instance.execute("PRAGMA foreign_keys=ON")
-                _conn_instance.execute("PRAGMA busy_timeout=10000")  # 10s 忙等待
-    return _conn_instance
+def _new_conn() -> sqlite3.Connection:
+    """创建新的数据库连接（每次操作独立连接，线程安全）"""
+    Path(_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(_DB_PATH, timeout=30)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=10000")
+    return conn
 
 
 @contextmanager
 def db_conn():
-    """数据库上下文管理器，自动处理 commit/rollback（写操作互斥）"""
-    conn = _get_conn()
+    """写操作上下文管理器（独立连接 + 写锁互斥 + 自动关闭）"""
+    conn = _new_conn()
     with _write_lock:
         try:
             yield conn
@@ -120,16 +109,18 @@ def db_conn():
         except Exception:
             conn.rollback()
             raise
+        finally:
+            conn.close()
 
 
 @contextmanager
 def db_read_conn():
-    """只读上下文管理器（不需要写锁，允许并发读）"""
-    conn = _get_conn()
+    """只读上下文管理器（独立连接，允许并发读，自动关闭）"""
+    conn = _new_conn()
     try:
         yield conn
-    except Exception:
-        raise
+    finally:
+        conn.close()
 
 
 def init_db():

@@ -11,4 +11,5 @@ RUN mkdir -p output data
 
 EXPOSE 5000
 
-CMD ["python", "start.py", "--host", "0.0.0.0", "--no-browser"]
+# 生产环境使用 gunicorn，开发环境用 start.py
+CMD ["gunicorn", "-c", "gunicorn.conf.py", "web:app"]

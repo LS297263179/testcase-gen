@@ -5,16 +5,18 @@ function showAuthError(m){const e=document.getElementById('authError');e.textCon
 function hideAuthError(){document.getElementById('authError').style.display='none';}
 function showLogin(){hideAuthError();document.getElementById('loginForm').style.display='block';document.getElementById('registerForm').style.display='none';}
 function showRegister(){hideAuthError();document.getElementById('loginForm').style.display='none';document.getElementById('registerForm').style.display='block';}
-async function doLogin(){const u=document.getElementById('loginUsername').value.trim(),p=document.getElementById('loginPassword').value;if(!u||!p){showAuthError('请输入用户名和密码');return;}try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok){showAuthError(d.error||'登录失败');return;}enterApp(d.user);}catch(e){showAuthError('网络错误: '+e.message);}}
-async function doRegister(){const u=document.getElementById('regUsername').value.trim(),p=document.getElementById('regPassword').value,p2=document.getElementById('regPassword2').value;if(!u||!p){showAuthError('请输入用户名和密码');return;}if(p!==p2){showAuthError('两次密码不一致');return;}try{const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok){showAuthError(d.error||'注册失败');return;}enterApp(d.user);}catch(e){showAuthError('网络错误: '+e.message);}}
+async function doLogin(){const u=document.getElementById('loginUsername').value.trim(),p=document.getElementById('loginPassword').value;if(!u||!p){showAuthError('请输入用户名和密码');return;}try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok){showAuthError(d.error||'登录失败');return;}if(d.csrf_token)csrfToken=d.csrf_token;enterApp(d.user);}catch(e){showAuthError('网络错误: '+e.message);}}
+async function doRegister(){const u=document.getElementById('regUsername').value.trim(),p=document.getElementById('regPassword').value,p2=document.getElementById('regPassword2').value;if(!u||!p){showAuthError('请输入用户名和密码');return;}if(p!==p2){showAuthError('两次密码不一致');return;}try{const r=await fetch('/api/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});const d=await r.json();if(!r.ok){showAuthError(d.error||'注册失败');return;}if(d.csrf_token)csrfToken=d.csrf_token;enterApp(d.user);}catch(e){showAuthError('网络错误: '+e.message);}}
 async function doLogout(){await fetch('/api/logout',{method:'POST'});document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';showLogin();}
 function enterApp(u){document.getElementById('authPage').style.display='none';document.getElementById('appPage').style.display='block';document.getElementById('headerUsername').textContent=u.username;document.getElementById('dashGreeting').textContent=u.username+'，你好';loadDashboard();}
-async function checkAuth(){try{const r=await fetch('/api/me');const d=await r.json();if(d.logged_in)enterApp(d.user);else{document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}catch(e){document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}
+async function checkAuth(){try{const r=await fetch('/api/me');const d=await r.json();if(d.logged_in){if(d.csrf_token)csrfToken=d.csrf_token;enterApp(d.user);}else{document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}catch(e){document.getElementById('authPage').style.display='block';document.getElementById('appPage').style.display='none';}}
 document.getElementById('loginPassword').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 document.getElementById('loginUsername').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 document.getElementById('regPassword2').addEventListener('keydown',e=>{if(e.key==='Enter')doRegister();});
 checkAuth();
-async function authFetch(u,o={}){const r=await fetch(u,o);if(r.status===401){doLogout();throw new Error('登录已过期');}return r;}
+let csrfToken='';
+function _headers(h={}){if(csrfToken)h['X-CSRF-Token']=csrfToken;return h;}
+async function authFetch(u,o={}){o.headers=_headers(o.headers||{});const r=await fetch(u,o);if(r.status===401){doLogout();throw new Error('登录已过期');}return r;}
 
 // ============================================================
 // 页面切换
@@ -90,8 +92,10 @@ function tpRenderFileList() {
     }).join('');
 }
 async function generatePoints(){
+    if(isGenerating){showToast('正在生成中，请勿重复点击','error');return;}
     const req=document.getElementById('tpRequirement').value.trim();
     if(!req&&!tpUploadedFiles.length){showToast('请输入需求描述或上传图片','error');return;}
+    isGenerating=true;
     const btn=document.getElementById('btnGenPoints');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> 生成中...';
     document.getElementById('tpLoading').style.display='block';document.getElementById('tpLoadingText').textContent='正在分析需求...';
     document.getElementById('tpResult').style.display='none';
@@ -104,7 +108,7 @@ async function generatePoints(){
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
         while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('tpLoadingText').textContent=ev.message;else if(ev.type==='done'){testPointsData=ev.data.points||[];renderTestPoints(testPointsData);showToast(`生成完成！共 ${ev.data.total} 个测试点`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
     }catch(e){showToast(e.message,'error');}
-    finally{btn.disabled=false;btn.innerHTML='&#128209; 生成测试点';document.getElementById('tpLoading').style.display='none';}
+    finally{isGenerating=false;btn.disabled=false;btn.innerHTML='&#128209; 生成测试点';document.getElementById('tpLoading').style.display='none';}
 }
 function renderTestPoints(points){
     const total=points.reduce((s,m)=>s+m.points.length,0);
@@ -334,7 +338,7 @@ function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/
 // SSE
 // ============================================================
 function sseParseLine(line,{onProgress,onDone}){if(!line.startsWith('data: '))return;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress'&&onProgress)onProgress(ev.message);else if(ev.type==='done'&&onDone)onDone(ev.data);else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}
-async function sseFetch(u,b,{onProgress,onDone}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.status===401){doLogout();throw new Error('登录已过期');}const rd=r.body.getReader(),dec=new TextDecoder();let buf='';try{while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){sseParseLine(line,{onProgress,onDone});}}}finally{rd.cancel();}if(buf.trim())sseParseLine(buf.trim(),{onProgress,onDone});}
+async function sseFetch(u,b,{onProgress,onDone}){const r=await fetch(u,{method:'POST',headers:_headers({'Content-Type':'application/json'}),body:JSON.stringify(b)});if(r.status===401){doLogout();throw new Error('登录已过期');}const rd=r.body.getReader(),dec=new TextDecoder();let buf='';try{while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){sseParseLine(line,{onProgress,onDone});}}}finally{rd.cancel();}if(buf.trim())sseParseLine(buf.trim(),{onProgress,onDone});}
 
 // ============================================================
 // 需求分析
@@ -368,6 +372,7 @@ async function analyzeRequirement(){
 // ============================================================
 let currentFiles={},currentRequirement='',currentTestcases=[],currentReview='',originalTestcases=[],currentSessionId=null,selectedRows=new Set();
 let genSelectedMats = new Set();
+let isGenerating=false;  // 防止重复生成请求
 
 async function loadGenMaterials() {
     try {
@@ -430,8 +435,10 @@ function genToggleTp(id) {
 async function generate(){await doGenerate(false);}
 async function generateFromAnalysis(){await doGenerate(true);}
 async function doGenerate(useAnalysis){
+    if(isGenerating){showToast('正在生成中，请勿重复点击','error');return;}
     const req=document.getElementById('requirement').value.trim();
     if(!req&&!uploadedFiles.length){showToast('请输入需求或上传文件','error');return;}
+    isGenerating=true;
     const btn=document.getElementById('btnGenerate');btn.disabled=true;btn.innerHTML='<span class="spinner"></span> 生成中...';
     document.getElementById('loading').style.display='block';document.getElementById('loadingText').textContent='AI 正在分析需求...';
     document.getElementById('result').style.display='none';document.getElementById('reviewPanel').style.display='none';document.getElementById('diffPanel').style.display='none';document.getElementById('analysisCard').style.display='none';
@@ -442,8 +449,8 @@ async function doGenerate(useAnalysis){
         for(const f of uploadedFiles)fd.append('files',f);
         const resp=await fetch('/api/generate',{method:'POST',body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
-        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
-    }catch(e){showToast(e.message,'error');}finally{btn.disabled=false;btn.innerHTML='&#9889; 直接生成';document.getElementById('loading').style.display='none';}
+        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;originalTestcases=[];renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
+    }catch(e){showToast(e.message,'error');}finally{isGenerating=false;btn.disabled=false;btn.innerHTML='&#9889; 直接生成';document.getElementById('loading').style.display='none';}
 }
 function renderResult(data){
     const tc=data.testcases,c={P0:0,P1:0,P2:0,P3:0};tc.forEach(t=>{c[t.priority]=(c[t.priority]||0)+1;});
@@ -525,7 +532,7 @@ function showDiff(oc,nc){
 // ============================================================
 function toggleHistory(){const s=document.getElementById('historySidebar'),o=document.getElementById('sidebarOverlay');if(s.classList.contains('open')){s.classList.remove('open');o.classList.remove('show');}else{s.classList.add('open');o.classList.add('show');loadHistory();}}
 async function loadHistory(){const l=document.getElementById('historyList');try{const r=await authFetch('/api/history?limit=50');const d=await r.json();const ss=d.sessions||[];if(!ss.length){l.innerHTML='<div class="history-empty">暂无历史记录</div>';return;}l.innerHTML=ss.map(s=>`<div class="history-item"><div class="h-time">${esc(s.created_at)}</div><div class="h-preview" title="${esc(s.requirement)}">${esc(s.requirement_preview)}</div><div class="h-meta"><span>${s.tc_count} 条</span>${s.priority?'<span>'+esc(s.priority)+'</span>':''}</div><div class="h-actions"><button onclick="loadSession(${s.id})">加载</button><button class="del-btn" onclick="deleteSession(${s.id},event)">删除</button></div></div>`).join('');}catch(e){l.innerHTML='<div class="history-empty">加载失败</div>';}}
-async function loadSession(id){try{const r=await authFetch('/api/history/'+id);if(!r.ok)throw new Error('记录不存在');const s=await r.json();document.getElementById('requirement').value=s.requirement||'';if(s.priority)document.getElementById('priority').value=s.priority;if(s.case_types)document.getElementById('caseTypes').value=s.case_types.join(',');currentTestcases=s.testcases;currentRequirement=s.requirement;currentSessionId=s.id;currentReview=s.review_report||'';currentFiles={};renderResult({testcases:s.testcases,count:s.testcases.length,files:{},session_id:s.id,input:{has_text:!!s.requirement,image_count:s.images?s.images.length:0,image_names:s.images?s.images.map(i=>i.filename||''):[]}});if(currentReview){document.getElementById('reviewContent').textContent=currentReview;document.getElementById('reviewPanel').style.display='block';}toggleHistory();showToast('已加载 #'+id);document.getElementById('result').scrollIntoView({behavior:'smooth'});}catch(e){showToast(e.message,'error');}}
+async function loadSession(id){try{const r=await authFetch('/api/history/'+id);if(!r.ok)throw new Error('记录不存在');const s=await r.json();document.getElementById('requirement').value=s.requirement||'';if(s.priority)document.getElementById('priority').value=s.priority;if(s.case_types)document.getElementById('caseTypes').value=s.case_types.join(',');currentTestcases=s.testcases;currentRequirement=s.requirement;currentSessionId=s.id;currentReview=s.review_report||'';currentFiles={};originalTestcases=[];renderResult({testcases:s.testcases,count:s.testcases.length,files:{},session_id:s.id,input:{has_text:!!s.requirement,image_count:s.images?s.images.length:0,image_names:s.images?s.images.map(i=>i.filename||''):[]}});if(currentReview){document.getElementById('reviewContent').textContent=currentReview;document.getElementById('reviewPanel').style.display='block';}toggleHistory();showToast('已加载 #'+id);document.getElementById('result').scrollIntoView({behavior:'smooth'});}catch(e){showToast(e.message,'error');}}
 async function deleteSession(id,ev){ev.stopPropagation();if(!confirm('确定删除？'))return;try{await authFetch('/api/history/'+id,{method:'DELETE'});showToast('已删除');loadHistory();}catch(e){showToast(e.message,'error');}}
 
 // ============================================================
