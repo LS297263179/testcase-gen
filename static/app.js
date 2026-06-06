@@ -475,7 +475,10 @@ function downloadFile(type){
         const blob=new Blob([JSON.stringify(currentTestcases,null,2)],{type:'application/json'});
         const url=URL.createObjectURL(blob);window.open(url,'_blank');URL.revokeObjectURL(url);return;
     }
-    const p=type==='excel'?currentFiles.excel:currentFiles.markdown;if(!p)return;window.open('/api/download/'+p.split(/[/\\]/).pop(),'_blank');
+    const p=type==='excel'?currentFiles.excel:currentFiles.markdown;if(!p)return;
+    const filename=p.split(/[/\\]/).pop();
+    const qs=currentSessionId?'?session_id='+currentSessionId:'';
+    window.open('/api/download/'+filename+qs,'_blank');
 }
 
 // ============================================================

@@ -1006,14 +1006,35 @@ def api_optimize():
 @app.route("/api/download/<path:filename>")
 @login_required
 def api_download(filename):
-    """下载文件"""
+    """下载文件（文件不存在时从历史记录重新生成）"""
     filepath = os.path.realpath(os.path.join(OUTPUT_DIR, filename))
     output_real = os.path.realpath(OUTPUT_DIR)
     if not filepath.startswith(output_real + os.sep) and filepath != output_real:
         return jsonify({"error": "非法路径"}), 403
+
+    # 文件存在直接下载
     if os.path.exists(filepath):
         return send_file(filepath, as_attachment=True)
-    return jsonify({"error": "文件不存在"}), 404
+
+    # 文件不存在：尝试从历史记录重新生成
+    session_id = request.args.get("session_id")
+    if session_id:
+        try:
+            record = db.get_session(int(session_id))
+            if record and record.get("user_id") == session.get("user_id"):
+                testcases = record.get("testcases", [])
+                if testcases:
+                    os.makedirs(OUTPUT_DIR, exist_ok=True)
+                    if filename.endswith(".xlsx"):
+                        to_excel(testcases, OUTPUT_DIR, filename)
+                    elif filename.endswith(".md"):
+                        to_markdown(testcases, OUTPUT_DIR, filename)
+                    if os.path.exists(filepath):
+                        return send_file(filepath, as_attachment=True)
+        except Exception as e:
+            logger.warning(f"重新生成文件失败: {e}")
+
+    return jsonify({"error": "文件不存在，请重新生成"}), 404
 
 
 # ============================================================
