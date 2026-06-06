@@ -63,7 +63,30 @@ def login_required(f):
 db.init_db()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片）
 
+# 启动时清理过期输出文件
+_cleanup_old_output_files()
+
 OUTPUT_DIR = "./output"
+OUTPUT_FILE_MAX_AGE_DAYS = 7  # 输出文件保留天数
+
+
+def _cleanup_old_output_files():
+    """清理超过保留天数的输出文件（每次启动时 + 每次生成后调用）"""
+    output_path = Path(OUTPUT_DIR)
+    if not output_path.exists():
+        return
+    now = time.time()
+    max_age = OUTPUT_FILE_MAX_AGE_DAYS * 86400
+    cleaned = 0
+    for f in output_path.iterdir():
+        if f.is_file() and (now - f.stat().st_mtime) > max_age:
+            try:
+                f.unlink()
+                cleaned += 1
+            except OSError:
+                pass
+    if cleaned:
+        logger.info(f"已清理 {cleaned} 个过期输出文件（>{OUTPUT_FILE_MAX_AGE_DAYS}天）")
 
 
 def _process_uploaded_files(files) -> tuple[list[dict], str]:
@@ -848,6 +871,9 @@ def api_generate():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             excel_path = to_excel(testcases, OUTPUT_DIR, f"testcases_{timestamp}.xlsx")
             md_path = to_markdown(testcases, OUTPUT_DIR, f"testcases_{timestamp}.md")
+
+            # 清理过期输出文件
+            _cleanup_old_output_files()
 
             # 自动保存到历史记录
             session_id = db.create_session(

@@ -33,5 +33,6 @@ _debug_*.txt
 Thumbs.db
 
 # 数据库和日志
+data/
 data.db
 *.log
