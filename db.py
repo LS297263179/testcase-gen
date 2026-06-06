@@ -123,8 +123,86 @@ def db_read_conn():
         conn.close()
 
 
+def _migrate_old_db():
+    """如果根目录存在旧 data.db 且新库为空，自动迁移旧数据"""
+    old_db_path = str(Path(__file__).parent / "data.db")
+    if not os.path.exists(old_db_path):
+        return
+    # 检查新库是否已有数据
+    with db_read_conn() as conn:
+        user_count = conn.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    if user_count > 0:
+        # 新库已有用户，检查旧库是否需要合并
+        old_conn = sqlite3.connect(old_db_path)
+        old_conn.row_factory = sqlite3.Row
+        try:
+            old_users = old_conn.execute("SELECT id, username, password_hash, created_at FROM users").fetchall()
+            new_users = {}
+            with db_read_conn() as conn:
+                for r in conn.execute("SELECT id, username FROM users").fetchall():
+                    new_users[r["username"]] = r["id"]
+
+            id_map = {}
+            has_new = False
+            for u in old_users:
+                if u["username"] in new_users:
+                    id_map[u["id"]] = new_users[u["username"]]
+                else:
+                    has_new = True
+
+            if not has_new:
+                # 旧库用户全部已存在，跳过
+                old_conn.close()
+                return
+
+            print(f"[迁移] 正在将旧数据库 ({old_db_path}) 合并到 {_DB_PATH} ...")
+            with db_conn() as new_conn:
+                for u in old_users:
+                    if u["username"] not in new_users:
+                        cur = new_conn.execute(
+                            "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+                            (u["username"], u["password_hash"], u["created_at"]),
+                        )
+                        id_map[u["id"]] = cur.lastrowid
+                        print(f"  [迁移] 用户 {u['username']} -> id={cur.lastrowid}")
+
+                # 迁移 sessions
+                for s in old_conn.execute("SELECT * FROM sessions").fetchall():
+                    new_uid = id_map.get(s["user_id"]) if s["user_id"] else None
+                    new_conn.execute(
+                        "INSERT INTO sessions (created_at, user_id, requirement, priority, case_types, "
+                        "testcases, tc_count, review_report, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (s["created_at"], new_uid, s["requirement"], s["priority"], s["case_types"],
+                         s["testcases"], s["tc_count"], s["review_report"], s["is_deleted"]),
+                    )
+
+                # 迁移 materials
+                for m in old_conn.execute("SELECT * FROM materials").fetchall():
+                    new_uid = id_map.get(m["user_id"]) if m["user_id"] else None
+                    new_conn.execute(
+                        "INSERT INTO materials (user_id, title, content, created_at) VALUES (?, ?, ?, ?)",
+                        (new_uid, m["title"], m["content"], m["created_at"]),
+                    )
+
+            print(f"[迁移] 完成，旧数据库已合并")
+        except Exception as e:
+            print(f"[迁移] 合并失败: {e}")
+        finally:
+            old_conn.close()
+    else:
+        # 新库为空，直接复制旧库
+        print(f"[迁移] 新数据库为空，正在从 {old_db_path} 迁移...")
+        import shutil
+        try:
+            shutil.copy2(old_db_path, _DB_PATH)
+            print("[迁移] 完成")
+        except Exception as e:
+            print(f"[迁移] 失败: {e}")
+
+
 def init_db():
     """建表（幂等，可重复调用）"""
+    _migrate_old_db()
     with db_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS users (
