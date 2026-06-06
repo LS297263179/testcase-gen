@@ -14,7 +14,7 @@ from flask import (Flask, Response, jsonify, render_template,
                    request, send_file, session, stream_with_context)
 
 import db
-from llm_client import build_client, load_config
+from llm_client import LLMClient, build_client, load_config
 from output import to_excel, to_markdown
 from preferences import compute_diffs, extract_preferences
 from reader import (get_image_media_type, image_to_base64, is_image,
@@ -57,6 +57,38 @@ app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片
 OUTPUT_DIR = "./output"
 
 
+def _process_uploaded_files(files) -> tuple[list[dict], str]:
+    """处理上传的文件，返回 (images, text_content)。
+    图片转为 base64，Excel/TXT 读取为文本。
+    """
+    from reader import read_excel, read_text
+    images = []
+    text_parts = []
+    for f in files:
+        if not f.filename:
+            continue
+        suffix = Path(f.filename).suffix.lower()
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp_path = tmp.name
+            f.save(tmp_path)
+            if is_image(tmp_path):
+                images.append({
+                    "data": image_to_base64(tmp_path),
+                    "media_type": get_image_media_type(tmp_path),
+                    "filename": f.filename,
+                })
+            elif suffix in (".xlsx", ".xls"):
+                text_parts.append(read_excel(tmp_path))
+            else:
+                text_parts.append(read_text(tmp_path))
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+    return images, "\n".join(text_parts)
+
+
 # ============================================================
 # 全局异常处理
 # ============================================================
@@ -66,7 +98,7 @@ def not_found(e):
     """404 统一返回 JSON"""
     if request.path.startswith("/api/"):
         return jsonify({"error": "接口不存在"}), 404
-    return e
+    return e.get_response() if hasattr(e, 'get_response') else ("Not Found", 404)
 
 
 @app.errorhandler(500)
@@ -74,7 +106,7 @@ def internal_error(e):
     """500 统一返回 JSON"""
     if request.path.startswith("/api/"):
         return jsonify({"error": "服务器内部错误"}), 500
-    return e
+    return e.get_response() if hasattr(e, 'get_response') else ("Internal Server Error", 500)
 
 
 @app.errorhandler(413)
@@ -375,7 +407,7 @@ def api_analyze():
             }})
         except Exception as e:
             traceback.print_exc()
-            yield _sse({"type": "error", "message": str(e)})
+            yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
         stream_with_context(sse_stream()),
@@ -427,23 +459,9 @@ def api_generate_points():
             requirement = request.form.get("requirement", "")
             material_ids_raw = request.form.get("material_ids", "")
             material_ids = [int(x) for x in material_ids_raw.split(",") if x.strip()] if material_ids_raw else None
-            files = request.files.getlist("files")
-            for f in files:
-                if not f.filename:
-                    continue
-                suffix = Path(f.filename).suffix.lower()
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    tmp_path = tmp.name
-                f.save(tmp_path)
-                try:
-                    if is_image(tmp_path):
-                        images.append({
-                            "data": image_to_base64(tmp_path),
-                            "media_type": get_image_media_type(tmp_path),
-                            "filename": f.filename,
-                        })
-                finally:
-                    os.unlink(tmp_path)
+            images, file_text = _process_uploaded_files(request.files.getlist("files"))
+            if file_text:
+                requirement += "\n" + file_text
         else:
             data = request.get_json()
             requirement = data.get("requirement", "")
@@ -489,7 +507,7 @@ def api_generate_points():
             }})
         except Exception as e:
             traceback.print_exc()
-            yield _sse({"type": "error", "message": str(e)})
+            yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
         stream_with_context(sse_stream()),
@@ -555,25 +573,7 @@ def api_materials_create():
     if not title:
         return jsonify({"error": "标题不能为空"}), 400
 
-    images = []
-    files = request.files.getlist("images")
-    for f in files:
-        if not f.filename:
-            continue
-        suffix = Path(f.filename).suffix.lower()
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            tmp_path = tmp.name
-        f.save(tmp_path)
-        try:
-            if is_image(tmp_path):
-                images.append({
-                    "data": image_to_base64(tmp_path),
-                    "media_type": get_image_media_type(tmp_path),
-                    "filename": f.filename,
-                })
-        finally:
-            os.unlink(tmp_path)
-
+    images, _ = _process_uploaded_files(request.files.getlist("images"))
     mid = db.create_material(session["user_id"], title, content, images)
     return jsonify({"success": True, "id": mid})
 
@@ -632,18 +632,13 @@ def api_test_points_delete(tp_id):
     return jsonify({"success": True})
 
 
-def _load_model_config() -> dict:
-    """加载模型配置（数据库优先，fallback config.yaml）"""
-    return db.get_model_config()
-
-
 def get_generate_client() -> LLMClient:
-    config = _load_model_config()
+    config = db.get_model_config()
     return build_client(config["generate"])
 
 
 def get_review_client() -> LLMClient:
-    config = _load_model_config()
+    config = db.get_model_config()
     review_cfg = config.get("review", {})
     if review_cfg.get("enabled", False):
         return build_client(review_cfg)
@@ -651,7 +646,7 @@ def get_review_client() -> LLMClient:
 
 
 def get_image_client() -> LLMClient | None:
-    config = _load_model_config()
+    config = db.get_model_config()
     gen_cfg = config["generate"]
     image_model = gen_cfg.get("image_model")
     if not image_model:
@@ -676,7 +671,6 @@ def api_health():
 def api_generate():
     """生成测试用例（SSE 流式返回进度 + 结果）"""
     # 先解析请求参数
-    requirement = ""
     priority = None
     case_types = None
     images = []
@@ -703,27 +697,9 @@ def api_generate():
                 except ValueError:
                     pass
 
-            files = request.files.getlist("files")
-            for f in files:
-                if not f.filename:
-                    continue
-                suffix = Path(f.filename).suffix.lower()
-                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                    tmp_path = tmp.name
-                f.save(tmp_path)
-                try:
-                    if is_image(tmp_path):
-                        images.append({
-                            "data": image_to_base64(tmp_path),
-                            "media_type": get_image_media_type(tmp_path),
-                            "filename": f.filename,
-                        })
-                    elif suffix in (".xlsx", ".xls"):
-                        requirement += "\n" + read_excel(tmp_path)
-                    else:
-                        requirement += "\n" + read_text(tmp_path)
-                finally:
-                    os.unlink(tmp_path)
+            images, file_text = _process_uploaded_files(request.files.getlist("files"))
+            if file_text:
+                requirement += "\n" + file_text
         else:
             data = request.get_json()
             requirement = data.get("requirement", "")
@@ -851,7 +827,7 @@ def api_generate():
 
         except Exception as e:
             traceback.print_exc()
-            yield _sse({"type": "error", "message": str(e)})
+            yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
         stream_with_context(sse_stream()),
@@ -898,7 +874,7 @@ def api_review():
             }})
         except Exception as e:
             traceback.print_exc()
-            yield _sse({"type": "error", "message": str(e)})
+            yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
         stream_with_context(sse_stream()),
@@ -944,7 +920,7 @@ def api_optimize():
             }})
         except Exception as e:
             traceback.print_exc()
-            yield _sse({"type": "error", "message": str(e)})
+            yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
         stream_with_context(sse_stream()),
@@ -1069,7 +1045,7 @@ def api_preferences_extract():
             }})
         except Exception as e:
             traceback.print_exc()
-            yield _sse({"type": "error", "message": str(e)})
+            yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
         stream_with_context(sse_stream()),

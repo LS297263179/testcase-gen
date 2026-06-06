@@ -105,10 +105,11 @@ def read_requirement_multimodal(source: str | None, image_paths: list[str] | Non
     """多模态入口：返回 {text: str, images: [{data, media_type}]}"""
     result = {"text": "", "images": []}
 
-    # 读取文本
+    # 读取文本（source 为图片路径时跳过文本读取）
     if source and not is_image(source):
         result["text"] = read_requirement(source)
-    elif source is None:
+    # source 为 None 时：如果有图片则跳过（Web 场景），否则 fallback 到手动输入
+    elif source is None and not image_paths:
         result["text"] = read_manual()
 
     # 读取图片

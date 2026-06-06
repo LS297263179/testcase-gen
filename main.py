@@ -125,8 +125,8 @@ def main():
     # 评审
     if args.review:
         review_cfg = config.get("review", {})
-        if review_cfg.get("enabled", False):
-            review_model = review_cfg["model"]
+        if review_cfg.get("enabled", False) and review_cfg.get("base_url") and review_cfg.get("api_key"):
+            review_model = review_cfg.get("model", gen_model)
             review_client = build_client(review_cfg)
         else:
             review_model = gen_model

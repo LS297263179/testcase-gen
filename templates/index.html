@@ -309,7 +309,7 @@
             </div>
             <div id="registerForm" style="display:none;">
                 <div class="form-group"><label>用户名</label><input type="text" id="regUsername" placeholder="2-32 个字符" autocomplete="username"></div>
-                <div class="form-group"><label>密码</label><input type="password" id="regPassword" placeholder="至少 4 个字符" autocomplete="new-password"></div>
+                <div class="form-group"><label>密码</label><input type="password" id="regPassword" placeholder="至少 8 个字符" autocomplete="new-password"></div>
                 <div class="form-group"><label>确认密码</label><input type="password" id="regPassword2" placeholder="再次输入密码" autocomplete="new-password"></div>
                 <button class="btn btn-primary" onclick="doRegister()">注 册</button>
                 <div class="auth-footer">已有账号？<a onclick="showLogin()">返回登录</a></div>
@@ -981,25 +981,6 @@ async function toggleMatCard(id) {
         body.classList.add('show');
         arrow.classList.add('open');
     } catch (e) { showToast('加载失败', 'error'); }
-}
-async function viewMaterial(id) {
-    try {
-        const r = await authFetch('/api/materials/' + id);
-        const m = await r.json();
-        document.getElementById('matModalTitle').textContent = m.title;
-        let html = '';
-        if (m.content) html += `<div class="mat-content">${esc(m.content)}</div>`;
-        if (m.images && m.images.length) {
-            html += '<div class="mat-images">';
-            m.images.forEach(img => {
-                html += `<img src="data:${img.media_type};base64,${img.data}" alt="${esc(img.filename||'')}" onclick="window.open(this.src,'_blank')">`;
-            });
-            html += '</div>';
-        }
-        if (!html) html = '<div style="color:#999;text-align:center;padding:20px;">无内容</div>';
-        document.getElementById('matModalBody').innerHTML = html;
-        document.getElementById('matModal').classList.add('show');
-    } catch (e) { showToast(e.message, 'error'); }
 }
 async function deleteMaterial(id) {
     if (!confirm('确定删除这条材料？')) return;

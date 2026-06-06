@@ -50,6 +50,8 @@ def normalize_testcase(tc: dict) -> dict:
     tc["precondition"] = _strip_trailing_punctuation(tc.get("precondition", ""))
     tc["steps"] = _normalize_steps(tc.get("steps", ""))
     return tc
+
+
 PRIORITY_COLORS = {
     "P0": "FF0000",  # 红
     "P1": "FF6600",  # 橙

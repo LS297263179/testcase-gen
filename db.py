@@ -86,8 +86,9 @@ _conn_instance: sqlite3.Connection | None = None
 
 def set_db_path(path: str):
     global _DB_PATH, _conn_instance
-    _DB_PATH = path
-    _conn_instance = None  # 重置连接，下次使用时重新创建
+    with _conn_lock:
+        _DB_PATH = path
+        _conn_instance = None  # 重置连接，下次使用时重新创建
 
 
 def _get_conn() -> sqlite3.Connection:
@@ -341,24 +342,19 @@ def list_sessions(limit: int = 50, offset: int = 0,
     with db_read_conn() as conn:
         if user_id is not None:
             rows = conn.execute(
-                "SELECT id, created_at, requirement, priority, tc_count, is_deleted "
+                "SELECT id, created_at, requirement, priority, tc_count "
                 "FROM sessions WHERE is_deleted = 0 AND user_id = ? "
                 "ORDER BY id DESC LIMIT ? OFFSET ?",
                 (user_id, limit, offset),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id, created_at, requirement, priority, tc_count, is_deleted "
+                "SELECT id, created_at, requirement, priority, tc_count "
                 "FROM sessions WHERE is_deleted = 0 "
                 "ORDER BY id DESC LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
-    result = []
-    for row in rows:
-        s = dict(row)
-        s["requirement_preview"] = s["requirement"][:80]
-        result.append(s)
-    return result
+    return [dict(r) | {"requirement_preview": (r["requirement"] or "")[:80]} for r in rows]
 
 
 def save_review(session_id: int, review_report: str):
@@ -563,18 +559,14 @@ def list_materials(user_id: int) -> list[dict]:
     """列出用户的所有项目资料（不含图片数据）"""
     with db_read_conn() as conn:
         rows = conn.execute(
-            "SELECT id, title, content, created_at FROM materials WHERE user_id = ? ORDER BY id DESC",
+            "SELECT m.id, m.title, m.content, m.created_at, "
+            "(SELECT COUNT(*) FROM material_images WHERE material_id = m.id) as image_count "
+            "FROM materials m WHERE m.user_id = ? ORDER BY m.id DESC",
             (user_id,),
         ).fetchall()
         result = []
         for r in rows:
             d = dict(r)
-            # 获取图片数量
-            img_count = conn.execute(
-                "SELECT COUNT(*) as cnt FROM material_images WHERE material_id = ?",
-                (d["id"],),
-            ).fetchone()["cnt"]
-            d["image_count"] = img_count
             d["content_preview"] = (d["content"] or "")[:60]
             result.append(d)
     return result

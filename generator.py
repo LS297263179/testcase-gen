@@ -321,7 +321,7 @@ def _analyze_modules(client: LLMClient, requirement: str,
 
 需要覆盖的测试维度：{"、".join(case_types)}"""
 
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             raw = client.chat(sys_prompt, prompt, images=images)
             match = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
@@ -338,6 +338,9 @@ def _analyze_modules(client: LLMClient, requirement: str,
             if modules and isinstance(modules, list):
                 return complexity, modules
         except Exception:
+            if attempt < 2:
+                import time
+                time.sleep(2 ** attempt)
             continue
     return "medium", []
 
@@ -363,12 +366,18 @@ def _generate_for_module(client: LLMClient, requirement: str,
     if preferences:
         prompt += "\n\n## 用户偏好（请遵循）\n" + preferences
 
-    for attempt in range(2):
+    for attempt in range(3):
         try:
             raw = client.chat("你是一名资深软件测试工程师。", prompt, images=images, max_tokens=8192)
             return _parse_response(raw)
         except (ValueError, json.JSONDecodeError):
             continue
+        except Exception:
+            if attempt < 2:
+                import time
+                time.sleep(2 ** attempt)
+                continue
+            raise
     return []
 
 
