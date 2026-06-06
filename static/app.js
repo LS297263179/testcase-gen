@@ -182,6 +182,13 @@ async function loadTpRecord(id){
         const tp=await r.json();
         testPointsData=tp.points||[];
         renderTestPoints(testPointsData);
+        // 自动展开所有模块
+        testPointsData.forEach((_,i)=>{
+            const pts=document.getElementById('tpPoints'+i);
+            const arrow=document.getElementById('tpArrow'+i);
+            if(pts)pts.classList.add('show');
+            if(arrow)arrow.classList.add('open');
+        });
         showToast('已加载历史记录');
     }catch(e){showToast(e.message,'error');}
 }
