@@ -1,8 +1,13 @@
 """偏好学习模块 - 从用户编辑中提取偏好规则"""
 
+from __future__ import annotations
+
 import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from llm_client import LLMClient
 
 # 比较字段列表
 _DIFF_FIELDS = ["title", "precondition", "steps", "expected", "priority", "type"]
