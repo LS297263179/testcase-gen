@@ -1,9 +1,13 @@
 """测试用例生成模块 - Prompt 模板 + 用例解析，支持分段并行生成"""
 
 import json
+import logging
 import re
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
+
+logger = logging.getLogger(__name__)
 
 from llm_client import LLMClient
 from output import _normalize_steps, _strip_trailing_punctuation
@@ -339,7 +343,6 @@ def _analyze_modules(client: LLMClient, requirement: str,
                 return complexity, modules
         except Exception:
             if attempt < 2:
-                import time
                 time.sleep(2 ** attempt)
             continue
     return "medium", []
@@ -374,7 +377,6 @@ def _generate_for_module(client: LLMClient, requirement: str,
             continue
         except Exception:
             if attempt < 2:
-                import time
                 time.sleep(2 ** attempt)
                 continue
             raise
@@ -536,7 +538,7 @@ def _parse_response(raw: str) -> list[dict]:
         json_str = json_str[start:end]
 
     # 依次尝试多种解析方式
-    for parser in [_try_json_loads, _try_fix_control_chars, _try_json5_loads, _try_regex_extract]:
+    for parser in [_try_json_loads, _try_fix_control_chars, _try_json5_loads, _try_brace_matching, _try_regex_extract]:
         result = parser(json_str)
         if result is not None:
             testcases = _normalize_result(result)
@@ -601,6 +603,47 @@ def _try_json5_loads(s: str):
         return None
 
 
+def _try_brace_matching(s: str):
+    """基于大括号配对提取 JSON 对象（处理嵌套花括号）"""
+    cases = []
+    i = 0
+    while i < len(s):
+        if s[i] == '{':
+            depth = 0
+            in_str = False
+            escape = False
+            j = i
+            while j < len(s):
+                c = s[j]
+                if escape:
+                    escape = False
+                elif c == '\\':
+                    escape = True
+                elif c == '"':
+                    in_str = not in_str
+                elif not in_str:
+                    if c == '{':
+                        depth += 1
+                    elif c == '}':
+                        depth -= 1
+                        if depth == 0:
+                            candidate = s[i:j + 1]
+                            try:
+                                obj = json.loads(candidate)
+                                if isinstance(obj, dict) and ("id" in obj or "title" in obj):
+                                    cases.append(obj)
+                            except json.JSONDecodeError:
+                                pass
+                            i = j + 1
+                            break
+                j += 1
+            else:
+                i += 1
+        else:
+            i += 1
+    return {"testcases": cases} if cases else None
+
+
 def _try_regex_extract(s: str):
     """用正则直接提取每个测试用例对象"""
     pattern = r'\{[^{}]*"id"\s*:\s*"[^"]*"[^{}]*\}'
@@ -629,13 +672,18 @@ def _normalize_result(data) -> list[dict]:
 
 
 def _fix_control_chars(s: str) -> str:
-    """修复 JSON 字符串中的未转义控制字符"""
+    """修复 JSON 字符串中的未转义控制字符（正确处理转义链）"""
     result = []
     in_string = False
-    i = 0
-    while i < len(s):
-        c = s[i]
-        if c == '"' and (i == 0 or s[i - 1] != '\\'):
+    escape_next = False
+    for c in s:
+        if escape_next:
+            escape_next = False
+            result.append(c)
+        elif c == '\\' and in_string:
+            escape_next = True
+            result.append(c)
+        elif c == '"' and not escape_next:
             in_string = not in_string
             result.append(c)
         elif in_string and c in ('\n', '\r', '\t'):
@@ -647,5 +695,4 @@ def _fix_control_chars(s: str) -> str:
                 result.append('\\t')
         else:
             result.append(c)
-        i += 1
     return ''.join(result)

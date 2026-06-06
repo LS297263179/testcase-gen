@@ -1,6 +1,10 @@
 """测试用例评审模块 - 使用 LLM 对生成的用例进行评审和优化"""
 
+import logging
+
 from llm_client import LLMClient
+
+logger = logging.getLogger(__name__)
 
 REVIEW_SYSTEM_PROMPT = """你是一名资深测试架构师，负责评审测试用例的质量。
 
@@ -33,7 +37,30 @@ REVIEW_SYSTEM_PROMPT = """你是一名资深测试架构师，负责评审测试
 （具体可操作的建议）
 
 ## 补充用例建议
-（如有遗漏场景，列出需要补充的用例）"""
+（如有遗漏场景，列出需要补充的用例）
+
+## 输出示例
+## 评审结论
+- 总体评分：7/10
+- 用例数量：15 条
+- 风险等级：中
+- 重复用例数：2 条
+
+## 重复用例清单
+- 重复组1：[TC_003 验证码过期登录] 与 [TC_008 验证码超时登录] 重复，原因：测试场景相同（验证码失效后登录），建议保留 TC_003（步骤更详细）
+- 重复组2：[TC_011 手机号为空] 与 [TC_012 未输入手机号] 重复，原因：测试目标相同，建议保留 TC_011
+
+## 发现的问题
+1. [TC_005] 步骤过于笼统："输入正确信息" 应改为具体操作（输入手机号、输入验证码等）
+2. [TC_012] 预期结果不合理：预期"提示错误"应明确具体的错误提示内容
+
+## 改进建议
+1. 所有用例的前置条件应统一格式
+2. 边界测试用例应标注具体的边界值
+
+## 补充用例建议
+1. 验证码已被使用后再次提交的场景
+2. 并发获取验证码的场景"""
 
 REVIEW_USER_PROMPT_TEMPLATE = """请评审以下测试用例：
 
@@ -141,7 +168,7 @@ def _format_tc_text(tc: dict) -> str:
 def optimize_testcases(client: LLMClient, requirement: str,
                        testcases: list[dict], review_report: str) -> list[dict]:
     """根据评审报告优化测试用例：删除标记的重复用例 + 修复问题 + 补充遗漏"""
-    from generator import _parse_response, _deduplicate
+    from generator import _parse_response, _deduplicate, _deduplicate_by_steps
 
     total = len(testcases)
 
@@ -164,7 +191,13 @@ def optimize_testcases(client: LLMClient, requirement: str,
     before_dedup = len(result)
     result = _deduplicate(result)
     if before_dedup != len(result):
-        print(f"[INFO] 兜底去重: {before_dedup} -> {len(result)}")
+        logger.info(f"精确去重: {before_dedup} -> {len(result)}")
+
+    # 步骤语义去重
+    before_step_dedup = len(result)
+    result = _deduplicate_by_steps(result)
+    if before_step_dedup != len(result):
+        logger.info(f"步骤语义去重: {before_step_dedup} -> {len(result)}")
 
     if not result:
         print(f"[WARN] 优化后用例为空，回退使用原始用例")

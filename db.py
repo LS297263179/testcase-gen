@@ -417,24 +417,17 @@ def save_preferences(preferences: list[dict], session_id: int,
 
         for i, pref in enumerate(preferences):
             category = pref["category"]
-            # 衰减同 category 旧规则（同用户范围内）
+            # 衰减同 category 旧规则（仅在同用户范围内，避免影响其他用户）
             if user_id is not None:
                 conn.execute(
-                    "UPDATE preferences SET weight = weight * 0.8 WHERE category = ? AND active = 1 AND (user_id = ? OR user_id IS NULL)",
+                    "UPDATE preferences SET weight = weight * 0.8 WHERE category = ? AND active = 1 AND user_id = ?",
                     (category, user_id),
                 )
                 conn.execute(
-                    "UPDATE preferences SET active = 0 WHERE weight < 0.2 AND active = 1 AND (user_id = ? OR user_id IS NULL)",
+                    "UPDATE preferences SET active = 0 WHERE weight < 0.2 AND active = 1 AND user_id = ?",
                     (user_id,),
                 )
-            else:
-                conn.execute(
-                    "UPDATE preferences SET weight = weight * 0.8 WHERE category = ? AND active = 1",
-                    (category,),
-                )
-                conn.execute(
-                    "UPDATE preferences SET active = 0 WHERE weight < 0.2 AND active = 1",
-                )
+            # user_id 为 None 时不执行衰减，避免误操作全局数据
             # 插入新规则
             source_diff = json.dumps(source_diffs[i], ensure_ascii=False) if source_diffs and i < len(source_diffs) else None
             cur = conn.execute(
@@ -447,6 +440,16 @@ def save_preferences(preferences: list[dict], session_id: int,
                 "INSERT INTO preference_links (preference_id, session_id) VALUES (?, ?)",
                 (pref_id, session_id),
             )
+
+
+def get_preference(pref_id: int) -> dict | None:
+    """获取单条偏好规则"""
+    with db_read_conn() as conn:
+        row = conn.execute(
+            "SELECT id, category, pattern, weight, active, user_id FROM preferences WHERE id = ?",
+            (pref_id,),
+        ).fetchone()
+    return dict(row) if row else None
 
 
 def update_preference(pref_id: int, active: int | None = None, pattern: str | None = None):

@@ -798,7 +798,7 @@ function tpRenderFileList() {
         const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
         const ext = f.name.split('.').pop().toUpperCase();
         const pre = isImg ? `<img src="${URL.createObjectURL(f)}">` : '';
-        return `<div class="file-item">${pre}<div><div class="fn" title="${f.name}">${f.name}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="tpRemoveFile(${i})">&times;</button></div>`;
+        return `<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="tpRemoveFile(${i})">&times;</button></div>`;
     }).join('');
 }
 async function generatePoints(){
@@ -918,7 +918,7 @@ function matRenderFileList() {
         const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
         const ext = f.name.split('.').pop().toUpperCase();
         const pre = isImg ? `<img src="${URL.createObjectURL(f)}">` : '';
-        return `<div class="file-item">${pre}<div><div class="fn" title="${f.name}">${f.name}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="matRemoveFile(${i})">&times;</button></div>`;
+        return `<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="matRemoveFile(${i})">&times;</button></div>`;
     }).join('');
 }
 async function saveMaterial() {
@@ -1040,14 +1040,15 @@ fileInput.addEventListener('change',()=>{addFiles(fileInput.files);fileInput.val
 document.getElementById('requirement').addEventListener('paste',e=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const f=item.getAsFile();if(f){const ext=f.type.split('/')[1]||'png';uploadedFiles.push(new File([f],`粘贴_${Date.now()}.${ext}`,{type:f.type}));renderFileList();showToast('已添加图片');}}}});
 function addFiles(fs){for(const f of fs){if(uploadedFiles.some(x=>x.name===f.name&&x.size===f.size))continue;uploadedFiles.push(f);}renderFileList();}
 function removeFile(i){uploadedFiles.splice(i,1);renderFileList();}
-function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${f.name}">${f.name}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
+function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
 function showToast(m,t='success'){const el=document.getElementById('toast');el.textContent=m;el.className='toast '+t+' show';setTimeout(()=>el.classList.remove('show'),3000);}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 // ============================================================
 // SSE
 // ============================================================
-async function sseFetch(u,b,{onProgress,onDone}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.status===401){doLogout();throw new Error('登录已过期');}const rd=r.body.getReader(),dec=new TextDecoder();let buf='';while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress'&&onProgress)onProgress(ev.message);else if(ev.type==='done'&&onDone)onDone(ev.data);else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}}
+function sseParseLine(line,{onProgress,onDone}){if(!line.startsWith('data: '))return;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress'&&onProgress)onProgress(ev.message);else if(ev.type==='done'&&onDone)onDone(ev.data);else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}
+async function sseFetch(u,b,{onProgress,onDone}){const r=await fetch(u,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)});if(r.status===401){doLogout();throw new Error('登录已过期');}const rd=r.body.getReader(),dec=new TextDecoder();let buf='';try{while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){sseParseLine(line,{onProgress,onDone});}}}finally{rd.cancel();}if(buf.trim())sseParseLine(buf.trim(),{onProgress,onDone});}
 
 // ============================================================
 // 需求分析

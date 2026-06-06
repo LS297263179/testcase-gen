@@ -2,6 +2,7 @@
 
 import functools
 import json
+import logging
 import os
 import tempfile
 import time
@@ -9,6 +10,14 @@ import traceback
 from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
+
+# 统一日志配置
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("web")
 
 from flask import (Flask, Response, jsonify, render_template,
                    request, send_file, session, stream_with_context)
@@ -93,6 +102,13 @@ def _process_uploaded_files(files) -> tuple[list[dict], str]:
 # 全局异常处理
 # ============================================================
 
+@app.before_request
+def _log_request():
+    """记录请求日志"""
+    if request.path.startswith("/api/") and request.path != "/api/health":
+        logger.info(f"{request.method} {request.path} user={session.get('username', '-')} ip={_get_real_ip()}")
+
+
 @app.errorhandler(404)
 def not_found(e):
     """404 统一返回 JSON"""
@@ -120,6 +136,7 @@ def too_large(e):
 # ============================================================
 
 _rate_limit_store: dict[str, list[float]] = {}  # {ip: [timestamp, ...]}
+_rate_limit_lock = __import__("threading").Lock()  # 速率限制字典锁
 RATE_LIMIT_MAX = 10    # 每个窗口最多 10 次
 RATE_LIMIT_WINDOW = 60 # 窗口大小：60 秒
 _rate_limit_last_cleanup = 0.0
@@ -141,24 +158,25 @@ def _check_rate_limit(ip: str) -> bool:
     now = time.time()
     window_start = now - RATE_LIMIT_WINDOW
 
-    # 定期清理所有过期条目（每 60 秒一次），防止内存泄漏
-    if now - _rate_limit_last_cleanup > RATE_LIMIT_WINDOW:
-        _rate_limit_last_cleanup = now
-        expired_ips = [
-            k for k, v in _rate_limit_store.items()
-            if not v or v[-1] <= window_start
-        ]
-        for k in expired_ips:
-            del _rate_limit_store[k]
+    with _rate_limit_lock:
+        # 定期清理所有过期条目（每 60 秒一次），防止内存泄漏
+        if now - _rate_limit_last_cleanup > RATE_LIMIT_WINDOW:
+            _rate_limit_last_cleanup = now
+            expired_ips = [
+                k for k, v in _rate_limit_store.items()
+                if not v or v[-1] <= window_start
+            ]
+            for k in expired_ips:
+                del _rate_limit_store[k]
 
-    # 清理当前 IP 的过期时间戳
-    timestamps = _rate_limit_store.get(ip, [])
-    timestamps = [t for t in timestamps if t > window_start]
-    if len(timestamps) >= RATE_LIMIT_MAX:
-        return False
-    timestamps.append(now)
-    _rate_limit_store[ip] = timestamps
-    return True
+        # 清理当前 IP 的过期时间戳
+        timestamps = _rate_limit_store.get(ip, [])
+        timestamps = [t for t in timestamps if t > window_start]
+        if len(timestamps) >= RATE_LIMIT_MAX:
+            return False
+        timestamps.append(now)
+        _rate_limit_store[ip] = timestamps
+        return True
 
 
 # ============================================================
@@ -170,7 +188,9 @@ def api_register():
     """用户注册"""
     if not _check_rate_limit(_get_real_ip()):
         return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "请求格式错误，请发送 JSON"}), 400
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
 
@@ -178,8 +198,12 @@ def api_register():
         return jsonify({"error": "用户名和密码不能为空"}), 400
     if len(username) < 2 or len(username) > 32:
         return jsonify({"error": "用户名长度需在 2-32 个字符之间"}), 400
+    if not username.isascii() or not all(c.isalnum() or c in "-_" for c in username):
+        return jsonify({"error": "用户名只能包含字母、数字、- 和 _"}), 400
     if len(password) < 8:
         return jsonify({"error": "密码长度至少 8 个字符"}), 400
+    if len(password) > 128:
+        return jsonify({"error": "密码长度不能超过 128 个字符"}), 400
 
     try:
         user_id = db.create_user(username, password)
@@ -195,7 +219,9 @@ def api_login():
     """用户登录"""
     if not _check_rate_limit(_get_real_ip()):
         return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
-    data = request.get_json()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"error": "请求格式错误，请发送 JSON"}), 400
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
 
@@ -406,7 +432,7 @@ def api_analyze():
                 "modules": modules,
             }})
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("SSE 流处理异常")
             yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
@@ -506,7 +532,7 @@ def api_generate_points():
                 "tp_id": tp_id,
             }})
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("SSE 流处理异常")
             yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
@@ -542,7 +568,7 @@ def api_export_points():
         os.makedirs(OUTPUT_DIR, exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
-        return jsonify({"success": True, "file": path})
+        return jsonify({"success": True, "file": os.path.basename(path)})
 
     elif fmt == "xmind":
         # XMind 导出暂不可用（xmind 库 API 不兼容）
@@ -662,8 +688,16 @@ def index():
 
 @app.route("/api/health")
 def api_health():
-    """健康检查端点"""
-    return jsonify({"status": "ok"})
+    """健康检查端点（检查数据库连通性）"""
+    checks = {"status": "ok"}
+    try:
+        with db.db_read_conn() as conn:
+            conn.execute("SELECT 1")
+        checks["database"] = "ok"
+    except Exception as e:
+        checks["status"] = "degraded"
+        checks["database"] = f"error: {e}"
+    return jsonify(checks), 200 if checks["status"] == "ok" else 503
 
 
 @app.route("/api/generate", methods=["POST"])
@@ -677,19 +711,33 @@ def api_generate():
 
     is_multipart = request.content_type and "multipart/form-data" in request.content_type
 
+    _VALID_PRIORITIES = {"P0", "P1", "P2", "P3"}
+    _VALID_CASE_TYPES = {"功能测试", "边界测试", "异常测试", "兼容性测试", "性能测试", "安全测试", "UI测试"}
+    _MAX_REQUIREMENT_LEN = 100_000  # 需求文本最大 10 万字符
+
     requirement = ""
     try:
         material_ids = None
         test_point_id = None
         if is_multipart:
             requirement = request.form.get("requirement", "")
+            if len(requirement) > _MAX_REQUIREMENT_LEN:
+                return jsonify({"error": f"需求文本过长，最大 {_MAX_REQUIREMENT_LEN} 字符"}), 400
             priority = request.form.get("priority")
+            if priority and priority not in _VALID_PRIORITIES:
+                return jsonify({"error": f"无效的优先级: {priority}，可选值: P0/P1/P2/P3"}), 400
             ct = request.form.get("case_types")
             if ct:
                 case_types = [x.strip() for x in ct.split(",") if x.strip()]
+                invalid = [t for t in case_types if t not in _VALID_CASE_TYPES]
+                if invalid:
+                    return jsonify({"error": f"无效的用例类型: {', '.join(invalid)}"}), 400
             material_ids_raw = request.form.get("material_ids", "")
             if material_ids_raw:
-                material_ids = [int(x) for x in material_ids_raw.split(",") if x.strip()]
+                try:
+                    material_ids = [int(x) for x in material_ids_raw.split(",") if x.strip()]
+                except ValueError:
+                    return jsonify({"error": "material_ids 格式错误，应为逗号分隔的数字"}), 400
             tp_id_raw = request.form.get("test_point_id", "")
             if tp_id_raw and tp_id_raw.strip():
                 try:
@@ -826,7 +874,7 @@ def api_generate():
             yield _sse({"type": "done", "data": result})
 
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("SSE 流处理异常")
             yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
@@ -873,7 +921,7 @@ def api_review():
                 "report_path": str(report_path),
             }})
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("SSE 流处理异常")
             yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
@@ -919,7 +967,7 @@ def api_optimize():
                 "files": {"excel": excel_path, "markdown": md_path},
             }})
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("SSE 流处理异常")
             yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
@@ -950,8 +998,8 @@ def api_download(filename):
 @login_required
 def api_history():
     """列出历史记录"""
-    limit = request.args.get("limit", 50, type=int)
-    offset = request.args.get("offset", 0, type=int)
+    limit = min(request.args.get("limit", 50, type=int), 200)  # 上限 200 条
+    offset = max(request.args.get("offset", 0, type=int), 0)
     sessions = db.list_sessions(limit=limit, offset=offset, user_id=session["user_id"])
     return jsonify({"sessions": sessions})
 
@@ -1044,7 +1092,7 @@ def api_preferences_extract():
                 "count": len(prefs),
             }})
         except Exception as e:
-            traceback.print_exc()
+            logger.exception("SSE 流处理异常")
             yield _sse({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
     return Response(
@@ -1058,6 +1106,12 @@ def api_preferences_extract():
 @login_required
 def api_preferences_update(pref_id):
     """更新偏好规则（启用/禁用/修改）"""
+    pref = db.get_preference(pref_id)
+    if not pref:
+        return jsonify({"error": "规则不存在"}), 404
+    # 所有权校验：只允许修改自己的偏好或无主偏好
+    if pref.get("user_id") is not None and pref.get("user_id") != session.get("user_id"):
+        return jsonify({"error": "无权操作"}), 403
     data = request.get_json()
     active = data.get("active")
     pattern = data.get("pattern")
@@ -1069,5 +1123,10 @@ def api_preferences_update(pref_id):
 @login_required
 def api_preferences_delete(pref_id):
     """删除偏好规则"""
+    pref = db.get_preference(pref_id)
+    if not pref:
+        return jsonify({"error": "规则不存在"}), 404
+    if pref.get("user_id") is not None and pref.get("user_id") != session.get("user_id"):
+        return jsonify({"error": "无权操作"}), 403
     db.delete_preference(pref_id)
     return jsonify({"success": True})
