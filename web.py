@@ -63,9 +63,6 @@ def login_required(f):
 db.init_db()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片）
 
-# 启动时清理过期输出文件
-_cleanup_old_output_files()
-
 OUTPUT_DIR = "./output"
 OUTPUT_FILE_MAX_AGE_DAYS = 7  # 输出文件保留天数
 
@@ -89,11 +86,14 @@ def _cleanup_old_output_files():
         logger.info(f"已清理 {cleaned} 个过期输出文件（>{OUTPUT_FILE_MAX_AGE_DAYS}天）")
 
 
+# 启动时清理过期输出文件
+_cleanup_old_output_files()
+
+
 def _process_uploaded_files(files) -> tuple[list[dict], str]:
     """处理上传的文件，返回 (images, text_content)。
     图片转为 base64，Excel/TXT 读取为文本。
     """
-    from reader import read_excel, read_text
     images = []
     text_parts = []
     for f in files:

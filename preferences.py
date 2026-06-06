@@ -2,8 +2,7 @@
 
 import json
 import re
-
-from llm_client import LLMClient
+from typing import Any
 
 # 比较字段列表
 _DIFF_FIELDS = ["title", "precondition", "steps", "expected", "priority", "type"]
