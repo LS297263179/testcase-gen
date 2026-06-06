@@ -103,7 +103,7 @@ async function generatePoints(){
         const fd=new FormData();fd.append('requirement',req);
         if(tpSelectedMats.size>0)fd.append('material_ids',[...tpSelectedMats].join(','));
         for(const f of tpUploadedFiles)fd.append('files',f);
-        const resp=await fetch('/api/generate-points',{method:'POST',body:fd});
+        const resp=await fetch('/api/generate-points',{method:'POST',headers:_headers(),body:fd});
         if(resp.status===401){doLogout();throw new Error('登录已过期');}
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
         while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('tpLoadingText').textContent=ev.message;else if(ev.type==='done'){testPointsData=ev.data.points||[];renderTestPoints(testPointsData);showToast(`生成完成！共 ${ev.data.total} 个测试点`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
@@ -447,7 +447,7 @@ async function doGenerate(useAnalysis){
         if(genSelectedMats.size>0)fd.append('material_ids',[...genSelectedMats].join(','));
         if(genSelectedTp!==null)fd.append('test_point_id',genSelectedTp);
         for(const f of uploadedFiles)fd.append('files',f);
-        const resp=await fetch('/api/generate',{method:'POST',body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
+        const resp=await fetch('/api/generate',{method:'POST',headers:_headers(),body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
         while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;originalTestcases=[];renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
     }catch(e){showToast(e.message,'error');}finally{isGenerating=false;btn.disabled=false;btn.innerHTML='&#9889; 直接生成';document.getElementById('loading').style.display='none';}
