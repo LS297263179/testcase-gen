@@ -3,6 +3,11 @@
 # 复制此文件为 config.yaml 并填入你的 API 信息
 # ============================================================
 
+# ---------- 安全配置 ----------
+# 用于 Flask session 加密，重启后保持登录状态
+# 请替换为你自己生成的随机字符串（可以用 python -c "import secrets; print(secrets.token_hex(32))" 生成）
+secret_key: "your-random-secret-key-here"
+
 # ---------- 测试用例生成模型 ----------
 generate:
   api_type: "anthropic"                                    # anthropic / openai

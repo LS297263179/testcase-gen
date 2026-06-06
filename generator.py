@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 
 from llm_client import LLMClient
+from output import _normalize_steps, _strip_trailing_punctuation
 
 # ============================================================
 # Step 1: 需求分析 Prompt — 拆解模块和测试维度
@@ -533,38 +534,6 @@ def _parse_response(raw: str) -> list[dict]:
             return _validate_testcases(testcases)
 
     raise ValueError(f"无法解析 LLM 返回的 JSON")
-
-
-def _strip_trailing_punctuation(text: str) -> str:
-    """去除文本结尾的标点符号"""
-    if not text:
-        return text
-    text = text.rstrip()
-    while text and text[-1] in ("。", ".", "，", ",", "；", ";", "：", ":"):
-        text = text[:-1].rstrip()
-    return text
-
-
-def _normalize_steps(steps: str) -> str:
-    """统一测试步骤格式：去除每步结尾的标点"""
-    if not steps:
-        return steps
-    lines = steps.split("\n")
-    normalized = []
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        m = re.match(r'^(\d+[.、]\s*)', line)
-        if m:
-            prefix = m.group(1)
-            content = line[len(prefix):].strip()
-            while content and content[-1] in ("。", ".", "，", ",", "；", ";", "：", ":"):
-                content = content[:-1].rstrip()
-            normalized.append(prefix + content)
-        else:
-            normalized.append(line)
-    return "\n".join(normalized)
 
 
 def _validate_testcases(testcases: list[dict]) -> list[dict]:

@@ -11,7 +11,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from generator import generate_testcases
-from llm_client import LLMClient, load_config
+from llm_client import build_client, load_config
 from output import to_excel, to_markdown
 from reader import read_requirement
 from reviewer import review_testcases
@@ -25,19 +25,6 @@ logging.basicConfig(
     encoding="utf-8",
 )
 logger = logging.getLogger(__name__)
-
-
-def build_client(cfg: dict) -> LLMClient:
-    return LLMClient(
-        base_url=cfg["base_url"],
-        api_key=cfg["api_key"],
-        model=cfg["model"],
-        api_type=cfg.get("api_type", "openai"),
-        temperature=cfg.get("temperature", 0.3),
-        max_tokens=cfg.get("max_tokens", 4096),
-        max_retries=cfg.get("max_retries", 3),
-        enable_thinking=cfg.get("enable_thinking", False),
-    )
 
 
 def print_summary(testcases: list[dict]):

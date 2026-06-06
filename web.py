@@ -4,7 +4,9 @@ import functools
 import json
 import os
 import tempfile
+import time
 import traceback
+from collections import defaultdict
 from datetime import datetime
 from pathlib import Path
 
@@ -12,7 +14,7 @@ from flask import (Flask, Response, jsonify, render_template,
                    request, send_file, session, stream_with_context)
 
 import db
-from llm_client import LLMClient, load_config
+from llm_client import build_client, load_config
 from output import to_excel, to_markdown
 from preferences import compute_diffs, extract_preferences
 from reader import (get_image_media_type, image_to_base64, is_image,
@@ -20,7 +22,18 @@ from reader import (get_image_media_type, image_to_base64, is_image,
 from reviewer import optimize_testcases, review_testcases
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
+# secret_key: 优先从环境变量读取，其次从 config.yaml，最后随机生成（重启后失效）
+_secret_from_env = os.environ.get("FLASK_SECRET_KEY")
+_secret_from_cfg = None
+try:
+    import yaml
+    _cfg_path = Path(__file__).parent / "config.yaml"
+    if _cfg_path.exists():
+        with open(_cfg_path, encoding="utf-8") as _f:
+            _secret_from_cfg = yaml.safe_load(_f).get("secret_key")
+except Exception:
+    pass
+app.secret_key = _secret_from_env or _secret_from_cfg or os.urandom(24)
 
 
 # ============================================================
@@ -45,12 +58,35 @@ OUTPUT_DIR = "./output"
 
 
 # ============================================================
+# 速率限制（基于 IP，保护登录/注册接口）
+# ============================================================
+
+_rate_limit_store = defaultdict(list)  # {ip: [timestamp, ...]}
+RATE_LIMIT_MAX = 10    # 每个窗口最多 10 次
+RATE_LIMIT_WINDOW = 60 # 窗口大小：60 秒
+
+
+def _check_rate_limit(ip: str) -> bool:
+    """检查 IP 是否超过速率限制，返回 True 表示允许，False 表示拒绝"""
+    now = time.time()
+    window_start = now - RATE_LIMIT_WINDOW
+    # 清理过期记录
+    _rate_limit_store[ip] = [t for t in _rate_limit_store[ip] if t > window_start]
+    if len(_rate_limit_store[ip]) >= RATE_LIMIT_MAX:
+        return False
+    _rate_limit_store[ip].append(now)
+    return True
+
+
+# ============================================================
 # 认证 API
 # ============================================================
 
 @app.route("/api/register", methods=["POST"])
 def api_register():
     """用户注册"""
+    if not _check_rate_limit(request.remote_addr):
+        return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
     data = request.get_json()
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
@@ -59,8 +95,8 @@ def api_register():
         return jsonify({"error": "用户名和密码不能为空"}), 400
     if len(username) < 2 or len(username) > 32:
         return jsonify({"error": "用户名长度需在 2-32 个字符之间"}), 400
-    if len(password) < 4:
-        return jsonify({"error": "密码长度至少 4 个字符"}), 400
+    if len(password) < 8:
+        return jsonify({"error": "密码长度至少 8 个字符"}), 400
 
     try:
         user_id = db.create_user(username, password)
@@ -74,6 +110,8 @@ def api_register():
 @app.route("/api/login", methods=["POST"])
 def api_login():
     """用户登录"""
+    if not _check_rate_limit(request.remote_addr):
+        return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
     data = request.get_json()
     username = (data.get("username") or "").strip()
     password = data.get("password") or ""
@@ -518,6 +556,9 @@ def api_materials_get(mid):
 @login_required
 def api_materials_delete(mid):
     """删除项目资料"""
+    m = db.get_material(mid)
+    if not m or m["user_id"] != session["user_id"]:
+        return jsonify({"error": "资料不存在"}), 404
     db.delete_material(mid)
     return jsonify({"success": True})
 
@@ -548,21 +589,11 @@ def api_test_points_get(tp_id):
 @login_required
 def api_test_points_delete(tp_id):
     """删除测试点记录"""
+    tp = db.get_test_points(tp_id)
+    if not tp or tp["user_id"] != session["user_id"]:
+        return jsonify({"error": "记录不存在"}), 404
     db.delete_test_points(tp_id)
     return jsonify({"success": True})
-
-
-def build_client(cfg: dict) -> LLMClient:
-    return LLMClient(
-        base_url=cfg["base_url"],
-        api_key=cfg["api_key"],
-        model=cfg["model"],
-        api_type=cfg.get("api_type", "openai"),
-        temperature=cfg.get("temperature", 0.3),
-        max_tokens=cfg.get("max_tokens", 4096),
-        max_retries=cfg.get("max_retries", 3),
-        enable_thinking=cfg.get("enable_thinking", False),
-    )
 
 
 def _load_model_config() -> dict:
@@ -911,16 +942,19 @@ def api_history():
 @login_required
 def api_history_detail(session_id):
     """获取单条历史记录"""
-    session = db.get_session(session_id)
-    if not session:
+    record = db.get_session(session_id)
+    if not record or record.get("user_id") != session["user_id"]:
         return jsonify({"error": "记录不存在"}), 404
-    return jsonify(session)
+    return jsonify(record)
 
 
 @app.route("/api/history/<int:session_id>", methods=["DELETE"])
 @login_required
 def api_history_delete(session_id):
     """删除历史记录"""
+    record = db.get_session(session_id)
+    if not record or record.get("user_id") != session["user_id"]:
+        return jsonify({"error": "记录不存在"}), 404
     db.delete_session(session_id)
     return jsonify({"success": True})
 
@@ -929,6 +963,9 @@ def api_history_delete(session_id):
 @login_required
 def api_history_save_review(session_id):
     """为历史记录保存评审报告"""
+    record = db.get_session(session_id)
+    if not record or record.get("user_id") != session["user_id"]:
+        return jsonify({"error": "记录不存在"}), 404
     data = request.get_json()
     review = data.get("review", "")
     if not review:

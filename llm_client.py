@@ -124,3 +124,17 @@ class LLMClient:
         msg = response.choices[0].message
         # 思考模式下，thinking 内容可能在 reasoning_content 字段
         return msg.content
+
+
+def build_client(cfg: dict) -> LLMClient:
+    """根据配置字典创建 LLMClient 实例"""
+    return LLMClient(
+        base_url=cfg["base_url"],
+        api_key=cfg["api_key"],
+        model=cfg["model"],
+        api_type=cfg.get("api_type", "openai"),
+        temperature=cfg.get("temperature", 0.3),
+        max_tokens=cfg.get("max_tokens", 4096),
+        max_retries=cfg.get("max_retries", 3),
+        enable_thinking=cfg.get("enable_thinking", False),
+    )
