@@ -40,8 +40,8 @@ try:
     if _cfg_path.exists():
         with open(_cfg_path, encoding="utf-8") as _f:
             _secret_from_cfg = yaml.safe_load(_f).get("secret_key")
-except Exception:
-    pass
+except Exception as e:
+    logger.debug(f"加载 config.yaml 失败（使用默认配置）: {e}")
 app.secret_key = _secret_from_env or _secret_from_cfg or os.urandom(24)
 
 

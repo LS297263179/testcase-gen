@@ -3,12 +3,15 @@
 import base64
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -42,7 +45,10 @@ def _get_fernet_key() -> bytes:
             with open(cfg_path, encoding="utf-8") as f:
                 secret = yaml.safe_load(f).get("secret_key", "")
         if not secret:
-            secret = os.environ.get("FLASK_SECRET_KEY", "default-key-change-me")
+            secret = os.environ.get("FLASK_SECRET_KEY", "")
+        if not secret:
+            secret = base64.urlsafe_b64encode(os.urandom(32)).decode()
+            logger.warning("未配置 FLASK_SECRET_KEY，使用随机密钥（重启后 API Key 加密密钥将失效）")
         # 确保生成合法的 32 字节 URL-safe base64 密钥
         derived = hashlib.sha256(secret.encode()).digest()
         new_key = base64.urlsafe_b64encode(derived).decode()
@@ -61,10 +67,11 @@ def encrypt_api_key(plaintext: str) -> str:
         return f.encrypt(plaintext.encode()).decode()
     except ImportError:
         # cryptography 未安装时不做加密，返回原文
-        print("[WARN] cryptography 未安装，API Key 将以明文存储。建议: pip install cryptography")
+        logger.warning("cryptography 未安装，API Key 将以明文存储。建议: pip install cryptography")
         return plaintext
-    except Exception:
-        return plaintext  # 加密失败时返回原文，不阻断流程
+    except Exception as e:
+        logger.warning(f"API Key 加密失败，返回原文: {e}")
+        return plaintext
 
 
 def decrypt_api_key(ciphertext: str) -> str:
@@ -75,8 +82,9 @@ def decrypt_api_key(ciphertext: str) -> str:
         from cryptography.fernet import Fernet
         f = Fernet(_get_fernet_key())
         return f.decrypt(ciphertext.encode()).decode()
-    except Exception:
-        return ciphertext  # 解密失败时返回原文（可能是旧的明文 key）
+    except Exception as e:
+        logger.debug(f"API Key 解密失败，返回原文: {e}")
+        return ciphertext
 
 _DB_PATH = str(Path(__file__).parent / "data" / "data.db")
 _write_lock = threading.Lock()  # 写操作互斥锁，防止 SQLite 写冲突
@@ -155,7 +163,7 @@ def _migrate_old_db():
                 old_conn.close()
                 return
 
-            print(f"[迁移] 正在将旧数据库 ({old_db_path}) 合并到 {_DB_PATH} ...")
+            logger.info(f"正在将旧数据库 ({old_db_path}) 合并到 {_DB_PATH} ...")
             with db_conn() as new_conn:
                 for u in old_users:
                     if u["username"] not in new_users:
@@ -164,7 +172,7 @@ def _migrate_old_db():
                             (u["username"], u["password_hash"], u["created_at"]),
                         )
                         id_map[u["id"]] = cur.lastrowid
-                        print(f"  [迁移] 用户 {u['username']} -> id={cur.lastrowid}")
+                        logger.info(f"  用户 {u['username']} -> id={cur.lastrowid}")
 
                 # 迁移 sessions
                 for s in old_conn.execute("SELECT * FROM sessions").fetchall():
@@ -184,20 +192,20 @@ def _migrate_old_db():
                         (new_uid, m["title"], m["content"], m["created_at"]),
                     )
 
-            print(f"[迁移] 完成，旧数据库已合并")
+            logger.info("旧数据库已合并完成")
         except Exception as e:
-            print(f"[迁移] 合并失败: {e}")
+            logger.warning(f"旧数据库合并失败: {e}")
         finally:
             old_conn.close()
     else:
         # 新库为空，直接复制旧库
-        print(f"[迁移] 新数据库为空，正在从 {old_db_path} 迁移...")
+        logger.info(f"新数据库为空，正在从 {old_db_path} 迁移...")
         import shutil
         try:
             shutil.copy2(old_db_path, _DB_PATH)
-            print("[迁移] 完成")
+            logger.info("数据库迁移完成")
         except Exception as e:
-            print(f"[迁移] 失败: {e}")
+            logger.warning(f"数据库迁移失败: {e}")
 
 
 def init_db():
@@ -777,7 +785,8 @@ def get_model_config() -> dict:
             "generate": cfg.get("generate", {}),
             "review": cfg.get("review", {}),
         }
-    except Exception:
+    except Exception as e:
+        logger.debug(f"加载模型配置失败（使用默认）: {e}")
         return {}
 
 

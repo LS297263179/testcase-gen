@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from typing import TYPE_CHECKING
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from llm_client import LLMClient
@@ -113,5 +116,6 @@ def extract_preferences(diffs: list[dict], client: LLMClient) -> list[dict]:
             if isinstance(p, dict) and p.get("category") and p.get("pattern"):
                 valid.append({"category": p["category"], "pattern": p["pattern"]})
         return valid
-    except Exception:
+    except Exception as e:
+        logger.debug(f"偏好解析失败: {e}")
         return []

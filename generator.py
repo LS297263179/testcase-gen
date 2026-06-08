@@ -341,7 +341,8 @@ def _analyze_modules(client: LLMClient, requirement: str,
                 complexity = "medium"
             if modules and isinstance(modules, list):
                 return complexity, modules
-        except Exception:
+        except Exception as e:
+            logger.debug(f"分析需求结构失败 (attempt {attempt+1}): {e}")
             if attempt < 2:
                 time.sleep(2 ** attempt)
             continue
@@ -375,7 +376,8 @@ def _generate_for_module(client: LLMClient, requirement: str,
             return _parse_response(raw)
         except (ValueError, json.JSONDecodeError):
             continue
-        except Exception:
+        except Exception as e:
+            logger.warning(f"LLM 生成用例失败 (attempt {attempt+1}): {e}")
             if attempt < 2:
                 time.sleep(2 ** attempt)
                 continue
@@ -599,7 +601,8 @@ def _try_json5_loads(s: str):
     try:
         import json5
         return json5.loads(s)
-    except Exception:
+    except Exception as e:
+        logger.debug(f"json5 解析失败: {e}")
         return None
 
 
