@@ -1,7 +1,7 @@
 // ============================================================
 // 认证
 // ============================================================
-function showAuthError(m){const e=document.getElementById('authError');e.textContent=m;e.style.display='block';}
+function showAuthError(m){const e=document.getElementById('authError');e.innerHTML='<span class="auth-error-icon">⚠</span>'+esc(m);e.style.display='block';e.style.animation='none';e.offsetHeight;e.style.animation='';}
 function hideAuthError(){document.getElementById('authError').style.display='none';}
 function showLogin(){hideAuthError();document.getElementById('loginForm').style.display='block';document.getElementById('registerForm').style.display='none';}
 function showRegister(){hideAuthError();document.getElementById('loginForm').style.display='none';document.getElementById('registerForm').style.display='block';}
@@ -195,7 +195,7 @@ async function loadTpRecord(id){
     }catch(e){showToast(e.message,'error');}
 }
 async function deleteTpRecord(id){
-    if(!confirm('确定删除？'))return;
+    if(!await showConfirm('确定删除？',{danger:true}))return;
     try{await authFetch('/api/test-points/'+id,{method:'DELETE'});showToast('已删除');loadTpHistory();}catch(e){showToast(e.message,'error');}
 }
 
@@ -283,7 +283,7 @@ async function toggleMatCard(id) {
     } catch (e) { showToast('加载失败', 'error'); }
 }
 async function deleteMaterial(id) {
-    if (!confirm('确定删除这条材料？')) return;
+    if (!await showConfirm('确定删除这条材料？',{danger:true})) return;
     try { await authFetch('/api/materials/' + id, { method: 'DELETE' }); showToast('已删除'); loadMaterials(); }
     catch (e) { showToast(e.message, 'error'); }
 }
@@ -340,7 +340,9 @@ document.getElementById('requirement').addEventListener('paste',e=>{const items=
 function addFiles(fs){for(const f of fs){if(uploadedFiles.some(x=>x.name===f.name&&x.size===f.size))continue;uploadedFiles.push(f);}renderFileList();}
 function removeFile(i){uploadedFiles.splice(i,1);renderFileList();}
 function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
-function showToast(m,t='success'){const el=document.getElementById('toast');el.textContent=m;el.className='toast '+t+' show';setTimeout(()=>el.classList.remove('show'),3000);}
+function showToast(m,t='success'){const c=document.getElementById('toastContainer');const icons={success:'✓',error:'✕',warning:'⚠'};const el=document.createElement('div');el.className='toast '+t;el.innerHTML=`<span class="toast-icon">${icons[t]||icons.success}</span><span class="toast-msg">${esc(m)}</span><button class="toast-close" onclick="dismissToast(this.parentElement)">×</button><div class="toast-progress" style="width:100%"></div>`;c.appendChild(el);requestAnimationFrame(()=>{el.classList.add('show');const pb=el.querySelector('.toast-progress');if(pb){pb.style.transition='width 3s linear';requestAnimationFrame(()=>{pb.style.width='0%';});}});const timer=setTimeout(()=>dismissToast(el),3500);el._timer=timer;}
+function dismissToast(el){if(!el||el._dismissed)return;el._dismissed=true;clearTimeout(el._timer);el.classList.remove('show');el.classList.add('hiding');setTimeout(()=>el.remove(),400);}
+function showConfirm(msg,{title='确认操作',okText='确定',cancelText='取消',danger=false}={}){return new Promise(resolve=>{const overlay=document.createElement('div');overlay.className='confirm-overlay';const iconClass=danger?'danger':'warn';const iconEmoji=danger?'🗑️':'⚠️';overlay.innerHTML=`<div class="confirm-box"><div class="confirm-icon ${iconClass}">${iconEmoji}</div><div class="confirm-title">${esc(title)}</div><div class="confirm-msg">${esc(msg)}</div><div class="confirm-actions"><button class="btn-cancel">${esc(cancelText)}</button><button class="btn-ok${danger?' danger':''}">${esc(okText)}</button></div></div>`;document.body.appendChild(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));const cleanup=(result)=>{overlay.classList.remove('show');setTimeout(()=>overlay.remove(),300);resolve(result);};overlay.querySelector('.btn-cancel').onclick=()=>cleanup(false);overlay.querySelector('.btn-ok').onclick=()=>cleanup(true);overlay.addEventListener('click',e=>{if(e.target===overlay)cleanup(false);});});}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 // ============================================================
@@ -509,9 +511,9 @@ function batchChangePriority(){
     renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});
     showToast(`已将 ${selectedRows.size} 条用例改为 ${val}`);
 }
-function batchDelete(){
+async function batchDelete(){
     if(!selectedRows.size){showToast('请先选择用例','error');return;}
-    if(!confirm(`确定删除 ${selectedRows.size} 条用例？`))return;
+    if(!await showConfirm(`确定删除 ${selectedRows.size} 条用例？`,{danger:true}))return;
     const sorted=[...selectedRows].sort((a,b)=>b-a);sorted.forEach(i=>currentTestcases.splice(i,1));
     currentTestcases.forEach((t,j)=>{t.id='TC_'+String(j+1).padStart(3,'0');});
     renderResult({testcases:currentTestcases,count:currentTestcases.length,files:currentFiles,session_id:currentSessionId,input:{}});
@@ -542,7 +544,7 @@ function showDiff(oc,nc){
 function toggleHistory(){const s=document.getElementById('historySidebar'),o=document.getElementById('sidebarOverlay');if(s.classList.contains('open')){s.classList.remove('open');o.classList.remove('show');}else{s.classList.add('open');o.classList.add('show');loadHistory();}}
 async function loadHistory(){const l=document.getElementById('historyList');try{const r=await authFetch('/api/history?limit=50');const d=await r.json();const ss=d.sessions||[];if(!ss.length){l.innerHTML='<div class="history-empty">暂无历史记录</div>';return;}l.innerHTML=ss.map(s=>`<div class="history-item"><div class="h-time">${esc(s.created_at)}</div><div class="h-preview" title="${esc(s.requirement)}">${esc(s.requirement_preview)}</div><div class="h-meta"><span>${s.tc_count} 条</span>${s.priority?'<span>'+esc(s.priority)+'</span>':''}</div><div class="h-actions"><button onclick="loadSession(${s.id})">加载</button><button class="del-btn" onclick="deleteSession(${s.id},event)">删除</button></div></div>`).join('');}catch(e){l.innerHTML='<div class="history-empty">加载失败</div>';}}
 async function loadSession(id){try{const r=await authFetch('/api/history/'+id);if(!r.ok)throw new Error('记录不存在');const s=await r.json();document.getElementById('requirement').value=s.requirement||'';if(s.priority)document.getElementById('priority').value=s.priority;if(s.case_types)document.getElementById('caseTypes').value=s.case_types.join(',');currentTestcases=s.testcases;currentRequirement=s.requirement;currentSessionId=s.id;currentReview=s.review_report||'';currentFiles={};originalTestcases=[];renderResult({testcases:s.testcases,count:s.testcases.length,files:{},session_id:s.id,input:{has_text:!!s.requirement,image_count:s.images?s.images.length:0,image_names:s.images?s.images.map(i=>i.filename||''):[]}});if(currentReview){document.getElementById('reviewContent').textContent=currentReview;document.getElementById('reviewPanel').style.display='block';}toggleHistory();showToast('已加载 #'+id);document.getElementById('result').scrollIntoView({behavior:'smooth'});}catch(e){showToast(e.message,'error');}}
-async function deleteSession(id,ev){ev.stopPropagation();if(!confirm('确定删除？'))return;try{await authFetch('/api/history/'+id,{method:'DELETE'});showToast('已删除');loadHistory();}catch(e){showToast(e.message,'error');}}
+async function deleteSession(id,ev){ev.stopPropagation();if(!await showConfirm('确定删除这条历史记录？',{danger:true}))return;try{await authFetch('/api/history/'+id,{method:'DELETE'});showToast('已删除');loadHistory();}catch(e){showToast(e.message,'error');}}
 
 // ============================================================
 // 内联编辑
@@ -558,4 +560,4 @@ async function savePreferences(){if(!originalTestcases.length){showToast('没有
 function togglePrefPanel(){const c=document.getElementById('prefContent'),t=document.getElementById('prefToggle');if(c.style.display==='none'){c.style.display='block';t.innerHTML='收起 &#9652;';loadPreferences();}else{c.style.display='none';t.innerHTML='展开 &#9662;';}}
 async function loadPreferences(){const l=document.getElementById('prefList');try{const r=await authFetch('/api/preferences');const d=await r.json();const ps=d.preferences||[];if(!ps.length){l.innerHTML='<div style="text-align:center;color:#bbb;padding:16px;font-size:12px;">暂无偏好规则</div>';return;}l.innerHTML=ps.map(p=>`<div class="pref-item ${p.active?'':'inactive'}"><span class="pref-cat">${esc(p.category)}</span><span class="pref-pattern">${esc(p.pattern)}</span><span class="pref-weight">权重 ${p.weight.toFixed(1)}</span><button onclick="togglePref(${p.id},${p.active?0:1})">${p.active?'禁用':'启用'}</button><button onclick="deletePref(${p.id})" style="color:#d32f2f;">删除</button></div>`).join('');}catch(e){l.innerHTML='<div style="text-align:center;color:#d32f2f;padding:16px;">加载失败</div>';}}
 async function togglePref(id,a){try{await authFetch('/api/preferences/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:a})});showToast(a?'已启用':'已禁用');loadPreferences();}catch(e){showToast(e.message,'error');}}
-async function deletePref(id){if(!confirm('确定删除？'))return;try{await authFetch('/api/preferences/'+id,{method:'DELETE'});showToast('已删除');loadPreferences();}catch(e){showToast(e.message,'error');}}
+async function deletePref(id){if(!await showConfirm('确定删除这条偏好规则？',{danger:true}))return;try{await authFetch('/api/preferences/'+id,{method:'DELETE'});showToast('已删除');loadPreferences();}catch(e){showToast(e.message,'error');}}
