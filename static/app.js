@@ -33,6 +33,7 @@ function switchPage(name){
     if(name==='testpoints'){loadTpMaterials();loadTpHistory();}
     if(name==='generator'){loadGenMaterials();loadGenTestPoints();}
     if(name==='materials')loadMaterials();
+    if(name==='xmind2case')initXmind2case();
 }
 
 // ============================================================
@@ -87,7 +88,7 @@ function tpRenderFileList() {
     tpFileList.innerHTML = tpUploadedFiles.map((f, i) => {
         const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
         const ext = f.name.split('.').pop().toUpperCase();
-        const pre = isImg ? `<img src="${URL.createObjectURL(f)}">` : '';
+        const pre = isImg ? `<img src="${URL.createObjectURL(f)}" style="cursor:zoom-in" onclick="viewImage(this.src)">` : '';
         return `<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="tpRemoveFile(${i})">&times;</button></div>`;
     }).join('');
 }
@@ -203,6 +204,8 @@ async function deleteTpRecord(id){
 // 项目材料
 // ============================================================
 let matUploadedFiles = [];
+let matEditingId = null;
+let matExistingImages = [];
 const matUploadArea = document.getElementById('matUploadArea');
 const matFileInput = document.getElementById('matFileInput');
 const matFileList = document.getElementById('matFileList');
@@ -211,16 +214,76 @@ matUploadArea.addEventListener('dragover', e => { e.preventDefault(); matUploadA
 matUploadArea.addEventListener('dragleave', () => matUploadArea.classList.remove('dragover'));
 matUploadArea.addEventListener('drop', e => { e.preventDefault(); matUploadArea.classList.remove('dragover'); matAddFiles(e.dataTransfer.files); });
 matFileInput.addEventListener('change', () => { matAddFiles(matFileInput.files); matFileInput.value = ''; });
+document.getElementById('matContent').addEventListener('paste', e => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+        if (item.type.startsWith('image/')) {
+            e.preventDefault();
+            const f = item.getAsFile();
+            if (f) { const ext = f.type.split('/')[1] || 'png'; matUploadedFiles.push(new File([f], `粘贴_${Date.now()}.${ext}`, { type: f.type })); matRenderFileList(); showToast('已添加图片'); }
+        }
+    }
+});
 function matAddFiles(fs) { for (const f of fs) { if (matUploadedFiles.some(x => x.name === f.name && x.size === f.size)) continue; matUploadedFiles.push(f); } matRenderFileList(); }
 function matRemoveFile(i) { matUploadedFiles.splice(i, 1); matRenderFileList(); }
 function matRenderFileList() {
-    if (!matUploadedFiles.length) { matFileList.innerHTML = ''; return; }
-    matFileList.innerHTML = matUploadedFiles.map((f, i) => {
-        const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
-        const ext = f.name.split('.').pop().toUpperCase();
-        const pre = isImg ? `<img src="${URL.createObjectURL(f)}">` : '';
-        return `<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="matRemoveFile(${i})">&times;</button></div>`;
-    }).join('');
+    let html = '';
+    if (matEditingId && matExistingImages.length) {
+        html = matExistingImages.map((img, i) => {
+            const src = `data:${img.media_type};base64,${img.data}`;
+            return `<div class="file-item" data-type="existing" data-index="${i}"><img src="${src}" style="cursor:zoom-in"><div><div class="fn" title="${esc(img.filename||'')}">${esc(img.filename||'已有图片')}</div><span class="ft">图片</span></div><button class="rb" data-action="remove-existing" data-index="${i}">&times;</button></div>`;
+        }).join('');
+    }
+    if (matUploadedFiles.length) {
+        html += matUploadedFiles.map((f, i) => {
+            const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
+            const ext = f.name.split('.').pop().toUpperCase();
+            const pre = isImg ? `<img src="${URL.createObjectURL(f)}" style="cursor:zoom-in">` : '';
+            return `<div class="file-item" data-type="new" data-index="${i}">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" data-action="remove-new" data-index="${i}">&times;</button></div>`;
+        }).join('');
+    }
+    matFileList.innerHTML = html;
+}
+matFileList.addEventListener('click', e => {
+    const btn = e.target.closest('[data-action]');
+    const img = e.target.closest('img');
+    if (btn) {
+        e.stopPropagation();
+        const i = parseInt(btn.dataset.index);
+        if (btn.dataset.action === 'remove-existing') { matExistingImages.splice(i, 1); matRenderFileList(); }
+        else if (btn.dataset.action === 'remove-new') { matUploadedFiles.splice(i, 1); matRenderFileList(); }
+    } else if (img) {
+        viewImage(img.src);
+    }
+});
+async function editMaterial(id) {
+    try {
+        const r = await authFetch('/api/materials/' + id);
+        const text = await r.text();
+        if (!r.ok) { showToast(JSON.parse(text).error || '加载失败', 'error'); return; }
+        const m = JSON.parse(text);
+        document.getElementById('matTitle').value = m.title || '';
+        document.getElementById('matContent').value = m.content || '';
+        matEditingId = id;
+        matExistingImages = m.images || [];
+        matUploadedFiles = [];
+        matRenderFileList();
+        document.getElementById('matFormTitle').textContent = '编辑项目材料';
+        document.getElementById('btnSaveMat').innerHTML = '&#128190; 更新材料';
+        document.getElementById('btnCancelMat').style.display = '';
+    } catch (e) { console.error('editMaterial error:', e); showToast('加载失败: ' + e.message, 'error'); }
+}
+function cancelEditMat() {
+    matEditingId = null;
+    matExistingImages = [];
+    matUploadedFiles = [];
+    document.getElementById('matTitle').value = '';
+    document.getElementById('matContent').value = '';
+    matRenderFileList();
+    document.getElementById('matFormTitle').textContent = '新建项目材料';
+    document.getElementById('btnSaveMat').innerHTML = '&#128190; 保存材料';
+    document.getElementById('btnCancelMat').style.display = 'none';
 }
 async function saveMaterial() {
     const title = document.getElementById('matTitle').value.trim();
@@ -230,17 +293,18 @@ async function saveMaterial() {
     try {
         const fd = new FormData(); fd.append('title', title); fd.append('content', content);
         for (const f of matUploadedFiles) fd.append('images', f);
-        const r = await authFetch('/api/materials', { method: 'POST', body: fd });
+        if (matEditingId !== null && matExistingImages.length) fd.append('keep_image_ids', JSON.stringify(matExistingImages.map(img => img.id)));
+        const isEdit = matEditingId !== null;
+        const url = isEdit ? '/api/materials/' + matEditingId : '/api/materials';
+        const r = await authFetch(url, { method: isEdit ? 'PUT' : 'POST', body: fd });
         const d = await r.json();
         if (d.success) {
-            showToast('保存成功');
-            document.getElementById('matTitle').value = '';
-            document.getElementById('matContent').value = '';
-            matUploadedFiles = []; matRenderFileList();
+            showToast(isEdit ? '更新成功' : '保存成功');
+            cancelEditMat();
             loadMaterials();
         } else showToast(d.error || '保存失败', 'error');
     } catch (e) { showToast(e.message, 'error'); }
-    finally { btn.disabled = false; btn.innerHTML = '&#128190; 保存材料'; }
+    finally { btn.disabled = false; if (!matEditingId) btn.innerHTML = '&#128190; 保存材料'; else btn.innerHTML = '&#128190; 更新材料'; }
 }
 async function loadMaterials() {
     const list = document.getElementById('matList');
@@ -255,6 +319,7 @@ async function loadMaterials() {
                     <span class="mat-arrow" id="matArrow${m.id}">&#9656;</span>
                     <span class="mat-name">${esc(m.title)}</span>
                     <span class="mat-meta">${m.image_count ? m.image_count + ' 张图' : ''}</span>
+                    <button class="mat-edit" onclick="event.stopPropagation();editMaterial(${m.id})">编辑</button>
                     <button class="mat-del" onclick="event.stopPropagation();deleteMaterial(${m.id})">删除</button>
                 </div>
                 <div class="mat-card-body" id="matBody${m.id}"></div>
@@ -273,7 +338,7 @@ async function toggleMatCard(id) {
         if (m.content) html += `<div class="mat-text">${esc(m.content)}</div>`;
         if (m.images && m.images.length) {
             html += '<div class="mat-imgs">';
-            m.images.forEach(img => { html += `<img src="data:${img.media_type};base64,${img.data}" alt="${esc(img.filename||'')}" onclick="window.open(this.src,'_blank')">`; });
+            m.images.forEach(img => { html += `<img src="data:${img.media_type};base64,${img.data}" alt="${esc(img.filename||'')}" onclick="viewImage(this.src)">`; });
             html += '</div>';
         }
         if (!html) html = '<div style="color:#999;font-size:12px;">无内容</div>';
@@ -286,6 +351,98 @@ async function deleteMaterial(id) {
     if (!await showConfirm('确定删除这条材料？',{danger:true})) return;
     try { await authFetch('/api/materials/' + id, { method: 'DELETE' }); showToast('已删除'); loadMaterials(); }
     catch (e) { showToast(e.message, 'error'); }
+}
+
+// ============================================================
+// XMind 转用例
+// ============================================================
+let xmindFile = null;
+let xmind2caseResult = null;
+const xmindUploadArea = document.getElementById('xmindUploadArea');
+const xmindFileInput = document.getElementById('xmindFileInput');
+const xmindFileList = document.getElementById('xmindFileList');
+xmindUploadArea.addEventListener('click', () => xmindFileInput.click());
+xmindUploadArea.addEventListener('dragover', e => { e.preventDefault(); xmindUploadArea.classList.add('dragover'); });
+xmindUploadArea.addEventListener('dragleave', () => xmindUploadArea.classList.remove('dragover'));
+xmindUploadArea.addEventListener('drop', e => {
+    e.preventDefault(); xmindUploadArea.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f && f.name.toLowerCase().endsWith('.xmind')) { xmindFile = f; xmindRenderFile(); }
+    else showToast('请上传 .xmind 文件', 'error');
+});
+xmindFileInput.addEventListener('change', () => {
+    const f = xmindFileInput.files[0];
+    if (f) { xmindFile = f; xmindRenderFile(); }
+    xmindFileInput.value = '';
+});
+function initXmind2case() { /* 页面初始化 */ }
+function xmindRenderFile() {
+    if (!xmindFile) { xmindFileList.innerHTML = ''; return; }
+    xmindFileList.innerHTML = `<div class="file-item"><div><div class="fn" title="${esc(xmindFile.name)}">${esc(xmindFile.name)}</div><span class="ft">XMind</span></div><button class="rb" onclick="xmindRemoveFile()">&times;</button></div>`;
+}
+function xmindRemoveFile() { xmindFile = null; xmindRenderFile(); }
+async function xmind2caseConvert() {
+    if (!xmindFile) { showToast('请先上传 XMind 文件', 'error'); return; }
+    const btn = document.getElementById('btnXmind2case');
+    btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> 转换中...';
+    const resultDiv = document.getElementById('xmind2caseResult');
+    resultDiv.innerHTML = '<div style="text-align:center;padding:30px;"><span class="spinner"></span><p style="margin-top:10px;color:#666;font-size:13px;">正在解析并生成测试用例...</p></div>';
+    document.getElementById('xmind2caseActions').style.display = 'none';
+    try {
+        const fd = new FormData(); fd.append('file', xmindFile);
+        const r = await fetch('/api/xmind2case', { method: 'POST', headers: _headers(), body: fd });
+        if (r.status === 401) { doLogout(); throw new Error('登录已过期'); }
+        const reader = r.body.getReader(), dec = new TextDecoder();
+        let buf = '';
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buf += dec.decode(value, { stream: true });
+            const lines = buf.split('\n'); buf = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                try {
+                    const ev = JSON.parse(line.slice(6));
+                    if (ev.type === 'progress') {
+                        resultDiv.innerHTML = `<div style="text-align:center;padding:30px;"><span class="spinner"></span><p style="margin-top:10px;color:#666;font-size:13px;">${esc(ev.message)}</p></div>`;
+                    } else if (ev.type === 'done') {
+                        xmind2caseResult = ev.data;
+                        renderXmind2caseResult(ev.data);
+                        showToast(`转换完成，共 ${ev.data.count} 条用例`);
+                    } else if (ev.type === 'error') {
+                        throw new Error(ev.message);
+                    }
+                } catch (e) { if (e.message && !e.message.includes('JSON')) throw e; }
+            }
+        }
+        if (buf.trim()) {
+            const ev = JSON.parse(buf.trim().slice(6));
+            if (ev.type === 'done') { xmind2caseResult = ev.data; renderXmind2caseResult(ev.data); }
+            else if (ev.type === 'error') throw new Error(ev.message);
+        }
+    } catch (e) { showToast(e.message, 'error'); resultDiv.innerHTML = `<div style="text-align:center;color:#d32f2f;padding:30px;">${esc(e.message)}</div>`; }
+    finally { btn.disabled = false; btn.innerHTML = '&#9889; 开始转换'; }
+}
+function renderXmind2caseResult(data) {
+    const resultDiv = document.getElementById('xmind2caseResult');
+    const tcs = data.testcases || [];
+    if (!tcs.length) { resultDiv.innerHTML = '<div style="text-align:center;color:#bbb;padding:30px;">未生成用例</div>'; return; }
+    let html = `<div style="margin-bottom:10px;font-size:13px;color:#555;">共 <strong>${tcs.length}</strong> 条用例</div>`;
+    html += '<div class="table-wrap"><table><thead><tr><th>用例ID</th><th>用例标题</th><th>模块</th><th>优先级</th></tr></thead><tbody>';
+    tcs.forEach(tc => {
+        const prioColor = {P0:'#d32f2f',P1:'#e65100',P2:'#f9a825',P3:'#2e7d32'}[tc.priority] || '';
+        html += `<tr><td>${esc(tc.id)}</td><td>${esc(tc.title)}</td><td>${esc(tc.module)}</td><td style="color:${prioColor};font-weight:bold;">${esc(tc.priority)}</td></tr>`;
+    });
+    html += '</tbody></table></div>';
+    resultDiv.innerHTML = html;
+    document.getElementById('xmind2caseActions').style.display = '';
+}
+function downloadXmindExcel() {
+    if (!xmind2caseResult || !xmind2caseResult.filename) return;
+    window.open('/api/download/' + xmind2caseResult.filename, '_blank');
+}
+function downloadXmindTemplate() {
+    window.open('/api/xmind-template', '_blank');
 }
 
 // ============================================================
@@ -339,11 +496,12 @@ fileInput.addEventListener('change',()=>{addFiles(fileInput.files);fileInput.val
 document.getElementById('requirement').addEventListener('paste',e=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const f=item.getAsFile();if(f){const ext=f.type.split('/')[1]||'png';uploadedFiles.push(new File([f],`粘贴_${Date.now()}.${ext}`,{type:f.type}));renderFileList();showToast('已添加图片');}}}});
 function addFiles(fs){for(const f of fs){if(uploadedFiles.some(x=>x.name===f.name&&x.size===f.size))continue;uploadedFiles.push(f);}renderFileList();}
 function removeFile(i){uploadedFiles.splice(i,1);renderFileList();}
-function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
+function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}" style="cursor:zoom-in" onclick="viewImage(this.src)">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
 function showToast(m,t='success'){const c=document.getElementById('toastContainer');const icons={success:'✓',error:'✕',warning:'⚠'};const el=document.createElement('div');el.className='toast '+t;el.innerHTML=`<span class="toast-icon">${icons[t]||icons.success}</span><span class="toast-msg">${esc(m)}</span><button class="toast-close" onclick="dismissToast(this.parentElement)">×</button><div class="toast-progress" style="width:100%"></div>`;c.appendChild(el);requestAnimationFrame(()=>{el.classList.add('show');const pb=el.querySelector('.toast-progress');if(pb){pb.style.transition='width 3s linear';requestAnimationFrame(()=>{pb.style.width='0%';});}});const timer=setTimeout(()=>dismissToast(el),3500);el._timer=timer;}
 function dismissToast(el){if(!el||el._dismissed)return;el._dismissed=true;clearTimeout(el._timer);el.classList.remove('show');el.classList.add('hiding');setTimeout(()=>el.remove(),400);}
 function showConfirm(msg,{title='确认操作',okText='确定',cancelText='取消',danger=false}={}){return new Promise(resolve=>{const overlay=document.createElement('div');overlay.className='confirm-overlay';const iconClass=danger?'danger':'warn';const iconEmoji=danger?'🗑️':'⚠️';overlay.innerHTML=`<div class="confirm-box"><div class="confirm-icon ${iconClass}">${iconEmoji}</div><div class="confirm-title">${esc(title)}</div><div class="confirm-msg">${esc(msg)}</div><div class="confirm-actions"><button class="btn-cancel">${esc(cancelText)}</button><button class="btn-ok${danger?' danger':''}">${esc(okText)}</button></div></div>`;document.body.appendChild(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));const cleanup=(result)=>{overlay.classList.remove('show');setTimeout(()=>overlay.remove(),300);resolve(result);};overlay.querySelector('.btn-cancel').onclick=()=>cleanup(false);overlay.querySelector('.btn-ok').onclick=()=>cleanup(true);overlay.addEventListener('click',e=>{if(e.target===overlay)cleanup(false);});});}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function viewImage(src){const overlay=document.createElement('div');overlay.className='img-viewer-overlay';overlay.innerHTML=`<img src="${src}">`;overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});document.body.appendChild(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));}
 
 // ============================================================
 // SSE

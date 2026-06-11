@@ -76,6 +76,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
             项目材料
         </div>
+        <div class="nav-item" onclick="switchPage('xmind2case')" id="nav-xmind2case">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+            XMind转用例
+        </div>
         <div class="nav-item" onclick="switchPage('modelConfig')" id="nav-modelConfig">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
             模型配置
@@ -331,7 +335,7 @@
                 <!-- 左侧：新建资料 -->
                 <div class="split-left">
                     <div class="card">
-                        <div class="card-header"><h3>新建项目材料</h3></div>
+                        <div class="card-header"><h3 id="matFormTitle">新建项目材料</h3></div>
                         <div class="card-body">
                             <div style="margin-bottom:10px;">
                                 <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">标题 *</label>
@@ -349,6 +353,7 @@
                             <div class="file-list" id="matFileList"></div>
                             <div style="margin-top:12px;">
                                 <button class="btn btn-primary btn-sm" onclick="saveMaterial()" id="btnSaveMat">&#128190; 保存材料</button>
+                                <button class="btn btn-outline btn-sm" onclick="cancelEditMat()" id="btnCancelMat" style="display:none;margin-left:8px;">取消</button>
                             </div>
                         </div>
                     </div>
@@ -363,6 +368,58 @@
                         </div>
                         <div class="card-body" id="matList">
                             <div style="text-align:center;color:#bbb;padding:30px;font-size:13px;">暂无材料</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ====== XMind 转用例 ====== -->
+        <div class="page" id="page-xmind2case">
+            <div class="split-layout">
+                <!-- 左侧：上传与操作 -->
+                <div class="split-left">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>XMind 转测试用例</h3>
+                            <button class="btn btn-outline btn-sm" onclick="downloadXmindTemplate()">&#128196; 下载模板</button>
+                        </div>
+                        <div class="card-body">
+                            <div class="upload-area" id="xmindUploadArea">
+                                <p>&#128228; 上传 XMind 文件</p>
+                                <div class="hint">支持 .xmind 格式，拖拽或点击上传</div>
+                                <input type="file" id="xmindFileInput" accept=".xmind">
+                            </div>
+                            <div class="file-list" id="xmindFileList"></div>
+                            <div style="margin-top:14px;">
+                                <button class="btn btn-primary btn-sm" onclick="xmind2caseConvert()" id="btnXmind2case">&#9889; 开始转换</button>
+                            </div>
+                            <div style="margin-top:16px;padding:12px;background:#f6f9ff;border-radius:8px;font-size:12px;color:#555;line-height:1.8;">
+                                <strong>使用说明：</strong>
+                                <ol style="margin:6px 0 0 16px;padding:0;">
+                                    <li>点击「下载模板」获取参考 XMind 模板</li>
+                                    <li>用 XMind 编辑器打开模板，按模块组织测试点</li>
+                                    <li>上传编辑好的 .xmind 文件</li>
+                                    <li>AI 自动识别结构并生成测试用例</li>
+                                    <li>用例 ID 自动生成（test_001 格式）</li>
+                                    <li>优先级由 AI 根据功能重要性判断</li>
+                                </ol>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：结果 -->
+                <div class="split-right">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>转换结果</h3>
+                            <div id="xmind2caseActions" style="display:none;">
+                                <button class="btn btn-primary btn-sm" onclick="downloadXmindExcel()">&#128196; 下载 Excel</button>
+                            </div>
+                        </div>
+                        <div class="card-body" id="xmind2caseResult">
+                            <div style="text-align:center;color:#bbb;padding:40px;font-size:13px;">上传 XMind 文件后开始转换</div>
                         </div>
                     </div>
                 </div>
