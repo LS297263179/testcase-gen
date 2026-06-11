@@ -662,7 +662,7 @@ def get_material(material_id: int) -> dict | None:
             return None
         m = dict(row)
         images = conn.execute(
-            "SELECT filename, media_type, data FROM material_images "
+            "SELECT id, filename, media_type, data FROM material_images "
             "WHERE material_id = ? ORDER BY sort_order", (material_id,)
         ).fetchall()
         m["images"] = [dict(img) for img in images]
@@ -691,6 +691,36 @@ def get_materials_for_prompt(user_id: int, material_ids: list[int] | None = None
         if r["content"]:
             lines.append(r["content"])
     return "\n".join(lines)
+
+
+def update_material(material_id: int, title: str, content: str = "",
+                    images: list[dict] | None = None,
+                    keep_image_ids: list[int] | None = None):
+    """更新项目资料（标题、内容、图片）"""
+    with db_conn() as conn:
+        conn.execute("UPDATE materials SET title=?, content=? WHERE id=?",
+                     (title, content, material_id))
+        # 删除不在保留列表中的旧图片
+        if keep_image_ids is not None:
+            placeholders = ",".join("?" * len(keep_image_ids))
+            conn.execute(
+                f"DELETE FROM material_images WHERE material_id=? AND id NOT IN ({placeholders})",
+                (material_id, *keep_image_ids),
+            )
+        else:
+            conn.execute("DELETE FROM material_images WHERE material_id=?", (material_id,))
+        # 追加新图片
+        if images:
+            max_order = conn.execute(
+                "SELECT COALESCE(MAX(sort_order), -1) FROM material_images WHERE material_id=?",
+                (material_id,),
+            ).fetchone()[0]
+            for i, img in enumerate(images):
+                conn.execute(
+                    "INSERT INTO material_images (material_id, filename, media_type, data, sort_order) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (material_id, img.get("filename"), img.get("media_type"), img["data"], max_order + 1 + i),
+                )
 
 
 def delete_material(material_id: int):
