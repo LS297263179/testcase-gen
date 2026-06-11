@@ -186,3 +186,60 @@ def to_markdown(testcases: list[dict], output_dir: str, filename: str | None = N
         f.write("\n".join(lines))
 
     return filepath
+
+
+XMIND_HEADERS = ["用例ID", "用例标题", "模块", "前置条件", "操作步骤", "预期结果", "优先级", "备注"]
+
+
+def xmind_to_excel(testcases: list[dict], output_dir: str, filename: str | None = None) -> str:
+    """XMind 转换后的测试用例导出为 Excel"""
+    _ensure_dir(output_dir)
+    fname = filename or f"xmind_cases_{_timestamp()}.xlsx"
+    filepath = os.path.join(output_dir, fname)
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "测试用例"
+
+    # 表头样式
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_align = Alignment(horizontal="center", vertical="center")
+
+    for col, header in enumerate(XMIND_HEADERS, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = header_align
+
+    # 数据行
+    for row_idx, tc in enumerate(testcases, 2):
+        values = [
+            tc.get("id", ""),
+            tc.get("title", ""),
+            tc.get("module", ""),
+            tc.get("precondition", ""),
+            tc.get("steps", ""),
+            tc.get("expected", ""),
+            tc.get("priority", ""),
+            tc.get("remark", ""),
+        ]
+        for col_idx, val in enumerate(values, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=val)
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+            # 优先级着色
+            if col_idx == 7:
+                color = PRIORITY_COLORS.get(str(val), "")
+                if color:
+                    cell.font = Font(bold=True, color=color)
+
+    # 列宽
+    widths = [12, 30, 15, 20, 40, 30, 10, 20]
+    for col, w in enumerate(widths, 1):
+        ws.column_dimensions[chr(64 + col)].width = w
+
+    # 筛选
+    ws.auto_filter.ref = f"A1:H{len(testcases) + 1}"
+
+    wb.save(filepath)
+    return filepath
