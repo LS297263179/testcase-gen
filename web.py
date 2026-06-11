@@ -24,7 +24,7 @@ from flask import (Flask, Response, jsonify, render_template,
 
 import db
 from llm_client import LLMClient, build_client, load_config
-from output import to_excel, to_markdown
+from output import to_excel, to_markdown, xmind_to_excel
 from preferences import compute_diffs, extract_preferences
 from reader import (get_image_media_type, image_to_base64, is_image,
                     read_excel, read_text)
@@ -677,6 +677,249 @@ def api_materials_delete(mid):
         return jsonify({"error": "资料不存在"}), 404
     db.delete_material(mid)
     return jsonify({"success": True})
+
+
+@app.route("/api/materials/<int:mid>", methods=["PUT"])
+@login_required
+@csrf_protect
+def api_materials_update(mid):
+    """更新项目资料"""
+    m = db.get_material(mid)
+    if not m or m["user_id"] != session["user_id"]:
+        return jsonify({"error": "资料不存在"}), 404
+
+    title = request.form.get("title", "").strip()
+    content = request.form.get("content", "")
+    if not title:
+        return jsonify({"error": "标题不能为空"}), 400
+
+    images, _ = _process_uploaded_files(request.files.getlist("images"))
+    keep_ids_raw = request.form.get("keep_image_ids")
+    keep_image_ids = None
+    if keep_ids_raw:
+        try:
+            keep_image_ids = [int(x) for x in json.loads(keep_ids_raw)]
+        except (json.JSONDecodeError, ValueError):
+            pass
+    db.update_material(mid, title, content, images, keep_image_ids)
+    return jsonify({"success": True})
+
+
+# ============================================================
+# XMind 转测试用例
+# ============================================================
+
+@app.route("/api/xmind2case", methods=["POST"])
+@login_required
+@csrf_protect
+def api_xmind2case():
+    """上传 XMind 文件，通过 LLM 生成测试用例，返回 Excel 下载"""
+    from xmind_utils import parse_xmind, flatten_topics
+
+    file = request.files.get("file")
+    if not file or not file.filename:
+        return jsonify({"error": "请上传 XMind 文件"}), 400
+    if not file.filename.lower().endswith(".xmind"):
+        return jsonify({"error": "文件格式不正确，请上传 .xmind 文件"}), 400
+
+    # 先保存临时文件（SSE 生成器内请求上下文已关闭，文件流不可用）
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xmind") as tmp:
+        file.save(tmp)
+        tmp_path = tmp.name
+
+    def sse_stream():
+        try:
+            yield _sse({"type": "progress", "message": "正在解析 XMind 文件..."})
+            sheets = parse_xmind(tmp_path)
+            if not sheets:
+                yield _sse({"type": "error", "message": "XMind 文件中没有找到内容"})
+                return
+
+            # 展平所有 sheet 的节点
+            all_items = []
+            for sheet in sheets:
+                root = sheet["root"]
+                items = flatten_topics(root)
+                all_items.extend(items)
+
+            if not all_items:
+                yield _sse({"type": "error", "message": "XMind 文件中没有找到节点"})
+                return
+
+            # 构建简化的结构给 LLM
+            tree_desc = _build_tree_description(sheets)
+
+            yield _sse({"type": "progress", "message": f"已解析 {len(all_items)} 个节点，正在调用 AI 生成测试用例..."})
+
+            # 调用 LLM
+            client = get_generate_client()
+            system_prompt = (
+                "你是一位资深软件测试工程师。根据用户提供的思维导图结构，生成完整的测试用例列表。\n\n"
+                "要求：\n"
+                "1. 输出一个 JSON 数组，不要包含任何其他文字、解释、markdown 标记\n"
+                "2. 每个用例包含以下字段：\n"
+                '   - "module": 所属模块名（从思维导图的层级结构中提取）\n'
+                '   - "title": 用例标题（简洁描述测试点）\n'
+                '   - "precondition": 前置条件（如无则留空字符串）\n'
+                '   - "steps": 操作步骤（用 \\n 分隔多步）\n'
+                '   - "expected": 预期结果\n'
+                '   - "priority": 优先级（P0/P1/P2/P3，根据功能重要性和风险判断）\n'
+                '   - "remark": 备注信息（如无则留空字符串）\n'
+                '3. id 字段留空字符串 ""，系统会自动生成\n'
+                "4. 优先级判断标准：P0=核心功能/阻塞级，P1=重要功能，P2=一般功能，P3=边缘场景\n"
+                "5. 每个叶子节点或测试点至少生成一条用例\n"
+                "6. 思维导图格式可能不规范，根据内容合理推断模块、步骤和预期结果\n"
+                "7. 直接输出 JSON 数组，以 [ 开头，以 ] 结尾\n\n"
+                "示例输出：\n"
+                '[{"id":"","module":"登录模块","title":"正确用户名密码登录成功","precondition":"用户已注册","steps":"1. 打开登录页\\n2. 输入用户名\\n3. 输入密码\\n4. 点击登录","expected":"跳转到首页","priority":"P0","remark":""}]'
+            )
+            user_prompt = f"请根据以下思维导图结构生成测试用例：\n\n{tree_desc}"
+
+            response = client.chat(system_prompt, user_prompt)
+            logger.warning(f"XMind LLM 原始响应（前500字）: {response[:500]}")
+            # 提取 JSON
+            testcases = _extract_json_array(response)
+            # 首次解析失败时，重试一次
+            if not testcases:
+                logger.warning("首次 JSON 解析失败，重试中...")
+                retry_prompt = (
+                    "你的上一次回复无法解析为 JSON 数组。请严格只输出 JSON 数组，不要包含任何解释文字。\n\n"
+                    f"以下是思维导图内容：\n{tree_desc}"
+                )
+                response = client.chat(system_prompt, retry_prompt)
+                logger.warning(f"XMind 重试 LLM 响应（前500字）: {response[:500]}")
+                testcases = _extract_json_array(response)
+            if not testcases:
+                logger.warning(f"XMind JSON 解析失败，完整响应: {response[:1000]}")
+                yield _sse({"type": "error", "message": "AI 返回的数据格式不正确，请重试"})
+                return
+
+            # 生成用例 ID
+            for i, tc in enumerate(testcases, 1):
+                tc["id"] = f"test_{i:03d}"
+
+            yield _sse({"type": "progress", "message": f"已生成 {len(testcases)} 条用例，正在导出 Excel..."})
+
+            # 导出 Excel
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = xmind_to_excel(testcases, OUTPUT_DIR, f"xmind_cases_{timestamp}.xlsx")
+            filename = os.path.basename(filepath)
+
+            yield _sse({"type": "done", "data": {
+                "filename": filename,
+                "count": len(testcases),
+                "testcases": testcases,
+            }})
+
+        except Exception as e:
+            logger.error(f"XMind 转换失败: {e}\n{traceback.format_exc()}")
+            yield _sse({"type": "error", "message": f"转换失败: {str(e)}"})
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    return Response(stream_with_context(sse_stream()), mimetype="text/event-stream")
+
+
+def _build_tree_description(sheets: list[dict]) -> str:
+    """构建思维导图的文字描述，供 LLM 理解"""
+    lines = []
+    for sheet in sheets:
+        lines.append(f"【{sheet['title']}】")
+        _format_node(sheet["root"], lines, indent=0)
+    return "\n".join(lines)
+
+
+def _format_node(node: dict, lines: list, indent: int):
+    """递归格式化节点"""
+    prefix = "  " * indent + "- "
+    lines.append(f"{prefix}{node['title']}")
+    for child in node.get("children", []):
+        _format_node(child, lines, indent + 1)
+
+
+def _extract_json_array(text: str) -> list[dict] | None:
+    """从 LLM 响应中提取 JSON 数组（兼容 thinking 模式、markdown 包裹等）"""
+    import re
+    text = text.strip()
+    if not text:
+        return None
+
+    def _try_parse(s: str) -> list[dict] | None:
+        """尝试解析 JSON，标准库 + json5 兜底"""
+        try:
+            result = json.loads(s)
+            if isinstance(result, list):
+                return result
+        except (json.JSONDecodeError, ValueError):
+            pass
+        try:
+            import json5
+            result = json5.loads(s)
+            if isinstance(result, list):
+                return result
+        except Exception:
+            pass
+        return None
+
+    # 1. 直接解析
+    result = _try_parse(text)
+    if result:
+        return result
+
+    # 2. 去掉 thinking 模式内容
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    cleaned = re.sub(r"<thinking>.*?</thinking>", "", cleaned, flags=re.DOTALL)
+    cleaned = cleaned.strip()
+
+    result = _try_parse(cleaned)
+    if result:
+        return result
+
+    # 3. 提取 ```json ... ``` 或 ``` ... ``` 块
+    for m in re.finditer(r"```(?:json)?\s*\n?(.*?)\n?\s*```", cleaned, re.DOTALL):
+        result = _try_parse(m.group(1).strip())
+        if result:
+            return result
+
+    # 4. 找第一个 [ 到最后一个 ]
+    for source in (cleaned, text):
+        start = source.find("[")
+        end = source.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            result = _try_parse(source[start:end + 1])
+            if result:
+                return result
+
+    # 5. 正则匹配所有可能的 JSON 数组（处理 LLM 在 JSON 前后加了解释文字的情况）
+    for m in re.finditer(r"\[[\s\S]*?\](?=\s*$|\s*[^}\]])", cleaned):
+        result = _try_parse(m.group())
+        if result:
+            return result
+
+    return None
+
+
+@app.route("/api/xmind-template")
+@login_required
+def api_xmind_template():
+    """下载 XMind 参考模板"""
+    import importlib
+    import xmind_utils
+    importlib.reload(xmind_utils)
+    from xmind_utils import generate_template
+
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"测试用例模板_{timestamp}.xmind"
+    filepath = os.path.join(OUTPUT_DIR, filename)
+    generate_template(filepath)
+    logger.warning(f"[DEBUG] 模板已生成: {filepath}, 函数模块: {xmind_utils.__file__}")
+    resp = send_file(filepath, as_attachment=True, download_name=filename)
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 # ============================================================
