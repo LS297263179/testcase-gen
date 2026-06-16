@@ -168,7 +168,7 @@ def _format_tc_text(tc: dict) -> str:
 def optimize_testcases(client: LLMClient, requirement: str,
                        testcases: list[dict], review_report: str) -> list[dict]:
     """根据评审报告优化测试用例：删除标记的重复用例 + 修复问题 + 补充遗漏"""
-    from generator import _parse_response, _deduplicate, _deduplicate_by_steps
+    from generator import parse_response, deduplicate, deduplicate_by_steps
 
     total = len(testcases)
 
@@ -185,30 +185,30 @@ def optimize_testcases(client: LLMClient, requirement: str,
     # 每条用例约 150 tokens，预留足够空间
     optimize_max_tokens = max(16384, total * 200)
     raw = client.chat(OPTIMIZE_SYSTEM_PROMPT, user_prompt, max_tokens=optimize_max_tokens)
-    result = _parse_response(raw)
+    result = parse_response(raw)
 
     # 兜底去重：对 LLM 未完全处理的重复做一轮程序化去重
     before_dedup = len(result)
-    result = _deduplicate(result)
+    result = deduplicate(result)
     if before_dedup != len(result):
         logger.info(f"精确去重: {before_dedup} -> {len(result)}")
 
     # 步骤语义去重
     before_step_dedup = len(result)
-    result = _deduplicate_by_steps(result)
+    result = deduplicate_by_steps(result)
     if before_step_dedup != len(result):
         logger.info(f"步骤语义去重: {before_step_dedup} -> {len(result)}")
 
     if not result:
-        print(f"[WARN] 优化后用例为空，回退使用原始用例")
+        logger.warning("优化后用例为空，回退使用原始用例")
         return testcases
 
     removed = total - len(result)
     if removed > 0:
-        print(f"[INFO] 优化完成: 原始 {total} 条 -> 优化后 {len(result)} 条（净减少 {removed} 条）")
+        logger.info(f"优化完成: 原始 {total} 条 -> 优化后 {len(result)} 条（净减少 {removed} 条）")
     elif removed < 0:
-        print(f"[INFO] 优化完成: 原始 {total} 条 -> 优化后 {len(result)} 条（补充了 {-removed} 条）")
+        logger.info(f"优化完成: 原始 {total} 条 -> 优化后 {len(result)} 条（补充了 {-removed} 条）")
     else:
-        print(f"[INFO] 优化完成: 数量不变 {total} 条（已修复质量问题）")
+        logger.info(f"优化完成: 数量不变 {total} 条（已修复质量问题）")
 
     return result

@@ -1,0 +1,41 @@
+[project]
+name = "testcase-gen"
+version = "1.0.0"
+description = "AI 测试用例生成器 - 基于 LLM 的自动化测试用例生成工具"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",   # 行长度限制由 formatter 处理
+    "E741",   # 允许 l/o 等变量名
+    "SIM108", # 允许 if-else 而非三元表达式（可读性优先）
+    "SIM115", # 允许 open() 而非 context manager（某些场景）
+    "B008",   # 允许函数默认参数中的函数调用（Flask 路由参数）
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["db", "generator", "llm_client", "output", "preferences", "reader", "reviewer", "web", "xmind_utils", "config"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"

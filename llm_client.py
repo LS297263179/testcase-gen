@@ -1,12 +1,22 @@
-"""LLM 调用客户端 - 支持 Anthropic 和 OpenAI 两种 API 格式，支持多模态"""
+"""LLM 调用客户端 - 支持 Anthropic 和 OpenAI 两种 API 格式，支持多模态和流式输出"""
 
 import logging
 import time
+from collections.abc import Generator
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class UsageStats:
+    """Token 用量统计"""
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_cost: float = 0.0
 
 # 项目根目录（此文件所在目录）
 _PROJECT_ROOT = Path(__file__).parent
@@ -14,10 +24,12 @@ _PROJECT_ROOT = Path(__file__).parent
 
 def load_config(path: str | None = None) -> dict:
     """加载配置文件（默认使用项目根目录下的 config.yaml）"""
-    if path is None:
-        path = str(_PROJECT_ROOT / "config.yaml")
-    with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+    from config import load_yaml_config
+    if path is not None:
+        # 自定义路径时直接读取（兼容 CLI 传参场景）
+        with open(path, "r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    return load_yaml_config()
 
 
 class LLMClient:
@@ -76,6 +88,76 @@ class LLMClient:
                     time.sleep(wait)
 
         raise RuntimeError(f"LLM 调用失败（已重试 {self.max_retries} 次）: {last_error}")
+
+    def chat_stream(self, system_prompt: str, user_prompt: str,
+                    images: list[dict] | None = None,
+                    max_tokens: int | None = None) -> Generator[str, None, None]:
+        """流式调用 LLM，yield 每个文本 chunk。
+
+        用法:
+            for chunk in client.chat_stream(sys, user):
+                print(chunk, end="", flush=True)
+        """
+        effective_max_tokens = max_tokens or self.max_tokens
+        if self.api_type == "anthropic":
+            yield from self._stream_anthropic(system_prompt, user_prompt, images, effective_max_tokens)
+        else:
+            yield from self._stream_openai(system_prompt, user_prompt, images, effective_max_tokens)
+
+    def _stream_openai(self, system_prompt: str, user_prompt: str,
+                       images: list[dict] | None, max_tokens: int) -> Generator[str, None, None]:
+        """OpenAI 兼容接口的流式调用"""
+        content = []
+        if images:
+            for img in images:
+                content.append({
+                    "type": "image_url",
+                    "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
+                })
+        content.append({"type": "text", "text": user_prompt})
+
+        kwargs = {
+            "model": self.model,
+            "temperature": self.temperature,
+            "max_tokens": max_tokens,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": content},
+            ],
+            "stream": True,
+        }
+        if self.enable_thinking:
+            kwargs["extra_body"] = {"enable_thinking": True}
+
+        for chunk in self.client.chat.completions.create(**kwargs):
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+    def _stream_anthropic(self, system_prompt: str, user_prompt: str,
+                          images: list[dict] | None, max_tokens: int) -> Generator[str, None, None]:
+        """Anthropic 接口的流式调用"""
+        content = []
+        if images:
+            for img in images:
+                content.append({
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": img["media_type"], "data": img["data"]},
+                })
+        content.append({"type": "text", "text": user_prompt})
+
+        kwargs = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "temperature": self.temperature,
+            "system": system_prompt,
+            "messages": [{"role": "user", "content": content}],
+        }
+        if self.enable_thinking:
+            kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
+
+        with self.client.messages.stream(**kwargs) as stream:
+            for text in stream.text_stream:
+                yield text
 
     def _call(self, system_prompt: str, user_prompt: str,
               images: list[dict] | None = None,

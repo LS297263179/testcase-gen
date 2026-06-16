@@ -5,12 +5,12 @@ import logging
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Callable
+from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
-from llm_client import LLMClient
-from output import _normalize_steps, _strip_trailing_punctuation
+from llm_client import LLMClient  # noqa: E402
+from output import _normalize_steps, _strip_trailing_punctuation  # noqa: E402
 
 # ============================================================
 # Step 1: 需求分析 Prompt — 拆解模块和测试维度
@@ -249,13 +249,13 @@ def generate_testcases(client: LLMClient, requirement: str,
     if on_progress:
         on_progress("正在分析需求，拆解功能模块...")
 
-    complexity, modules = _analyze_modules(active_client, requirement, case_types, images)
+    complexity, modules = analyze_modules(active_client, requirement, case_types, images)
 
     if not modules:
         # 分析失败，回退到一次性生成
         if on_progress:
             on_progress("模块分析失败，使用一次性生成模式...")
-        return _generate_all_in_one(active_client, requirement, default_priority, case_types, images, max_testcases, preferences)
+        return generate_all_in_one(active_client, requirement, default_priority, case_types, images, max_testcases, preferences)
 
     # Step 2: 按模块并行生成
     all_testcases = []
@@ -268,7 +268,7 @@ def generate_testcases(client: LLMClient, requirement: str,
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_module = {
-            executor.submit(_generate_for_module, active_client, requirement, mod, default_priority, images, complexity, preferences): mod
+            executor.submit(generate_for_module, active_client, requirement, mod, default_priority, images, complexity, preferences): mod
             for mod in modules
         }
         completed = 0
@@ -289,13 +289,13 @@ def generate_testcases(client: LLMClient, requirement: str,
 
     # Step 3: 去重、限制数量、统一编号
     raw_count = len(all_testcases)
-    all_testcases = _deduplicate(all_testcases)
+    all_testcases = deduplicate(all_testcases)
     dedup_count = raw_count - len(all_testcases)
     if on_progress and dedup_count > 0:
         on_progress(f"精确去重完成，移除 {dedup_count} 条重复用例")
 
     step_dedup_before = len(all_testcases)
-    all_testcases = _deduplicate_by_steps(all_testcases)
+    all_testcases = deduplicate_by_steps(all_testcases)
     step_dedup_count = step_dedup_before - len(all_testcases)
     if on_progress and step_dedup_count > 0:
         on_progress(f"步骤语义去重完成，移除 {step_dedup_count} 条相似用例")
@@ -303,7 +303,7 @@ def generate_testcases(client: LLMClient, requirement: str,
     if len(all_testcases) > max_testcases:
         if on_progress:
             on_progress(f"用例数 ({len(all_testcases)}) 超过上限 {max_testcases}，按优先级保留")
-        all_testcases = _limit_testcases(all_testcases, max_testcases)
+        all_testcases = limit_testcases(all_testcases, max_testcases)
 
     for i, tc in enumerate(all_testcases):
         tc["id"] = f"TC_{i + 1:03d}"
@@ -311,7 +311,7 @@ def generate_testcases(client: LLMClient, requirement: str,
     return all_testcases
 
 
-def _analyze_modules(client: LLMClient, requirement: str,
+def analyze_modules(client: LLMClient, requirement: str,
                      case_types: list[str], images: list[dict] | None = None) -> tuple[str, list[dict]]:
     """Step 1: 分析需求，拆解功能模块和测试维度，返回 (complexity, modules)"""
     # 有图片时用图片版 prompt，引导 LLM 关注界面元素
@@ -349,7 +349,7 @@ def _analyze_modules(client: LLMClient, requirement: str,
     return "medium", []
 
 
-def _generate_for_module(client: LLMClient, requirement: str,
+def generate_for_module(client: LLMClient, requirement: str,
                          module: dict, default_priority: str,
                          images: list[dict] | None = None,
                          complexity: str = "medium",
@@ -373,7 +373,7 @@ def _generate_for_module(client: LLMClient, requirement: str,
     for attempt in range(3):
         try:
             raw = client.chat("你是一名资深软件测试工程师。", prompt, images=images, max_tokens=8192)
-            return _parse_response(raw)
+            return parse_response(raw)
         except (ValueError, json.JSONDecodeError):
             continue
         except Exception as e:
@@ -385,7 +385,7 @@ def _generate_for_module(client: LLMClient, requirement: str,
     return []
 
 
-def _generate_all_in_one(client: LLMClient, requirement: str,
+def generate_all_in_one(client: LLMClient, requirement: str,
                          default_priority: str, case_types: list[str],
                          images: list[dict] | None = None,
                          max_testcases: int = 100,
@@ -412,7 +412,7 @@ def _generate_all_in_one(client: LLMClient, requirement: str,
     for attempt in range(3):
         try:
             raw = client.chat(SYSTEM_PROMPT, user_prompt, images=images)
-            return _parse_response(raw)
+            return parse_response(raw)
         except (ValueError, json.JSONDecodeError):
             continue
 
@@ -431,7 +431,7 @@ def _normalize_text(text: str) -> str:
     return text
 
 
-def _deduplicate(testcases: list[dict]) -> list[dict]:
+def deduplicate(testcases: list[dict]) -> list[dict]:
     """去除重复用例（标题 + 预期结果 相同视为重复，跨模块也生效）"""
     seen = set()
     unique = []
@@ -454,7 +454,7 @@ _STEP_VERB_PATTERN = re.compile(
 )
 
 
-def _extract_step_fingerprint(steps: str) -> set[str]:
+def _extract_step_fingerprint(steps: str | None) -> set[str]:
     """从测试步骤中提取操作动词+紧随的关键词作为步骤指纹"""
     if not steps:
         return set()
@@ -473,7 +473,7 @@ def _extract_step_fingerprint(steps: str) -> set[str]:
     return fingerprint
 
 
-def _deduplicate_by_steps(testcases: list[dict], threshold: float = 0.7) -> list[dict]:
+def deduplicate_by_steps(testcases: list[dict], threshold: float = 0.7) -> list[dict]:
     """基于测试步骤的语义去重：步骤指纹 Jaccard 相似度 > threshold 视为重复"""
     if len(testcases) <= 1:
         return testcases
@@ -506,7 +506,7 @@ def _deduplicate_by_steps(testcases: list[dict], threshold: float = 0.7) -> list
 PRIORITY_ORDER = {"P0": 0, "P1": 1, "P2": 2, "P3": 3}
 
 
-def _limit_testcases(testcases: list[dict], max_count: int) -> list[dict]:
+def limit_testcases(testcases: list[dict], max_count: int) -> list[dict]:
     """限制用例数量，按优先级保留高优先级用例"""
     if len(testcases) <= max_count:
         return testcases
@@ -527,7 +527,7 @@ REQUIRED_FIELDS = {
 }
 
 
-def _parse_response(raw: str) -> list[dict]:
+def parse_response(raw: str) -> list[dict]:
     """从 LLM 响应中提取 JSON 测试用例"""
     # 尝试提取 JSON 块
     match = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
@@ -544,12 +544,12 @@ def _parse_response(raw: str) -> list[dict]:
         result = parser(json_str)
         if result is not None:
             testcases = _normalize_result(result)
-            return _validate_testcases(testcases)
+            return validate_testcases(testcases)
 
     raise ValueError(f"无法解析 LLM 返回的 JSON")
 
 
-def _validate_testcases(testcases: list[dict]) -> list[dict]:
+def validate_testcases(testcases: list[dict]) -> list[dict]:
     """校验并补全测试用例字段"""
     if not testcases:
         raise ValueError("LLM 返回了空的用例列表")

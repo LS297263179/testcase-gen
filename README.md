@@ -60,9 +60,13 @@
 
 - **API Key 加密存储**：使用 Fernet 对称加密，API Key 不再以明文形式存入数据库
 - **Secret Key 持久化**：支持环境变量 → config.yaml → 随机生成三级 fallback
+- **集中配置管理**：统一配置模块（config.py），优先级：环境变量 > 数据库 > config.yaml > 默认值
 - **越权防护**：所有资源操作（删除材料/测试点/历史记录）均校验 user_id
-- **路径安全**：文件下载接口校验路径，防止目录穿越攻击
+- **路径安全**：文件下载校验路径，防止目录穿越攻击
+- **XSS 防护**：前端图片查看器白名单校验，使用 DOM API 替代 innerHTML
+- **CSRF 保护**：所有状态变更请求必须携带有效 CSRF token
 - **文件大小限制**：上传文件最大 32MB
+- **Docker 非 root 运行**：容器以 `appuser` 用户运行，降低安全风险
 
 ### 模型配置
 
@@ -75,7 +79,9 @@
 ### 导出与交互
 
 - **多格式导出**：支持 Excel / Markdown / JSON 格式
+- **用户隔离目录**：输出文件按用户 ID 隔离存储，文件名使用 UUID 避免冲突
 - **SSE 实时进度**：生成、评审、优化全程显示当前步骤
+- **LLM 流式输出**：支持流式调用 LLM（chat_stream），实时推送生成进度
 - **粘贴图片**：在文本框直接 Ctrl+V 粘贴截图，自动添加到上传区
 
 ### 兼容性
@@ -89,6 +95,12 @@
 
 ```bash
 pip install -r requirements.txt
+```
+
+开发环境（含测试和 linting）：
+
+```bash
+pip install -r requirements-dev.txt
 ```
 
 ### 2. 配置 API
@@ -253,31 +265,67 @@ python main.py [需求文档路径] [选项]
 ```
 testcase-gen/
 ├── start.py              # Web 版启动器
-├── web.py                # Flask Web 应用（全部 API + SSE 流式）
+├── web.py                # Flask 应用入口（路由注册 + 全局配置）
+├── web_auth.py           # 认证 Blueprint（注册/登录/登出）
+├── web_config.py         # 配置 Blueprint（模型配置/预设/仪表盘）
+├── web_data.py           # 数据 Blueprint（材料/历史/测试点/偏好/下载）
+├── web_generate.py       # 生成 Blueprint（分析/生成/评审/优化/XMind）
+├── web_utils.py          # 共享工具（装饰器/SSE/速率限制/文件处理/Client工厂）
+├── config.py             # 集中配置管理（环境变量 > 数据库 > config.yaml > 默认值）
 ├── templates/
-│   └── index.html        # Web 前端（工作台 + 测试用例 + 测试点 + 材料 + 模型配置）
+│   └── index.html        # Web 前端（SPA 单页应用）
+├── static/
+│   ├── app.js            # 前端逻辑（认证/SSE/生成/编辑/偏好）
+│   └── style.css         # 样式（响应式/暗色主题/动画）
 ├── main.py               # 命令行入口
 ├── config.yaml           # 配置文件（模型、输出、用例参数）
 ├── config.yaml.example   # 配置文件模板
 ├── .env.example          # 环境变量模板（Docker 部署用）
-├── Dockerfile            # Docker 镜像定义
+├── Dockerfile            # Docker 镜像定义（非 root 用户）
 ├── docker-compose.yml    # Docker Compose 编排
+├── gunicorn.conf.py      # Gunicorn 生产配置
+├── pyproject.toml        # ruff linting + pytest 配置
+├── requirements.txt      # Python 生产依赖
+├── requirements-dev.txt  # Python 开发依赖（pytest, ruff）
 ├── .gitignore
 ├── .dockerignore
-├── requirements.txt      # Python 依赖
-├── llm_client.py         # LLM 调用封装（双 SDK + 多模态 + 思考模式 + 重试）
+├── llm_client.py         # LLM 调用封装（双 SDK + 多模态 + 流式 + 思考模式）
 ├── reader.py             # 需求文档读取（MD / TXT / Excel / 图片）
 ├── generator.py          # 测试用例生成（并行分段 + Prompt + 去重 + JSON 容错解析）
 ├── reviewer.py           # 测试用例评审（6 维评审 + 重复检测）+ 精准优化
-├── output.py             # 输出模块（Excel + Markdown）
+├── output.py             # 输出模块（Excel + Markdown + XMind 转 Excel）
 ├── xmind_utils.py        # XMind 文件解析 + 模板生成（支持 XMind 8+ JSON 和旧版 XML）
 ├── db.py                 # SQLite 数据库（用户 + 历史 + 材料 + 测试点 + 偏好 + API Key 加密）
 ├── preferences.py        # 偏好学习模块
+├── tests/                # 测试套件
+│   ├── conftest.py       # pytest 共享 fixtures
+│   ├── test_db.py        # 数据库层测试（26 tests）
+│   ├── test_generator.py # 生成逻辑测试（28 tests）
+│   ├── test_web_api.py   # API 集成测试（20 tests）
+│   └── test_regression.py # 全功能回归测试（52 tests）
 ├── examples/
 │   └── sample_requirement.md
 ├── data/                 # 数据目录（自动创建）
 │   └── data.db           # SQLite 数据库文件
-└── output/               # 生成的文件（自动创建）
+└── output/               # 生成的文件（按用户隔离，自动创建）
+    └── {user_id}/        # 用户专属输出目录
+```
+
+## 运行测试
+
+```bash
+# 运行全部测试
+pytest
+
+# 运行特定模块测试
+pytest tests/test_generator.py -v
+
+# 查看覆盖率
+pytest --cov=. --cov-report=term-miss
+
+# 运行 linting
+ruff check .
+ruff format .
 ```
 
 ## API 接口
@@ -304,7 +352,7 @@ testcase-gen/
 | `/api/preferences` | GET | 偏好规则列表 |
 | `/api/preferences/extract` | POST | 提取偏好规则（SSE） |
 | `/api/materials` | GET/POST | 项目材料列表/创建 |
-| `/api/materials/<id>` | GET/DELETE | 获取/删除项目材料 |
+| `/api/materials/<id>` | GET/PUT/DELETE | 获取/更新/删除项目材料 |
 | `/api/test-points` | GET | 测试点历史列表 |
 | `/api/test-points/<id>` | GET/DELETE | 获取/删除测试点 |
 | `/api/xmind-template` | GET | 下载 XMind 参考模板 |

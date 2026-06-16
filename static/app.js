@@ -23,6 +23,7 @@ async function authFetch(u,o={}){o.headers=_headers(o.headers||{});const r=await
 // ============================================================
 let currentPage='dashboard';
 function switchPage(name){
+    isGenerating=false;
     currentPage=name;
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -40,7 +41,7 @@ function switchPage(name){
 // 测试点生成
 // ============================================================
 let testPointsData = [];
-let tpUploadedFiles = [];
+let tpUploadedFiles = [], tpBlobUrls = [];
 let tpSelectedMats = new Set();
 
 async function loadTpMaterials() {
@@ -59,7 +60,7 @@ async function loadTpMaterials() {
                 ${esc(m.title)}
             </label>
         `).join('');
-    } catch (e) {}
+    } catch (e) { console.warn('请求失败:', e.message); }
 }
 function tpToggleMat(id) { if (tpSelectedMats.has(id)) tpSelectedMats.delete(id); else tpSelectedMats.add(id); }
 const tpUploadArea = document.getElementById('tpUploadArea');
@@ -84,11 +85,12 @@ document.getElementById('tpRequirement').addEventListener('paste', e => {
 function tpAddFiles(fs) { for (const f of fs) { if (tpUploadedFiles.some(x => x.name === f.name && x.size === f.size)) continue; tpUploadedFiles.push(f); } tpRenderFileList(); }
 function tpRemoveFile(i) { tpUploadedFiles.splice(i, 1); tpRenderFileList(); }
 function tpRenderFileList() {
+    tpBlobUrls.forEach(u => URL.revokeObjectURL(u)); tpBlobUrls = [];
     if (!tpUploadedFiles.length) { tpFileList.innerHTML = ''; return; }
     tpFileList.innerHTML = tpUploadedFiles.map((f, i) => {
         const isImg = /\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);
         const ext = f.name.split('.').pop().toUpperCase();
-        const pre = isImg ? `<img src="${URL.createObjectURL(f)}" style="cursor:zoom-in" onclick="viewImage(this.src)">` : '';
+        const pre = isImg ? (()=>{const u=URL.createObjectURL(f);tpBlobUrls.push(u);return `<img src="${u}" style="cursor:zoom-in" onclick="viewImage(this.src)">`;})() : '';
         return `<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg ? '图片' : ext}</span></div><button class="rb" onclick="tpRemoveFile(${i})">&times;</button></div>`;
     }).join('');
 }
@@ -107,7 +109,9 @@ async function generatePoints(){
         const resp=await fetch('/api/generate-points',{method:'POST',headers:_headers(),body:fd});
         if(resp.status===401){doLogout();throw new Error('登录已过期');}
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
-        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('tpLoadingText').textContent=ev.message;else if(ev.type==='done'){testPointsData=ev.data.points||[];renderTestPoints(testPointsData);showToast(`生成完成！共 ${ev.data.total} 个测试点`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
+        function _tpHandleLine(line){if(!line.startsWith('data: '))return;const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('tpLoadingText').textContent=ev.message;else if(ev.type==='done'){testPointsData=ev.data.points||[];renderTestPoints(testPointsData);showToast(`生成完成！共 ${ev.data.total} 个测试点`);}else if(ev.type==='error')throw new Error(ev.message);}
+        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){try{_tpHandleLine(line);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
+        if(buf.trim())try{_tpHandleLine(buf.trim());}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}
     }catch(e){showToast(e.message,'error');}
     finally{isGenerating=false;btn.disabled=false;btn.innerHTML='&#128209; 生成测试点';document.getElementById('tpLoading').style.display='none';}
 }
@@ -486,7 +490,7 @@ setTimeout(loadPresets,500);
 // ============================================================
 // 文件上传
 // ============================================================
-let uploadedFiles=[];
+let uploadedFiles=[],genBlobUrls=[];
 const uploadArea=document.getElementById('uploadArea'),fileInput=document.getElementById('fileInput'),fileList=document.getElementById('fileList');
 uploadArea.addEventListener('click',()=>fileInput.click());
 uploadArea.addEventListener('dragover',e=>{e.preventDefault();uploadArea.classList.add('dragover');});
@@ -496,12 +500,12 @@ fileInput.addEventListener('change',()=>{addFiles(fileInput.files);fileInput.val
 document.getElementById('requirement').addEventListener('paste',e=>{const items=e.clipboardData?.items;if(!items)return;for(const item of items){if(item.type.startsWith('image/')){e.preventDefault();const f=item.getAsFile();if(f){const ext=f.type.split('/')[1]||'png';uploadedFiles.push(new File([f],`粘贴_${Date.now()}.${ext}`,{type:f.type}));renderFileList();showToast('已添加图片');}}}});
 function addFiles(fs){for(const f of fs){if(uploadedFiles.some(x=>x.name===f.name&&x.size===f.size))continue;uploadedFiles.push(f);}renderFileList();}
 function removeFile(i){uploadedFiles.splice(i,1);renderFileList();}
-function renderFileList(){if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?`<img src="${URL.createObjectURL(f)}" style="cursor:zoom-in" onclick="viewImage(this.src)">`:'';return`<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
+function renderFileList(){genBlobUrls.forEach(u=>URL.revokeObjectURL(u));genBlobUrls=[];if(!uploadedFiles.length){fileList.innerHTML='';return;}fileList.innerHTML=uploadedFiles.map((f,i)=>{const isImg=/\.(png|jpe?g|gif|webp|bmp)$/i.test(f.name);const ext=f.name.split('.').pop().toUpperCase();const pre=isImg?(()=>{const u=URL.createObjectURL(f);genBlobUrls.push(u);return `<img src="${u}" style="cursor:zoom-in" onclick="viewImage(this.src)">`;})():'';return`<div class="file-item">${pre}<div><div class="fn" title="${esc(f.name)}">${esc(f.name)}</div><span class="ft">${isImg?'图片':ext}</span></div><button class="rb" onclick="removeFile(${i})">&times;</button></div>`;}).join('');}
 function showToast(m,t='success'){const c=document.getElementById('toastContainer');const icons={success:'✓',error:'✕',warning:'⚠'};const el=document.createElement('div');el.className='toast '+t;el.innerHTML=`<span class="toast-icon">${icons[t]||icons.success}</span><span class="toast-msg">${esc(m)}</span><button class="toast-close" onclick="dismissToast(this.parentElement)">×</button><div class="toast-progress" style="width:100%"></div>`;c.appendChild(el);requestAnimationFrame(()=>{el.classList.add('show');const pb=el.querySelector('.toast-progress');if(pb){pb.style.transition='width 3s linear';requestAnimationFrame(()=>{pb.style.width='0%';});}});const timer=setTimeout(()=>dismissToast(el),3500);el._timer=timer;}
 function dismissToast(el){if(!el||el._dismissed)return;el._dismissed=true;clearTimeout(el._timer);el.classList.remove('show');el.classList.add('hiding');setTimeout(()=>el.remove(),400);}
 function showConfirm(msg,{title='确认操作',okText='确定',cancelText='取消',danger=false}={}){return new Promise(resolve=>{const overlay=document.createElement('div');overlay.className='confirm-overlay';const iconClass=danger?'danger':'warn';const iconEmoji=danger?'🗑️':'⚠️';overlay.innerHTML=`<div class="confirm-box"><div class="confirm-icon ${iconClass}">${iconEmoji}</div><div class="confirm-title">${esc(title)}</div><div class="confirm-msg">${esc(msg)}</div><div class="confirm-actions"><button class="btn-cancel">${esc(cancelText)}</button><button class="btn-ok${danger?' danger':''}">${esc(okText)}</button></div></div>`;document.body.appendChild(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));const cleanup=(result)=>{overlay.classList.remove('show');setTimeout(()=>overlay.remove(),300);resolve(result);};overlay.querySelector('.btn-cancel').onclick=()=>cleanup(false);overlay.querySelector('.btn-ok').onclick=()=>cleanup(true);overlay.addEventListener('click',e=>{if(e.target===overlay)cleanup(false);});});}
 function esc(s){if(!s)return '';return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
-function viewImage(src){const overlay=document.createElement('div');overlay.className='img-viewer-overlay';overlay.innerHTML=`<img src="${src}">`;overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});document.body.appendChild(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));}
+function viewImage(src){if(!src||(!src.startsWith('data:')&&!src.startsWith('blob:')&&!src.startsWith('/')&&!src.startsWith('http'))){console.warn('viewImage: 不安全的图片来源',src);return;}const overlay=document.createElement('div');overlay.className='img-viewer-overlay';const img=document.createElement('img');img.src=src;overlay.appendChild(img);overlay.addEventListener('click',e=>{if(e.target===overlay)overlay.remove();});document.body.appendChild(overlay);requestAnimationFrame(()=>overlay.classList.add('show'));}
 
 // ============================================================
 // SSE
@@ -559,7 +563,7 @@ async function loadGenMaterials() {
                 ${esc(m.title)}
             </label>
         `).join('');
-    } catch (e) {}
+    } catch (e) { console.warn('请求失败:', e.message); }
 }
 function genToggleMat(id) { if (genSelectedMats.has(id)) genSelectedMats.delete(id); else genSelectedMats.add(id); }
 
@@ -582,7 +586,7 @@ async function loadGenTestPoints() {
                 <span style="color:#888;font-size:10px;">${tp.total} 点</span>
             </div>
         `).join('');
-    } catch (e) {}
+    } catch (e) { console.warn('请求失败:', e.message); }
 }
 
 function genToggleTp(id) {
@@ -618,7 +622,9 @@ async function doGenerate(useAnalysis){
         for(const f of uploadedFiles)fd.append('files',f);
         const resp=await fetch('/api/generate',{method:'POST',headers:_headers(),body:fd});if(resp.status===401){doLogout();throw new Error('登录已过期');}
         const rd=resp.body.getReader(),dec=new TextDecoder();let buf='';
-        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){if(!line.startsWith('data: '))continue;try{const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;originalTestcases=[];renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
+        function _genHandleLine(line){if(!line.startsWith('data: '))return;const ev=JSON.parse(line.slice(6));if(ev.type==='progress')document.getElementById('loadingText').textContent=ev.message;else if(ev.type==='done'){const d=ev.data;currentTestcases=d.testcases;currentFiles=d.files;currentRequirement=req;currentSessionId=d.session_id||null;originalTestcases=[];renderResult(d);showToast(`生成成功！共 ${d.count} 条用例`);}else if(ev.type==='error')throw new Error(ev.message);}
+        while(true){const{done,value}=await rd.read();if(done)break;buf+=dec.decode(value,{stream:true});const lines=buf.split('\n');buf=lines.pop();for(const line of lines){try{_genHandleLine(line);}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}}}
+        if(buf.trim())try{_genHandleLine(buf.trim());}catch(e){if(e.message&&!e.message.includes('JSON'))throw e;}
     }catch(e){showToast(e.message,'error');}finally{isGenerating=false;btn.disabled=false;btn.innerHTML='&#9889; 直接生成';document.getElementById('loading').style.display='none';}
 }
 function renderResult(data){
