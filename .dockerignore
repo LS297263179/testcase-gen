@@ -4,7 +4,6 @@ __pycache__
 .gitignore
 .vscode
 *.md
-!requirements.txt
 data.db
 output/
 .env

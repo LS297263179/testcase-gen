@@ -10,11 +10,11 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from generator import generate_testcases
-from llm_client import build_client, load_config
-from output import to_excel, to_markdown
-from reader import read_requirement
-from reviewer import review_testcases
+from core.generator import generate_testcases
+from core.llm_client import build_client, load_config
+from core.output import to_excel, to_markdown
+from core.reader import read_requirement
+from core.reviewer import review_testcases
 
 console = Console()
 

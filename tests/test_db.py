@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-import db
+from core import db
 
 
 # ============================================================

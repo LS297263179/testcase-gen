@@ -19,12 +19,12 @@ class UsageStats:
     total_cost: float = 0.0
 
 # 项目根目录（此文件所在目录）
-_PROJECT_ROOT = Path(__file__).parent
+_PROJECT_ROOT = Path(__file__).parent.parent
 
 
 def load_config(path: str | None = None) -> dict:
     """加载配置文件（默认使用项目根目录下的 config.yaml）"""
-    from config import load_yaml_config
+    from core.config import load_yaml_config
     if path is not None:
         # 自定义路径时直接读取（兼容 CLI 传参场景）
         with open(path, "r", encoding="utf-8") as f:

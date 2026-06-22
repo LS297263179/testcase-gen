@@ -13,7 +13,7 @@ import yaml
 
 logger = logging.getLogger(__name__)
 
-_PROJECT_ROOT = Path(__file__).parent
+_PROJECT_ROOT = Path(__file__).parent.parent
 _config_cache: dict | None = None
 
 
@@ -85,7 +85,7 @@ def get_model_config() -> dict:
     这是 web 层获取模型配置的统一入口。
     数据库中的 API Key 会自动解密。
     """
-    import db
+    from core import db
 
     raw = db.get_setting("model_config")
     if raw:

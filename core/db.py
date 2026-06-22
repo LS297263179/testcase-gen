@@ -39,7 +39,7 @@ def _get_fernet_key() -> bytes:
     except ImportError:
         # cryptography 未安装时，使用基于 secret_key 的确定性密钥（32 字节 base64）
         import yaml
-        cfg_path = Path(__file__).parent / "config.yaml"
+        cfg_path = Path(__file__).parent.parent / "config.yaml"
         secret = ""
         if cfg_path.exists():
             with open(cfg_path, encoding="utf-8") as f:
@@ -86,7 +86,7 @@ def decrypt_api_key(ciphertext: str) -> str:
         logger.debug(f"API Key 解密失败，返回原文: {e}")
         return ciphertext
 
-_DB_PATH = str(Path(__file__).parent / "data" / "data.db")
+_DB_PATH = str(Path(__file__).parent.parent / "data" / "data.db")
 _write_lock = threading.Lock()  # 写操作互斥锁，防止 SQLite 写冲突
 
 
@@ -133,7 +133,7 @@ def db_read_conn():
 
 def _migrate_old_db():
     """如果根目录存在旧 data.db 且新库为空，自动迁移旧数据"""
-    old_db_path = str(Path(__file__).parent / "data.db")
+    old_db_path = str(Path(__file__).parent.parent / "data.db")
     if not os.path.exists(old_db_path):
         return
     # 检查新库是否已有数据
@@ -808,7 +808,7 @@ def get_model_config() -> dict:
         return config
     # fallback 到 config.yaml（使用绝对路径）
     try:
-        cfg_path = Path(__file__).parent / "config.yaml"
+        cfg_path = Path(__file__).parent.parent / "config.yaml"
         with open(cfg_path, "r", encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         return {

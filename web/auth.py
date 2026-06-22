@@ -5,9 +5,8 @@ import logging
 
 from flask import Blueprint, jsonify, request, session
 
-import config
-import db
-from web_utils import check_rate_limit, generate_csrf_token, get_real_ip
+from core import config, db
+from web.utils import check_rate_limit, generate_csrf_token, get_real_ip
 
 logger = logging.getLogger("web")
 

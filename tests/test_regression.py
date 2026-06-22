@@ -32,14 +32,14 @@ class TestConfig:
     """config.py 回归测试"""
 
     def test_load_yaml_config_returns_dict(self):
-        from config import load_yaml_config
+        from core.config import load_yaml_config
         cfg = load_yaml_config()
         assert isinstance(cfg, dict)
         # 应包含 generate 和 testcase 段
         assert "generate" in cfg or "testcase" in cfg
 
     def test_get_testcase_config_has_defaults(self):
-        from config import get_testcase_config
+        from core.config import get_testcase_config
         cfg = get_testcase_config()
         assert "default_priority" in cfg
         assert "max_testcases" in cfg
@@ -47,32 +47,32 @@ class TestConfig:
         assert cfg["default_priority"] in ("P0", "P1", "P2", "P3")
 
     def test_get_output_config(self):
-        from config import get_output_config
+        from core.config import get_output_config
         cfg = get_output_config()
         assert "dir" in cfg
         assert "format" in cfg
 
     def test_get_secret_key_returns_bytes_or_str(self):
-        from config import get_secret_key
+        from core.config import get_secret_key
         key = get_secret_key()
         assert isinstance(key, (bytes, str))
         assert len(key) > 0
 
     def test_get_secret_key_env_override(self, monkeypatch):
-        from config import get_secret_key
+        from core.config import get_secret_key
         monkeypatch.setenv("FLASK_SECRET_KEY", "test-secret-123")
         key = get_secret_key()
         assert key == "test-secret-123"
 
     def test_get_model_config_returns_structure(self, tmp_db):
-        from config import get_model_config
+        from core.config import get_model_config
         cfg = get_model_config()
         assert "generate" in cfg
         assert "review" in cfg
 
     def test_get_model_config_from_db(self, tmp_db):
-        from config import get_model_config
-        import db
+        from core.config import get_model_config
+        from core import db
         # 保存到数据库
         db.save_model_config({
             "generate": {"api_key": "test-key", "model": "test-model", "base_url": "http://test"},
@@ -211,7 +211,7 @@ class TestGeneratorFull:
 
     def test_parse_response_all_formats(self):
         """测试所有 JSON 格式的解析"""
-        from generator import parse_response
+        from core.generator import parse_response
 
         cases = [
             # 标准格式
@@ -229,7 +229,7 @@ class TestGeneratorFull:
 
     def test_deduplicate_mixed(self):
         """混合去重：精确 + 语义"""
-        from generator import deduplicate, deduplicate_by_steps
+        from core.generator import deduplicate, deduplicate_by_steps
 
         cases = [
             {"id": "TC_001", "module": "m", "title": "登录成功", "steps": "1. 输入账号\n2. 输入密码\n3. 点击登录", "expected": "成功", "priority": "P1", "type": "功能测试"},
@@ -246,7 +246,7 @@ class TestGeneratorFull:
 
     def test_limit_preserves_order(self):
         """限制数量时保持同优先级的原始顺序"""
-        from generator import limit_testcases
+        from core.generator import limit_testcases
 
         cases = [
             {"id": "TC_001", "priority": "P1", "title": "a", "module": "m", "steps": "s", "expected": "e", "type": "t"},
@@ -261,7 +261,7 @@ class TestGeneratorFull:
 
     def test_validate_completes_all_fields(self):
         """验证字段补全的完整性"""
-        from generator import validate_testcases
+        from core.generator import validate_testcases
 
         raw = [{"title": "只有标题"}]
         result = validate_testcases(raw)
@@ -276,7 +276,7 @@ class TestGeneratorFull:
 
     def test_step_fingerprint_chinese(self):
         """中文步骤的指纹提取"""
-        from generator import _extract_step_fingerprint
+        from core.generator import _extract_step_fingerprint
 
         fp = _extract_step_fingerprint("1. 打开登录页面\n2. 输入手机号 13800138000\n3. 点击获取验证码\n4. 输入验证码\n5. 点击登录按钮")
         verbs = {"打开", "输入", "点击"}
@@ -296,7 +296,7 @@ class TestLLMClient:
     """llm_client.py 回归测试"""
 
     def test_build_client_openai(self):
-        from llm_client import build_client
+        from core.llm_client import build_client
         client = build_client({
             "api_type": "openai",
             "base_url": "http://localhost:8080/v1",
@@ -307,7 +307,7 @@ class TestLLMClient:
         assert client.api_type == "openai"
 
     def test_build_client_anthropic(self):
-        from llm_client import build_client
+        from core.llm_client import build_client
         client = build_client({
             "api_type": "anthropic",
             "base_url": "https://api.anthropic.com",
@@ -318,16 +318,16 @@ class TestLLMClient:
         assert client.api_type == "anthropic"
 
     def test_load_config(self):
-        from llm_client import load_config
+        from core.llm_client import load_config
         cfg = load_config()
         assert isinstance(cfg, dict)
 
     def test_chat_stream_method_exists(self):
-        from llm_client import LLMClient
+        from core.llm_client import LLMClient
         assert hasattr(LLMClient, "chat_stream")
 
     def test_usage_stats_dataclass(self):
-        from llm_client import UsageStats
+        from core.llm_client import UsageStats
         stats = UsageStats(prompt_tokens=100, completion_tokens=50)
         assert stats.prompt_tokens == 100
         assert stats.completion_tokens == 50
@@ -341,7 +341,7 @@ class TestOutput:
     """output.py 回归测试"""
 
     def test_to_excel_creates_file(self, tmp_path):
-        from output import to_excel
+        from core.output import to_excel
         cases = [
             {"id": "TC_001", "module": "m", "title": "t", "precondition": "p",
              "steps": "s", "expected": "e", "priority": "P1", "type": "功能测试"},
@@ -351,7 +351,7 @@ class TestOutput:
         assert path.endswith(".xlsx")
 
     def test_to_markdown_creates_file(self, tmp_path):
-        from output import to_markdown
+        from core.output import to_markdown
         cases = [
             {"id": "TC_001", "module": "m", "title": "t", "precondition": "p",
              "steps": "s", "expected": "e", "priority": "P1", "type": "功能测试"},
@@ -363,7 +363,7 @@ class TestOutput:
         assert "t" in content
 
     def test_xmind_to_excel(self, tmp_path):
-        from output import xmind_to_excel
+        from core.output import xmind_to_excel
         cases = [
             {"id": "TC_001", "module": "登录", "title": "测试", "precondition": "",
              "steps": "步骤", "expected": "结果", "priority": "P1", "remark": ""},
@@ -372,13 +372,13 @@ class TestOutput:
         assert os.path.exists(path)
 
     def test_normalize_steps(self):
-        from output import _normalize_steps
+        from core.output import _normalize_steps
         result = _normalize_steps("1.步骤一\n2.步骤二\n3.步骤三")
         assert "1." in result
         assert "2." in result
 
     def test_strip_trailing_punctuation(self):
-        from output import _strip_trailing_punctuation
+        from core.output import _strip_trailing_punctuation
         assert _strip_trailing_punctuation("测试。") == "测试"
         assert _strip_trailing_punctuation("测试.") == "测试"
         assert _strip_trailing_punctuation("测试") == "测试"
@@ -392,7 +392,7 @@ class TestReader:
     """reader.py 回归测试"""
 
     def test_read_text_markdown(self, tmp_path):
-        from reader import read_text
+        from core.reader import read_text
         f = tmp_path / "test.md"
         f.write_text("# 需求文档\n\n用户登录功能", encoding="utf-8")
         result = read_text(str(f))
@@ -400,14 +400,14 @@ class TestReader:
         assert "用户登录" in result
 
     def test_read_text_plain(self, tmp_path):
-        from reader import read_text
+        from core.reader import read_text
         f = tmp_path / "test.txt"
         f.write_text("纯文本文档内容", encoding="utf-8")
         result = read_text(str(f))
         assert "纯文本" in result
 
     def test_is_image_detection(self, tmp_path):
-        from reader import is_image
+        from core.reader import is_image
         # 创建一个假的 PNG 文件头
         png_file = tmp_path / "test.png"
         png_file.write_bytes(b'\x89PNG\r\n\x1a\n' + b'\x00' * 100)
@@ -418,7 +418,7 @@ class TestReader:
         assert is_image(str(txt_file)) is False
 
     def test_get_image_media_type(self, tmp_path):
-        from reader import get_image_media_type
+        from core.reader import get_image_media_type
         for ext, mime in [("png", "image/png"), ("jpg", "image/jpeg"), ("gif", "image/gif"), ("webp", "image/webp")]:
             f = tmp_path / f"test.{ext}"
             f.write_bytes(b'\x00' * 10)
@@ -433,7 +433,7 @@ class TestPreferences:
     """preferences.py 回归测试"""
 
     def test_compute_diffs(self):
-        from preferences import compute_diffs
+        from core.preferences import compute_diffs
         original = [
             {"id": "TC_001", "title": "旧标题", "steps": "旧步骤", "expected": "旧预期", "priority": "P1", "type": "功能测试", "precondition": ""},
         ]
@@ -447,7 +447,7 @@ class TestPreferences:
         assert "steps" not in diffs[0]["field_diffs"]
 
     def test_compute_diffs_no_change(self):
-        from preferences import compute_diffs
+        from core.preferences import compute_diffs
         tc = {"id": "TC_001", "title": "t", "steps": "s", "expected": "e", "priority": "P1", "type": "t", "precondition": ""}
         diffs = compute_diffs([tc], [tc])
         assert len(diffs) == 0
@@ -461,14 +461,14 @@ class TestXmindUtils:
     """xmind_utils.py 回归测试"""
 
     def test_generate_template_creates_file(self, tmp_path):
-        from xmind_utils import generate_template
+        from core.xmind_utils import generate_template
         path = str(tmp_path / "template.xmind")
         generate_template(path)
         assert os.path.exists(path)
         assert os.path.getsize(path) > 0
 
     def test_flatten_topics(self):
-        from xmind_utils import flatten_topics
+        from core.xmind_utils import flatten_topics
         root = {
             "title": "根节点",
             "children": [
@@ -622,7 +622,7 @@ class TestWebE2E:
 
     def test_rate_limit_on_register(self, client):
         """注册接口速率限制"""
-        import web_utils
+        from web import utils as web_utils
         web_utils._rate_limit_store.clear()
         web_utils._rate_limit_last_cleanup = 0.0
 
@@ -655,7 +655,7 @@ class TestLLMStream:
 
     def test_chat_stream_is_generator(self):
         """chat_stream 返回生成器"""
-        from llm_client import LLMClient
+        from core.llm_client import LLMClient
         from unittest.mock import MagicMock
 
         # 直接构造 LLMClient 并 mock 内部 client

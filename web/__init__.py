@@ -1,12 +1,12 @@
-"""Flask Web 应用 - 路由注册 + 全局配置"""
+"""Flask Web 应用包 - 路由注册 + 全局配置"""
 
 import logging
+from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, session
 
-import config
-import db
-from web_utils import get_real_ip
+from core import config, db
+from web.utils import get_real_ip
 
 # 统一日志配置
 logging.basicConfig(
@@ -16,7 +16,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger("web")
 
-app = Flask(__name__)
+_PROJECT_ROOT = Path(__file__).parent.parent
+
+app = Flask(
+    __name__,
+    template_folder=str(_PROJECT_ROOT / "templates"),
+    static_folder=str(_PROJECT_ROOT / "static"),
+)
 app.secret_key = config.get_secret_key()
 
 # 初始化数据库
@@ -28,10 +34,10 @@ app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片
 # 注册 Blueprint
 # ============================================================
 
-from web_auth import bp as auth_bp
-from web_config import bp as config_bp
-from web_data import bp as data_bp
-from web_generate import bp as generate_bp
+from web.auth import bp as auth_bp
+from web.config_routes import bp as config_bp
+from web.data import bp as data_bp
+from web.generate import bp as generate_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(config_bp)

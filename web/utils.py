@@ -11,9 +11,9 @@ from pathlib import Path
 
 from flask import jsonify, request, session
 
-import db
-from llm_client import LLMClient, build_client
-from reader import get_image_media_type, image_to_base64, is_image, read_excel, read_text
+from core import db
+from core.llm_client import LLMClient, build_client
+from core.reader import get_image_media_type, image_to_base64, is_image, read_excel, read_text
 
 logger = logging.getLogger("web")
 
@@ -180,14 +180,14 @@ def cleanup_old_output_files():
 
 def get_generate_client() -> LLMClient:
     """获取生成用 LLM 客户端"""
-    from config import get_model_config
+    from core.config import get_model_config
     cfg = get_model_config()
     return build_client(cfg["generate"])
 
 
 def get_review_client() -> LLMClient:
     """获取评审用 LLM 客户端（可能与生成用不同模型）"""
-    from config import get_model_config
+    from core.config import get_model_config
     cfg = get_model_config()
     review_cfg = cfg.get("review", {})
     if review_cfg.get("enabled", False):
@@ -197,7 +197,7 @@ def get_review_client() -> LLMClient:
 
 def get_image_client() -> LLMClient | None:
     """获取图片识别 LLM 客户端"""
-    from config import get_model_config
+    from core.config import get_model_config
     cfg = get_model_config()
     gen_cfg = cfg["generate"]
     image_model = gen_cfg.get("image_model")

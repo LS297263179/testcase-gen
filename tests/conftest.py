@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 @pytest.fixture
 def tmp_db(tmp_path):
     """创建临时数据库，测试结束后自动清理"""
-    import db
+    from core import db
     db_path = str(tmp_path / "test.db")
     old_path = db._DB_PATH
     db.set_db_path(db_path)
@@ -26,8 +26,8 @@ def tmp_db(tmp_path):
 @pytest.fixture
 def app():
     """创建 Flask 测试客户端"""
-    import db
-    import web
+    from core import db
+    from web import app as flask_app
 
     # 使用临时数据库
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
@@ -36,9 +36,9 @@ def app():
     db.set_db_path(db_path)
     db.init_db()
 
-    web.app.config["TESTING"] = True
-    web.app.config["WTF_CSRF_ENABLED"] = False
-    yield web.app
+    flask_app.config["TESTING"] = True
+    flask_app.config["WTF_CSRF_ENABLED"] = False
+    yield flask_app
 
     db.set_db_path(old_path)
     try:
@@ -50,7 +50,7 @@ def app():
 @pytest.fixture
 def client(app):
     """Flask 测试客户端（重置速率限制）"""
-    import web_utils
+    from web import utils as web_utils
     web_utils._rate_limit_store.clear()
     return app.test_client()
 
@@ -58,7 +58,7 @@ def client(app):
 @pytest.fixture
 def auth_client(client):
     """已登录的 Flask 测试客户端"""
-    import web_utils
+    from web import utils as web_utils
     web_utils._rate_limit_store.clear()
     # 注册
     rv = client.post("/api/register", json={"username": "testuser", "password": "testpass123"})
@@ -73,7 +73,7 @@ def auth_client(client):
 def mock_llm_client():
     """Mock LLM 客户端，不实际调用 API"""
     from unittest.mock import MagicMock
-    from llm_client import LLMClient
+    from core.llm_client import LLMClient
 
     client = MagicMock(spec=LLMClient)
     client.chat.return_value = '{"testcases": []}'

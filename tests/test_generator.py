@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from generator import (
+from core.generator import (
     deduplicate,
     deduplicate_by_steps,
     limit_testcases,

@@ -5,9 +5,8 @@ import logging
 
 from flask import Blueprint, jsonify, request, session
 
-import config
-import db
-from web_utils import csrf_protect, login_required
+from core import config, db
+from web.utils import csrf_protect, login_required
 
 logger = logging.getLogger("web")
 

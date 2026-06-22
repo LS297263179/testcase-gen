@@ -12,11 +12,11 @@ from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, request, send_file, session, stream_with_context
 
-import db
-from llm_client import load_config
-from output import to_excel, to_markdown, xmind_to_excel
-from reviewer import optimize_testcases, review_testcases
-from web_utils import (OUTPUT_DIR, cleanup_old_output_files, csrf_protect,
+from core import db
+from core.llm_client import load_config
+from core.output import to_excel, to_markdown, xmind_to_excel
+from core.reviewer import optimize_testcases, review_testcases
+from web.utils import (OUTPUT_DIR, cleanup_old_output_files, csrf_protect,
                        get_generate_client, get_image_client, get_review_client,
                        get_user_output_dir, login_required, process_uploaded_files, sse_format)
 
@@ -130,7 +130,7 @@ def api_analyze():
 
     def sse_stream():
         try:
-            from generator import analyze_modules
+            from core.generator import analyze_modules
             client = get_generate_client()
             _ct = case_types or load_config()["testcase"]["case_types"]
 
@@ -244,8 +244,8 @@ def api_generate():
             if tp_context:
                 requirement = requirement + "\n\n【参考测试点】\n" + tp_context
 
-            from generator import (analyze_modules, generate_for_module, deduplicate,
-                                   deduplicate_by_steps, generate_all_in_one, limit_testcases)
+            from core.generator import (analyze_modules, generate_for_module, deduplicate,
+                                       deduplicate_by_steps, generate_all_in_one, limit_testcases)
             client = get_generate_client()
             image_client = get_image_client() if images else None
             active_client = image_client if (images and image_client) else client
@@ -453,7 +453,7 @@ def api_optimize():
 @csrf_protect
 def api_xmind2case():
     """上传 XMind 文件，通过 LLM 生成测试用例，返回 Excel 下载"""
-    from xmind_utils import parse_xmind, flatten_topics
+    from core.xmind_utils import parse_xmind, flatten_topics
 
     file = request.files.get("file")
     if not file or not file.filename:
@@ -558,9 +558,9 @@ def api_xmind2case():
 def api_xmind_template():
     """下载 XMind 参考模板"""
     import importlib
-    import xmind_utils
+    import core.xmind_utils as xmind_utils
     importlib.reload(xmind_utils)
-    from xmind_utils import generate_template
+    from core.xmind_utils import generate_template
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

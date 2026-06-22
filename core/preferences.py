@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from llm_client import LLMClient
+    from core.llm_client import LLMClient
 
 # 比较字段列表
 _DIFF_FIELDS = ["title", "precondition", "steps", "expected", "priority", "type"]

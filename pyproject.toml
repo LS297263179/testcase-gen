@@ -3,6 +3,25 @@ name = "testcase-gen"
 version = "1.0.0"
 description = "AI 测试用例生成器 - 基于 LLM 的自动化测试用例生成工具"
 requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=0.40.0",
+    "openai>=1.0.0",
+    "pyyaml>=6.0",
+    "openpyxl>=3.1.0",
+    "rich>=13.0.0",
+    "json5>=0.9.0",
+    "flask>=3.0.0",
+    "werkzeug>=3.0.0",
+    "cryptography>=41.0.0",
+    "gunicorn>=21.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.5.0",
+]
 
 [tool.ruff]
 target-version = "py311"
@@ -27,7 +46,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["db", "generator", "llm_client", "output", "preferences", "reader", "reviewer", "web", "xmind_utils", "config"]
+known-first-party = ["core", "web"]
 
 [tool.ruff.format]
 quote-style = "double"

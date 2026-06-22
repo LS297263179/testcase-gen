@@ -8,10 +8,10 @@ from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, request, send_file, session, stream_with_context
 
-import db
-from output import to_excel, to_markdown
-from preferences import compute_diffs, extract_preferences
-from web_utils import (OUTPUT_DIR, cleanup_old_output_files, csrf_protect,
+from core import db
+from core.output import to_excel, to_markdown
+from core.preferences import compute_diffs, extract_preferences
+from web.utils import (OUTPUT_DIR, cleanup_old_output_files, csrf_protect,
                        get_generate_client, get_image_client, get_user_output_dir,
                        login_required, process_uploaded_files, sse_format)
 

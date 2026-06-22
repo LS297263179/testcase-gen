@@ -9,8 +9,8 @@ from collections.abc import Callable
 
 logger = logging.getLogger(__name__)
 
-from llm_client import LLMClient  # noqa: E402
-from output import _normalize_steps, _strip_trailing_punctuation  # noqa: E402
+from core.llm_client import LLMClient  # noqa: E402
+from core.output import _normalize_steps, _strip_trailing_punctuation  # noqa: E402
 
 # ============================================================
 # Step 1: 需求分析 Prompt — 拆解模块和测试维度

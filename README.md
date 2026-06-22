@@ -94,13 +94,13 @@
 ### 1. 安装依赖
 
 ```bash
-pip install -r requirements.txt
+pip install .
 ```
 
 开发环境（含测试和 linting）：
 
 ```bash
-pip install -r requirements-dev.txt
+pip install .[dev]
 ```
 
 ### 2. 配置 API
@@ -278,31 +278,37 @@ testcase-gen/
 │   ├── app.js            # 前端逻辑（认证/SSE/生成/编辑/偏好）
 │   └── style.css         # 样式（响应式/暗色主题/动画）
 ├── main.py               # 命令行入口
+├── start.py              # Web 启动入口
 ├── config.yaml           # 配置文件（模型、输出、用例参数）
 ├── config.yaml.example   # 配置文件模板
 ├── .env.example          # 环境变量模板（Docker 部署用）
 ├── Dockerfile            # Docker 镜像定义（非 root 用户）
 ├── docker-compose.yml    # Docker Compose 编排
 ├── gunicorn.conf.py      # Gunicorn 生产配置
-├── pyproject.toml        # ruff linting + pytest 配置
-├── requirements.txt      # Python 生产依赖
-├── requirements-dev.txt  # Python 开发依赖（pytest, ruff）
-├── .gitignore
-├── .dockerignore
-├── llm_client.py         # LLM 调用封装（双 SDK + 多模态 + 流式 + 思考模式）
-├── reader.py             # 需求文档读取（MD / TXT / Excel / 图片）
-├── generator.py          # 测试用例生成（并行分段 + Prompt + 去重 + JSON 容错解析）
-├── reviewer.py           # 测试用例评审（6 维评审 + 重复检测）+ 精准优化
-├── output.py             # 输出模块（Excel + Markdown + XMind 转 Excel）
-├── xmind_utils.py        # XMind 文件解析 + 模板生成（支持 XMind 8+ JSON 和旧版 XML）
-├── db.py                 # SQLite 数据库（用户 + 历史 + 材料 + 测试点 + 偏好 + API Key 加密）
-├── preferences.py        # 偏好学习模块
+├── pyproject.toml        # 项目配置（依赖 + ruff + pytest）
+├── core/                 # 核心业务包
+│   ├── config.py         # 集中配置管理
+│   ├── db.py             # SQLite 数据库（用户 + 历史 + 材料 + 测试点 + 偏好 + API Key 加密）
+│   ├── llm_client.py     # LLM 调用封装（双 SDK + 多模态 + 流式 + 思考模式）
+│   ├── generator.py      # 测试用例生成（并行分段 + Prompt + 去重 + JSON 容错解析）
+│   ├── reviewer.py       # 测试用例评审（6 维评审 + 重复检测）+ 精准优化
+│   ├── output.py         # 输出模块（Excel + Markdown + XMind 转 Excel）
+│   ├── reader.py         # 需求文档读取（MD / TXT / Excel / 图片）
+│   ├── preferences.py    # 偏好学习模块
+│   └── xmind_utils.py    # XMind 文件解析 + 模板生成
+├── web/                  # Web 路由包
+│   ├── __init__.py       # Flask app + Blueprint 注册
+│   ├── auth.py           # 认证路由
+│   ├── config_routes.py  # 模型配置路由
+│   ├── data.py           # 数据 CRUD 路由
+│   ├── generate.py       # 生成相关路由
+│   └── utils.py          # Web 工具函数
 ├── tests/                # 测试套件
 │   ├── conftest.py       # pytest 共享 fixtures
-│   ├── test_db.py        # 数据库层测试（26 tests）
-│   ├── test_generator.py # 生成逻辑测试（28 tests）
-│   ├── test_web_api.py   # API 集成测试（20 tests）
-│   └── test_regression.py # 全功能回归测试（52 tests）
+│   ├── test_db.py        # 数据库层测试
+│   ├── test_generator.py # 生成逻辑测试
+│   ├── test_web_api.py   # API 集成测试
+│   └── test_regression.py # 全功能回归测试
 ├── examples/
 │   └── sample_requirement.md
 ├── data/                 # 数据目录（自动创建）
@@ -373,7 +379,7 @@ ruff format .
 ## 常见问题
 
 **Q: 报错 `ModuleNotFoundError`**
-A: 运行 `pip install -r requirements.txt` 安装依赖。
+A: 运行 `pip install .` 安装依赖。
 
 **Q: 报错 `API Key 无效`**
 A: 在「模型配置」页面检查 API Key 是否正确，确认模型服务是否到期。
