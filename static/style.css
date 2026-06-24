@@ -200,6 +200,16 @@ textarea:focus{outline:none;border-color:#1a73e8;box-shadow:0 0 0 2px rgba(26,11
 .tp-point .tp-title{color:#333;font-weight:500;}
 .tp-point .tp-desc{color:#888;font-size:11px;margin-top:2px;}
 
+/* ===== 测试点子分类 ===== */
+.tp-subcategory{margin:6px 0;}
+.tp-sc-title{font-size:13px;font-weight:500;color:#444;padding:5px 8px;margin:2px 0;cursor:pointer;display:flex;align-items:center;gap:6px;border-radius:4px;}
+.tp-sc-title:hover{background:#f0f4ff;}
+.tp-sc-title .tp-sc-arrow{transition:transform 0.2s;font-size:11px;color:#888;}
+.tp-sc-title .tp-sc-arrow.open{transform:rotate(90deg);}
+.tp-sc-count{font-size:10px;color:#aaa;font-weight:normal;}
+.tp-sc-points{padding:2px 0 2px 18px;display:none;}
+.tp-sc-points.show{display:block;}
+
 /* ===== Preferences ===== */
 .pref-item{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid #eee;border-radius:6px;margin-bottom:5px;font-size:12px;}
 .pref-item.inactive{opacity:0.45;}

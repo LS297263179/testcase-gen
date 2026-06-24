@@ -35,7 +35,7 @@ def load_config(path: str | None = None) -> dict:
 class LLMClient:
     def __init__(self, base_url: str, api_key: str, model: str,
                  api_type: str = "openai",
-                 temperature: float = 0.3, max_tokens: int = 4096,
+                 temperature: float = 0.3, max_tokens: int = 8192,
                  max_retries: int = 3,
                  enable_thinking: bool = False):
         self.api_type = api_type

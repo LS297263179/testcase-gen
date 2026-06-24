@@ -116,23 +116,66 @@ async function generatePoints(){
     finally{isGenerating=false;btn.disabled=false;btn.innerHTML='&#128209; 生成测试点';document.getElementById('tpLoading').style.display='none';}
 }
 function renderTestPoints(points){
-    const total=points.reduce((s,m)=>s+m.points.length,0);
+    // 兼容新旧格式：统一转为 subcategories 结构
+    const normalized=points.map(m=>{
+        if(m.subcategories) return m;
+        return {module:m.module||'未分类',subcategories:[{name:'测试点',points:m.points||[]}]};
+    });
+    let total=0;
+    normalized.forEach(m=>m.subcategories.forEach(sc=>total+=(sc.points||[]).length));
     document.getElementById('tpTotal').textContent=total;
-    document.getElementById('tpModules').textContent=points.length;
+    document.getElementById('tpModules').textContent=normalized.length;
     const tree=document.getElementById('tpTree');
-    tree.innerHTML=points.map((m,i)=>`
-        <div class="tp-module">
-            <div class="tp-module-title" onclick="toggleTpModule(${i})">
-                <span class="arrow" id="tpArrow${i}">&#9656;</span>
+    tree.innerHTML=normalized.map((m,mi)=>{
+        const hasNamedSubs=m.subcategories.some(sc=>sc.name&&sc.name!=='测试点');
+        const allPoints=m.subcategories.flatMap(sc=>sc.points||[]);
+        const moduleCount=allPoints.length;
+        if(!hasNamedSubs){
+            // 旧样式：扁平渲染
+            return `<div class="tp-module">
+                <div class="tp-module-title" onclick="toggleTpModule(${mi})">
+                    <span class="arrow" id="tpArrow${mi}">&#9656;</span>
+                    ${esc(m.module)}
+                    <span class="tp-module-count">${moduleCount} 个测试点</span>
+                </div>
+                <div class="tp-points" id="tpPoints${mi}">
+                    ${allPoints.map(p=>`<div class="tp-point"><div class="tp-dot"></div><div class="tp-info"><div class="tp-title">${esc(p.title)}</div>${p.description?`<div class="tp-desc">${esc(p.description)}</div>`:''}</div></div>`).join('')}
+                </div>
+            </div>`;
+        }
+        // 新样式：三级结构
+        return `<div class="tp-module">
+            <div class="tp-module-title" onclick="toggleTpModule(${mi})">
+                <span class="arrow" id="tpArrow${mi}">&#9656;</span>
                 ${esc(m.module)}
-                <span class="tp-module-count">${m.points.length} 个测试点</span>
+                <span class="tp-module-count">${moduleCount} 个测试点</span>
             </div>
-            <div class="tp-points" id="tpPoints${i}">
-                ${m.points.map(p=>`<div class="tp-point"><div class="tp-dot"></div><div class="tp-info"><div class="tp-title">${esc(p.title)}</div>${p.description?`<div class="tp-desc">${esc(p.description)}</div>`:''}</div></div>`).join('')}
+            <div class="tp-points" id="tpPoints${mi}">
+                ${m.subcategories.map((sc,sci)=>{
+                    const scId=`tpSC${mi}_${sci}`;
+                    const scPoints=sc.points||[];
+                    if(!scPoints.length) return '';
+                    return `<div class="tp-subcategory">
+                        <div class="tp-sc-title" onclick="event.stopPropagation();toggleTpSC('${scId}')">
+                            <span class="arrow tp-sc-arrow" id="tpSCArrow${scId}">&#9656;</span>
+                            ${esc(sc.name)}
+                            <span class="tp-sc-count">${scPoints.length} 项</span>
+                        </div>
+                        <div class="tp-sc-points" id="${scId}">
+                            ${scPoints.map(p=>`<div class="tp-point"><div class="tp-dot"></div><div class="tp-info"><div class="tp-title">${esc(p.title)}</div>${p.description?`<div class="tp-desc">${esc(p.description)}</div>`:''}</div></div>`).join('')}
+                        </div>
+                    </div>`;
+                }).join('')}
             </div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
     document.getElementById('tpResult').style.display='block';
+}
+function toggleTpSC(id){
+    const pts=document.getElementById(id);
+    const arrow=document.getElementById('tpSCArrow'+id);
+    if(pts) pts.classList.toggle('show');
+    if(arrow) arrow.classList.toggle('open');
 }
 function toggleTpModule(i){
     const pts=document.getElementById('tpPoints'+i);

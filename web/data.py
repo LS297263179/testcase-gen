@@ -101,29 +101,114 @@ def api_materials_update(mid):
 # 测试点 API
 # ============================================================
 
-TEST_POINTS_PROMPT = """你是一位资深测试专家。请根据以下需求，生成测试点。
 
-需求内容：
+def _normalize_points_format(points: list) -> list:
+    """兼容旧格式（无 subcategories）：自动转换为新格式"""
+    if not points:
+        return points
+    normalized = []
+    for m in points:
+        if "subcategories" in m:
+            normalized.append(m)
+        elif "points" in m:
+            # 旧格式：module -> points，包装为 module -> subcategories -> points
+            normalized.append({
+                "module": m.get("module", "未分类"),
+                "subcategories": [{"name": "测试点", "points": m["points"]}],
+            })
+        else:
+            normalized.append(m)
+    return normalized
+
+
+TEST_POINTS_PROMPT = """你是一位资深测试工程师，擅长编写高质量、可执行的测试点。请根据以下需求生成测试点。
+
+## 需求内容
 {requirement}
 {materials}
 
-请返回 JSON 格式的测试点树，结构如下：
+## 第一步：分析需求（内部思考，不输出）
+在生成测试点之前，请先完成以下分析：
+1. 识别需求中的核心业务实体和功能模块
+2. 梳理每个模块的业务规则、公式、字段约束
+3. 识别跨模块的公共规则（如全局筛选器、自动刷新、联动关系）
+4. 为每个模块确定需要覆盖的测试维度
+
+## 第二步：生成测试点
+分析完成后，按以下 JSON 格式输出测试点：
+
+```json
 [
   {{
     "module": "模块名称",
-    "points": [
-      {{"title": "测试点标题", "description": "简要描述"}},
-      ...
+    "subcategories": [
+      {{
+        "name": "子分类名称",
+        "points": [
+          {{"title": "测试点标题", "description": "具体可执行的检查描述"}},
+          ...
+        ]
+      }}
     ]
   }}
 ]
+```
 
-要求：
-1. 按功能模块分组
-2. 每个模块下列出关键测试点（正常流程、边界、异常）
-3. 测试点要具体可执行
-4. 结合项目资料中的信息补充测试点
-5. 只返回 JSON，不要其他内容"""
+## 子分类命名规范
+按测试维度组织子分类，根据模块特点选择合适的维度：
+- **功能正确性**：核心业务流程、数据展示、计算逻辑
+- **边界条件**：极值、空值、分母为0、最大/最小限制
+- **交互细节**：悬浮提示、Tab切换、弹窗、排序、筛选
+- **数据联动**：多模块联动刷新、状态同步、定时刷新
+- **异常场景**：接口超时、数据格式异常、竞态条件
+- **空状态与无数据**：无数据展示、空列表、占位文案
+- **性能**：加载速度、刷新流畅度、大数据量渲染
+- **UI与兼容性**：布局、响应式、多浏览器适配
+- **权限与安全**：角色权限、数据隔离、敏感信息
+
+## 测试点编写规范
+1. **具体可执行**：描述要包含具体的操作、数值、公式或交互行为，不要写笼统的"功能正常"
+2. **一个检查点一个断言**：每条测试点只验证一个具体行为
+3. **覆盖全面**：正常流程 + 边界条件 + 异常场景 + 非功能维度都要覆盖
+4. **引用需求细节**：公式、字段名、交互规则等直接写入描述，不要省略
+5. **结合项目资料**：如果提供了项目资料，结合资料中的业务规则补充测试点
+6. **关注公共规则**：全局筛选器、自动刷新、环比计算等跨模块规则要单独列出
+
+## 示例
+```json
+[
+  {{
+    "module": "成交与转化",
+    "subcategories": [
+      {{
+        "name": "功能正确性",
+        "points": [
+          {{"title": "支付转化率计算", "description": "支付转化率 = 成交用户数 \u00f7 日访问人数 \u00d7 100%，验证计算结果正确"}},
+          {{"title": "成交用户数展示", "description": "展示所选日期内完成支付的去重成交客户数，数值为整数，千位分隔符显示"}}
+        ]
+      }},
+      {{
+        "name": "边界条件",
+        "points": [
+          {{"title": "日访问人数为0时转化率", "description": "日访问人数为0时，支付转化率显示为0%或'--'，不报错"}}
+        ]
+      }},
+      {{
+        "name": "交互细节",
+        "points": [
+          {{"title": "成交用户数口径说明", "description": "鼠标悬浮\u2139\ufe0f图标，弹出字段口径说明弹窗"}}
+        ]
+      }}
+    ]
+  }}
+]
+```
+
+## 要求
+1. 按功能模块分组，每个模块下按子分类组织测试点
+2. 子分类根据模块特点选择，不必全部使用，但要覆盖该模块的关键维度
+3. 测试点总数控制在 60-120 条，确保覆盖全面且不冗余
+4. 只返回 JSON，不要其他内容"""
 
 
 @bp.route("/api/generate-points", methods=["POST"])
@@ -165,7 +250,7 @@ def api_generate_points():
             )
 
             yield sse_format({"type": "progress", "message": "正在分析需求，生成测试点..."})
-            response = active_client.chat("你是一位资深测试专家。", prompt, images=images if images else None)
+            response = active_client.chat("你是一位资深测试工程师。", prompt, images=images if images else None)
             text = response.strip()
 
             import re
@@ -175,7 +260,12 @@ def api_generate_points():
             else:
                 points = json.loads(text)
 
-            total = sum(len(m.get("points", [])) for m in points)
+            # 兼容旧格式（无 subcategories）：自动转换为新格式
+            points = _normalize_points_format(points)
+
+            total = sum(
+                len(p) for m in points for sc in m.get("subcategories", []) for p in [sc.get("points", [])]
+            )
             title = (requirement or "测试点").strip()[:30]
             tp_id = db.save_test_points(session["user_id"], title, requirement, points, total)
 
@@ -212,12 +302,18 @@ def api_export_points():
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     if fmt == "md":
+        # 兼容新旧两种格式
+        points = _normalize_points_format(points)
         lines = [f"# {title}\n"]
         for module in points:
             lines.append(f"## {module.get('module', '未分类')}\n")
-            for p in module.get("points", []):
-                lines.append(f"- **{p.get('title', '')}**：{p.get('description', '')}")
-            lines.append("")
+            for sc in module.get("subcategories", []):
+                sc_name = sc.get("name", "")
+                if sc_name and sc_name != "测试点":
+                    lines.append(f"### {sc_name}\n")
+                for p in sc.get("points", []):
+                    lines.append(f"- **{p.get('title', '')}**：{p.get('description', '')}")
+                lines.append("")
         content = "\n".join(lines)
         path = os.path.join(OUTPUT_DIR, f"testpoints_{timestamp}.md")
         os.makedirs(OUTPUT_DIR, exist_ok=True)

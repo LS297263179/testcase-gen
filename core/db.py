@@ -773,7 +773,7 @@ def delete_test_points(tp_id: int):
 
 
 def get_test_points_for_prompt(tp_id: int) -> str:
-    """格式化测试点为 prompt 注入文本"""
+    """格式化测试点为 prompt 注入文本，兼容新旧两种格式"""
     tp = get_test_points(tp_id)
     if not tp:
         return ""
@@ -784,13 +784,22 @@ def get_test_points_for_prompt(tp_id: int) -> str:
     for module in points:
         mod_name = module.get("module", "未分类")
         lines.append(f"模块：{mod_name}")
-        for p in module.get("points", []):
-            title = p.get("title", "")
-            desc = p.get("description", "")
-            if desc:
-                lines.append(f"- {title}：{desc}")
-            else:
-                lines.append(f"- {title}")
+        # 新格式：subcategories
+        if "subcategories" in module:
+            for sc in module["subcategories"]:
+                sc_name = sc.get("name", "")
+                if sc_name and sc_name != "测试点":
+                    lines.append(f"  [{sc_name}]")
+                for p in sc.get("points", []):
+                    title = p.get("title", "")
+                    desc = p.get("description", "")
+                    lines.append(f"  - {title}：{desc}" if desc else f"  - {title}")
+        # 旧格式：直接 points
+        else:
+            for p in module.get("points", []):
+                title = p.get("title", "")
+                desc = p.get("description", "")
+                lines.append(f"- {title}：{desc}" if desc else f"- {title}")
         lines.append("")
     return "\n".join(lines)
 
