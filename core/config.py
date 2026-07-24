@@ -95,6 +95,19 @@ def get_model_config() -> dict:
             for section in ("generate", "review"):
                 if section in config and "api_key" in config[section]:
                     config[section]["api_key"] = db.decrypt_api_key(config[section]["api_key"])
+            # 如果数据库配置缺少 api_key，从 config.yaml 补充
+            needs_fallback = False
+            for section in ("generate", "review"):
+                if section in config and not config[section].get("api_key"):
+                    needs_fallback = True
+                    break
+            if needs_fallback:
+                file_cfg = load_yaml_config()
+                for section in ("generate", "review"):
+                    if section in config and not config[section].get("api_key"):
+                        file_key = file_cfg.get(section, {}).get("api_key", "")
+                        if file_key:
+                            config[section]["api_key"] = file_key
             return config
         except (json.JSONDecodeError, Exception) as e:
             logger.warning(f"数据库模型配置解析失败，fallback 到文件: {e}")

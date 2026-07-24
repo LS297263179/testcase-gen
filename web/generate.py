@@ -349,6 +349,110 @@ def api_generate():
 
 
 # ============================================================
+# 单条用例重新生成 API
+# ============================================================
+
+REGEN_SINGLE_PROMPT = """你是一名资深软件测试工程师。请根据以下需求重新生成一条更高质量的测试用例。
+
+## 原始需求
+{requirement}
+
+## 原始用例（供参考，请改进）
+- 模块：{module}
+- 标题：{title}
+- 前置条件：{precondition}
+- 步骤：{steps}
+- 预期结果：{expected}
+- 优先级：{priority}
+- 类型：{tc_type}
+
+## 要求
+1. 保持相同的模块和测试目标，但提升用例质量
+2. 测试步骤要具体可执行，每步一行，格式为 "1. 操作描述"
+3. 预期结果要写具体的系统响应，不要写"功能正常"
+4. 如果原始用例已经很好，可以保持类似内容但优化措辞
+5. 输出严格 JSON 对象（不是数组）
+
+## 输出格式（严格 JSON）：
+```json
+{{
+  "id": "{tc_id}",
+  "module": "{module}",
+  "title": "改进后的标题",
+  "precondition": "改进后的前置条件",
+  "steps": "1. 改进步骤一\\n2. 改进步骤二",
+  "expected": "改进后的预期结果",
+  "priority": "{priority}",
+  "type": "{tc_type}"
+}}
+```"""
+
+
+@bp.route("/api/regenerate-single", methods=["POST"])
+@login_required
+@csrf_protect
+def api_regenerate_single():
+    """单条用例重新生成（SSE 流式）"""
+    try:
+        data = request.get_json()
+        requirement = data.get("requirement", "")
+        testcase = data.get("testcase", {})
+        if not testcase:
+            return jsonify({"error": "缺少用例数据"}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    def sse_stream():
+        try:
+            from core.generator import parse_response
+            client = get_generate_client()
+
+            yield sse_format({"type": "progress", "message": f"正在重新生成: {testcase.get('title', '')}"})
+
+            prompt = REGEN_SINGLE_PROMPT.format(
+                requirement=requirement or "（无详细需求描述）",
+                module=testcase.get("module", "未分类"),
+                title=testcase.get("title", ""),
+                precondition=testcase.get("precondition", ""),
+                steps=testcase.get("steps", ""),
+                expected=testcase.get("expected", ""),
+                priority=testcase.get("priority", "P1"),
+                tc_type=testcase.get("type", "功能测试"),
+                tc_id=testcase.get("id", ""),
+            )
+
+            raw = client.chat("你是一名资深软件测试工程师。", prompt, max_tokens=4096)
+
+            # 解析单条用例
+            match = re.search(r"```json\s*(.*?)\s*```", raw, re.DOTALL)
+            json_str = match.group(1) if match else raw
+            start = json_str.find("{")
+            end = json_str.rfind("}") + 1
+            if start >= 0 and end > start:
+                json_str = json_str[start:end]
+            new_tc = json.loads(json_str)
+
+            # 补全字段
+            for field, default in [("id", testcase.get("id", "")), ("module", testcase.get("module", "")),
+                                   ("title", ""), ("precondition", ""), ("steps", ""), ("expected", ""),
+                                   ("priority", testcase.get("priority", "P1")), ("type", testcase.get("type", ""))]:
+                if not new_tc.get(field):
+                    new_tc[field] = default
+
+            yield sse_format({"type": "done", "data": new_tc})
+
+        except Exception as e:
+            logger.exception("单条重新生成异常")
+            yield sse_format({"type": "error", "message": f"生成失败: {str(e)}"})
+
+    return Response(
+        stream_with_context(sse_stream()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ============================================================
 # 评审 & 优化 API
 # ============================================================
 

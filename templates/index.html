@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 测试用例生成器</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
@@ -55,6 +58,7 @@
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleHistory()"></div>
 <div class="history-sidebar" id="historySidebar">
     <div class="hs-header"><h3>&#128194; 历史记录</h3><button class="hs-close" onclick="toggleHistory()">&times;</button></div>
+    <div class="hs-search"><input type="text" id="historySearch" placeholder="搜索历史记录..." oninput="filterHistory()"></div>
     <div class="hs-body" id="historyList"><div class="history-empty">暂无历史记录</div></div>
 </div>
 
@@ -96,10 +100,18 @@
             </div>
 
             <div class="stats-grid" id="dashStatsGrid">
-                <div class="stat-card"><div class="num" id="dashSessions"><span style="color:#ddd;">···</span></div><div class="label">生成次数</div></div>
-                <div class="stat-card pink"><div class="num" id="dashTestcases"><span style="color:#ddd;">···</span></div><div class="label">用例总数</div></div>
-                <div class="stat-card green"><div class="num" id="dashPrefs"><span style="color:#ddd;">···</span></div><div class="label">偏好规则</div></div>
-                <div class="stat-card orange"><div class="num" id="dashModels"><span style="color:#ddd;">···</span></div><div class="label">当前模型</div></div>
+                <div class="stat-card blue">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+                    <div class="num" id="dashSessions"><span style="color:#ddd;">···</span></div><div class="label">生成次数</div></div>
+                <div class="stat-card pink">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+                    <div class="num" id="dashTestcases"><span style="color:#ddd;">···</span></div><div class="label">用例总数</div></div>
+                <div class="stat-card green">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+                    <div class="num" id="dashPrefs"><span style="color:#ddd;">···</span></div><div class="label">偏好规则</div></div>
+                <div class="stat-card orange">
+                    <div class="stat-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></div>
+                    <div class="num" id="dashModels"><span style="color:#ddd;">···</span></div><div class="label">当前模型</div></div>
             </div>
 
             <div class="quick-actions">
@@ -237,19 +249,34 @@
                             </select>
                             <button class="btn btn-ghost btn-sm" onclick="batchChangePriority()">应用</button>
                             <button class="btn btn-ghost btn-sm" onclick="batchDelete()" style="color:#d32f2f;">批量删除</button>
+                            <div class="spacer"></div>
+                            <button class="undo-btn" id="btnUndo" onclick="undo()" title="Ctrl+Z">↩ 撤销</button>
+                        </div>
+
+                        <div class="filter-bar" id="filterBar" style="display:none;">
+                            <input type="text" id="tcSearch" placeholder="搜索标题、步骤、预期结果..." oninput="applyFilters()">
+                            <select id="filterModule" onchange="applyFilters()"><option value="">全部模块</option></select>
+                            <select id="filterPriority" onchange="applyFilters()">
+                                <option value="">全部优先级</option>
+                                <option value="P0">P0</option>
+                                <option value="P1">P1</option>
+                                <option value="P2">P2</option>
+                                <option value="P3">P3</option>
+                            </select>
+                            <span id="filterCount" class="filter-count"></span>
                         </div>
 
                         <div class="tc-table-wrap">
                         <table class="tc-table">
                             <thead><tr>
                                 <th class="cb-cell"><input type="checkbox" id="thCheckbox" onchange="toggleSelectAll()" style="accent-color:#1a73e8;"></th>
-                                <th style="width:65px;">编号</th>
-                                <th style="width:85px;">模块</th>
+                                <th style="width:65px;" class="sortable" onclick="sortBy('id')">编号 <span class="sort-icon" id="sort-id"></span></th>
+                                <th style="width:85px;" class="sortable" onclick="sortBy('module')">模块 <span class="sort-icon" id="sort-module"></span></th>
                                 <th>标题</th>
-                                <th style="width:55px;">优先级</th>
-                                <th style="width:75px;">类型</th>
+                                <th style="width:55px;" class="sortable" onclick="sortBy('priority')">优先级 <span class="sort-icon" id="sort-priority"></span></th>
+                                <th style="width:75px;" class="sortable" onclick="sortBy('type')">类型 <span class="sort-icon" id="sort-type"></span></th>
                                 <th style="width:80px;">来源</th>
-                                <th style="width:80px;">操作</th>
+                                <th style="width:100px;">操作</th>
                             </tr></thead>
                             <tbody id="tbody"></tbody>
                         </table>
