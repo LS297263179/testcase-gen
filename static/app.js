@@ -45,6 +45,8 @@ function switchPage(name){
     if(name==='materials')loadMaterials();
     if(name==='xmind2case')initXmind2case();
 }
+// 折叠左侧面板
+function togglePanel(btn){const right=btn.closest('.split-right');const layout=right.closest('.split-layout');const left=layout.querySelector('.split-left');const pl=btn.querySelector('polyline');left.classList.toggle('collapsed');if(left.classList.contains('collapsed')){pl.setAttribute('points','9 18 15 12 9 6');}else{pl.setAttribute('points','15 18 9 12 15 6');}}
 
 // ============================================================
 // 测试点生成
