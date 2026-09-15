@@ -10,6 +10,7 @@ Step 3 引入：TestPoint 的 ULID 是每次新生成的，无法用于跨轮次
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 
 # 归一化时压缩的空白字符（含全角空格）
@@ -55,6 +56,55 @@ def compute_testpoint_fingerprint(
             normalize_text(module),
             normalize_text(subcategory),
             normalize_text(title),
+        ]
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    return f"tp_{digest}"
+
+
+def canonical_strategy_params(params: dict | None) -> str:
+    """将 strategy_params 规范化为确定性字符串（用于 fingerprint 计算）。
+
+    - sort_keys=True：保证字典序一致，不受插入顺序影响
+    - ensure_ascii=False：中文不转义，减少长度
+    - separators=(',', ':')：去除多余空格，紧凑格式
+    - None 或空 dict 统一返回 "{}"
+    """
+    if not params:
+        return "{}"
+    return json.dumps(params, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def compute_strategy_testpoint_fingerprint(
+    *,
+    version_id: str | None,
+    obligation_id: str,
+    technique: str,
+    strategy_params: dict | None,
+) -> str:
+    """计算 Step 4 策略引擎派生 TestPoint 的业务确定性指纹（32 位十六进制，前缀 tp_）。
+
+    与 Step 3 LLM 派生的指纹公式不同：策略 TestPoint 的业务身份由
+    “覆盖哪个 obligation + 用什么技术 + 结构化参数”决定，而非 title/module/subcategory。
+    同一 obligation 派生的多个 TestPoint（1:N）靠 strategy_params 区分，
+    避免仅靠 title 区分不够可靠的问题。
+
+    四元组构成业务身份：
+      - version_id：不同 RequirementVersion 天然隔离
+      - obligation_id：同一 obligation 派生的多个 TestPoint 靠 strategy_params 区分
+      - technique：边界值/等价类/权限矩阵等技术分开算
+      - canonical(strategy_params)：结构化参数的确定性序列化
+        示例：{"boundary_type":"min_minus_1","value":0} / {"class":"valid_enum_value","value":"active"}
+
+    返回格式：tp_<sha256 前 32 位十六进制>，共 35 字符（与 Step 3 公式保持一致的长度与前缀）。
+    """
+    payload = "|".join(
+        [
+            version_id or "",
+            "strategy",  # 固定 generation_scope，与 Step 3 公式区分
+            obligation_id or "",
+            technique or "",
+            canonical_strategy_params(strategy_params),
         ]
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]

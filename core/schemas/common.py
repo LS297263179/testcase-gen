@@ -202,10 +202,12 @@ class ExpressionType(StrEnum):
 
 
 class GenerationScope(StrEnum):
-    """测试点生成范围（Step 3 两阶段生成引入）
+    """测试点生成范围（Step 3 两阶段生成 + Step 4 策略引擎引入）
 
     - ITEM: Phase A 逐 RequirementItem 独立生成，item_ids 长度必为 1
     - CROSS_ITEM: Phase B 跨项补漏生成，item_ids 长度必 ≥ 2
+    - STRATEGY: Step 4 策略引擎代码派生（纯代码、不调 LLM），item_ids 长度必为 1（天然单 item 追溯）；
+      technique 与 obligation_id 必填（与 Step 3 LLM 派生的硬性约束相反）。
     Validator 据此分别校验 item_ids 长度与追溯合法性。
     """
 
@@ -213,6 +215,7 @@ class GenerationScope(StrEnum):
 
     ITEM = "item"
     CROSS_ITEM = "cross_item"
+    STRATEGY = "strategy"
 
 
 class TestDimension(StrEnum):

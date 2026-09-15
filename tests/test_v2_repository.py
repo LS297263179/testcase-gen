@@ -93,11 +93,11 @@ def _make_chain(repo):
 
 class TestSchema:
     def test_schema_version(self, repo):
-        assert ddl.get_schema_version() == 3
+        assert ddl.get_schema_version() == 4
 
     def test_create_is_idempotent(self, repo):
         ddl.create_v2_schema()  # 再次执行不应报错
-        assert ddl.get_schema_version() == 3
+        assert ddl.get_schema_version() == 4
 
 
 class TestRequirementChain:

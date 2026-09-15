@@ -16,6 +16,7 @@ from core.schemas import (
     FieldSpec,
     GenerationConfig,
     Preference,
+    Provenance,
     RequirementDoc,
     RequirementItem,
     RequirementVersion,
@@ -28,7 +29,7 @@ from core.schemas import (
     new_ulid,
 )
 from core.v2.db import v2_conn, v2_read_conn
-from core.v2.fingerprint import compute_testpoint_fingerprint
+from core.v2.fingerprint import compute_strategy_testpoint_fingerprint, compute_testpoint_fingerprint
 from core.v2.resolver import ReferentialValidator
 
 
@@ -464,16 +465,26 @@ def save_test_point(tp: TestPoint) -> None:
       - upsert 列表新增 generation_scope / fingerprint 两列。
     """
     if not tp.fingerprint:
-        tp.fingerprint = compute_testpoint_fingerprint(
-            version_id=tp.version_id,
-            generation_scope=tp.generation_scope.value
-            if hasattr(tp.generation_scope, "value")
-            else str(tp.generation_scope),
-            item_ids=list(tp.item_ids),
-            module=tp.module,
-            subcategory=tp.subcategory,
-            title=tp.title,
-        )
+        if tp.provenance == Provenance.STRATEGY and tp.obligation_id and tp.technique:
+            # Step 4 公式：version_id | "strategy" | obligation_id | technique | canonical(strategy_params)
+            tp.fingerprint = compute_strategy_testpoint_fingerprint(
+                version_id=tp.version_id,
+                obligation_id=tp.obligation_id,
+                technique=tp.technique.value if hasattr(tp.technique, "value") else str(tp.technique),
+                strategy_params=tp.strategy_params,
+            )
+        else:
+            # Step 3 公式：version_id | scope | sorted(item_ids) | module | subcategory | normalize(title)
+            tp.fingerprint = compute_testpoint_fingerprint(
+                version_id=tp.version_id,
+                generation_scope=tp.generation_scope.value
+                if hasattr(tp.generation_scope, "value")
+                else str(tp.generation_scope),
+                item_ids=list(tp.item_ids),
+                module=tp.module,
+                subcategory=tp.subcategory,
+                title=tp.title,
+            )
 
     with v2_conn() as conn:
         # 幂等身份对齐：若已有同 fingerprint 行但 id 不同，复用旧 id
@@ -499,6 +510,7 @@ def save_test_point(tp: TestPoint) -> None:
                     "status",
                     "generation_scope",
                     "fingerprint",
+                    "strategy_params_json",
                     "created_at",
                     "updated_at",
                     "schema_version",
@@ -520,6 +532,7 @@ def save_test_point(tp: TestPoint) -> None:
                 _en(tp.status),
                 _en(tp.generation_scope),
                 tp.fingerprint,
+                _j(tp.strategy_params) if tp.strategy_params is not None else None,
                 _dt(tp.created_at),
                 _dt(tp.updated_at),
                 tp.schema_version,
@@ -535,6 +548,9 @@ def save_test_point(tp: TestPoint) -> None:
 def _row_to_test_point(row: sqlite3.Row, item_ids: list[str]) -> TestPoint:
     data = dict(row)
     data["item_ids"] = item_ids
+    # strategy_params_json → strategy_params（dict | None）
+    sp_json = data.pop("strategy_params_json", None)
+    data["strategy_params"] = json.loads(sp_json) if sp_json else None
     return TestPoint.model_validate(data)
 
 
@@ -726,6 +742,26 @@ def save_obligation(ob: CoverageObligation) -> None:
 def get_obligation(ob_id: str) -> CoverageObligation | None:
     with v2_read_conn() as conn:
         row = conn.execute("SELECT * FROM coverage_obligations WHERE id = ?", (ob_id,)).fetchone()
+    if not row:
+        return None
+    data = dict(row)
+    data["params"] = _loads(row["params_json"], {})
+    data.pop("params_json", None)
+    return CoverageObligation.model_validate(data)
+
+
+def get_obligation_by_natural_key(run_id: str, item_id: str, technique: str, target: str) -> CoverageObligation | None:
+    """按业务自然键查 obligation（Step 4 幂等重跑时用于复用旧 id）。
+
+    natural key = (run_id, item_id, technique, target)，在同一 run 下唯一标识一个 obligation。
+    Step 4 orchestrator 在持久化前查旧行，若存在则复用旧 ULID，保证下游 TestPoint
+    的 fingerprint（含 obligation_id）稳定 → 幂等重跑不产生重复行。
+    """
+    with v2_read_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM coverage_obligations WHERE run_id = ? AND item_id = ? AND technique = ? AND target = ?",
+            (run_id, item_id, technique, target),
+        ).fetchone()
     if not row:
         return None
     data = dict(row)

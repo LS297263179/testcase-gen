@@ -611,5 +611,5 @@ def test_extra_v1_untouched(ir_with_5_items):
 
     assert ANALYSIS_PROMPT and MODULE_PROMPT and SYSTEM_PROMPT
 
-    # schema_version = 3（Step 3 升级后）
-    assert get_schema_version() == 3
+    # schema_version = 4（Step 4 升级后）
+    assert get_schema_version() == 4

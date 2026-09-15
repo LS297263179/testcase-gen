@@ -10,7 +10,7 @@
 本项目 V1 = 基于 LLM 的测试用例生成器（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度：Step 1 已完成并推送；Step 2 已完成、通过 14 项验收门槛、已推送；Step 3 已完成、通过 15 项验收门槛（含 12 条主门槛 + 3 条附加）、待用户确认后推送；Step 4 未开始（需先讨论方案）。**
+**当前进度：Step 1~3 已完成并推送；Step 4 已完成、通过 15 项验收门槛（12 主 + 3 附加）、待用户确认后推送；Step 5 未开始（需先讨论方案）。**
 
 ---
 
@@ -33,7 +33,7 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 1：冻结数据模型 / Schema          ✅ 完成
  ├─ Step 2：建立 Requirement IR             ✅ 完成
  ├─ Step 3：重构"需求 → 测试点"             ✅ 完成
- ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务）
+ ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务） ✅ 完成
  ├─ Step 5：重构"测试点 → 测试用例"
  ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析
  ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator）
@@ -63,10 +63,11 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 |---|---|---|---|
 | 1 冻结数据模型 | ✅ 完成+验证 | 设计文档 + `core/schemas/`(10) + `core/v2/`持久层 + 迁移 + 测试(209) | 已推 origin+gitee |
 | 2 Requirement IR | ✅ 完成+验证(14门槛全过) | `core/v2/`{prompts,ingestion,parser,validator,ir} + 4 测试文件 + 修复 Step1 upsert bug | 已推 origin+gitee |
-| 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 待用户确认后推 |
-| 4~13 | ⬜ 未开始 | — | — |
+| 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 已推 origin+gitee (e7ab544) |
+| 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 待用户确认后推 |
+| 5~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 345 passed**（Step 1 层 290 + Step 3 新增 55），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 497 passed**（Step 3 后 362 + Step 4 新增 135），ruff check/format 全绿。
 
 ---
 
@@ -179,6 +180,75 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ---
 
+## 5.6 Step 4 详情（测试策略引擎）✅
+
+**目标**：消费 Step 2 IR 的 `FieldSpec / PermissionRule`，用**纯代码规则**（不调 LLM）确定性派生 `CoverageObligation` + `TestPoint(provenance=STRATEGY)`，硬兜底覆盖率。对应蓝图 `Strategy Engine`。
+
+**首批三类技术**（用户拍板）：BOUNDARY_VALUE / EQUIVALENCE_CLASS / PERMISSION_MATRIX。DECISION_TABLE / STATE_TRANSITION / ERROR_GUESSING / SCENARIO 延后。
+
+**派生关系**（用户拍板 1:N）：
+- BOUNDARY_VALUE：1 obligation → 6 TestPoint（min-1/min/min+1/max-1/max/max+1）
+- EQUIVALENCE_CLASS：1 obligation → N TestPoint（enum: N 合法+1 非法；pattern/required/nullable/unique/format: 各 2）
+- PERMISSION_MATRIX：1 obligation → 1 TestPoint（1:1）
+
+**Step 4 硬性约束**（用户补充，Validator 代码强制）：
+- `provenance = STRATEGY`、`generation_scope = STRATEGY`、`technique != None`、`obligation_id != None`
+- `module` 来源 `item.module`；`subcategory` 按 technique 命名（"边界值"/"等价类"/"权限矩阵"）
+- **不生成真实测试数据**：等价类只产出抽象类标识（如 `class="invalid_pattern"`），具体数据由 Step 5 TestDataGenerator 生成
+- min≤0 时的 min-1 点带 `warn="negative_value_may_be_invalid"` 标记（第一版简单规则）
+
+**strategy_params + fingerprint**（用户补充）：
+- TestPoint 新增 `strategy_params: dict` 字段（结构化参数，用于 fingerprint 区分同 obligation 下多个点）
+- 示例：边界值 `{"boundary_type":"min_minus_1","value":0,"kind":"value"}`；等价类 `{"class":"valid_enum_value","value":"active"}`；权限 `{"role":"admin","resource":"order","action":"refund","allowed":true}`
+- Step 4 fingerprint 公式：`sha256(version_id | "strategy" | obligation_id | technique | canonical(strategy_params))[:32]`
+- **obligation 幂等**：按 natural key `(run_id, item_id, technique, target)` 复用旧 id → 下游 TestPoint fingerprint 稳定
+
+**覆盖率双指标严格分离**（用户修订）：
+- **Strategy Obligation Coverage**（Step 4 内部硬指标）= `obligation_coverage_ratio(run_id)` == 1.0
+- **RequirementItem Coverage**（整体软指标）= 被至少一个 TestPoint（LLM 或 strategy）引用的 item / 全部 item
+- 两者不混为一谈：纯功能类 item（无 fields/permissions）Step 4 无法派生 obligation，但可能被 Step 3 LLM 覆盖
+
+**交付文件**（`core/v2/strategy/` 包）：
+| 文件 | 职责 |
+|---|---|
+| `boundary.py` | 边界值策略：六点派生 + strategy_params + min≤0 合理性提示 |
+| `equivalence.py` | 等价类策略：6 种字段属性 → 抽象类标识（不含真实数据） |
+| `permission.py` | 权限矩阵策略：PermissionRule → 1:1 派生 |
+| `engine.py` | 三策略汇总 `derive_obligations(items, run_id)` |
+| `deriver.py` | obligation → TestPoint 分派 + fingerprint 统一计算 + 去重 |
+| `orchestrator.py` | `apply_strategy_engine`（Run 状态机 + 持久化 + add_coverage + 双指标）+ `generate_test_points_full`（Step 3+4 一站式） |
+| `fingerprint.py`（补） | `compute_strategy_testpoint_fingerprint` + `canonical_strategy_params` |
+
+**Schema/DDL/Repository 升级**（`schema_version` 3 → 4）：
+- `core/schemas/common.py`：`GenerationScope` 新增 `STRATEGY = "strategy"`
+- `core/schemas/testpoint.py`：TestPoint 新增 `strategy_params: dict | None`
+- `core/v2/ddl.py`：`test_points` 加 `strategy_params_json` 列 + v3→v4 自动升级分支
+- `core/v2/repository.py`：`save_test_point` fingerprint 兜底区分 LLM/STRATEGY 两种公式；序列化 `strategy_params`；新增 `get_obligation_by_natural_key`
+
+**测试**（纯代码，不调 LLM）：
+- `tests/test_strategy_boundary.py`（42 例）、`test_strategy_equivalence.py`（29 例）、`test_strategy_permission.py`（15 例）
+- `tests/test_tp_strategy_deriver.py`（18 例）、`test_strategy_orchestrator.py`（16 例）、`test_step4_acceptance.py`（15 例）
+
+**12 条主验收门槛 + 3 条附加：全部 PASSED**
+1. ✅ min_value+max_value → BOUNDARY_VALUE obligation + 6 TestPoint
+2. ✅ min_length+max_length → BOUNDARY_VALUE obligation + 6 TestPoint
+3. ✅ enum_values → EQUIVALENCE_CLASS obligation + N+1 TestPoint
+4. ✅ required=True → EQUIVALENCE_CLASS obligation（必填 + 空值非法）
+5. ✅ pattern 非空 → EQUIVALENCE_CLASS obligation（合法匹配 + 非法不匹配，抽象类标识）
+6. ✅ PermissionRule → PERMISSION_MATRIX obligation + 1:1 TestPoint
+7. ✅ Strategy TestPoint 硬性约束（provenance/scope/technique/obligation_id）
+8. ✅ Strategy Obligation Coverage == 1.0（硬指标）
+9. ✅ fingerprint 幂等（natural key 对齐 obligation.id → TestPoint fingerprint 稳定）
+10. ✅ Step 3+4 合流后 generation_scope 三值齐全（item/cross_item/strategy）
+11. ✅ Run 状态机 STRATEGIZING→DONE + counts 累加
+12. ✅ V1 零回归 + schema_version=4
+附加 A. ✅ fingerprint 公式验证（canonical_strategy_params 确定性）
+附加 B. ✅ 覆盖率双指标严格分离（硬 1.0 ≠ 软 0.5）
+
+**诚实边界**：边界值的 float precision 处理、复杂正则的精确样例生成、permission condition 的规则化验证均留待迭代（首批采用简单规则）。纯功能类 item（无 fields/permissions）Step 4 无法派生 obligation，依赖 Step 3 LLM 覆盖（软指标报告里会列出）。**★覆盖语义是「结构性」而非「语义性」**：`Strategy Obligation Coverage == 1.0` 仅保证每个 obligation 都派生了 TestPoint 并登记回链（派生即登记，无语义验证环节），不保证 TestPoint 在语义上真正满足 obligation 的测试设计意图——后者是 Step 5（TestCase 合成检验可执行性）与 Step 7（AI Reviewer coverage 维度）的职责，Step 4 有意到此为止（详见 `step4-strategy-engine.md` §5.4）。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -191,41 +261,47 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=3）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=4）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3 自动升级分支）
-  repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint 按 fingerprint upsert）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4 自动升级分支）
+  repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
-  fingerprint.py #   TestPoint 业务确定性指纹（Step 3 新增）
+  fingerprint.py #   TestPoint 业务确定性指纹（Step 3 LLM 公式 + Step 4 strategy 公式）
   migrate_v1_to_v2.py
   prompts.py ingestion.py parser.py validator.py ir.py                    # Step 2
   tp_prompts.py tp_generator.py tp_validator.py tp_orchestrator.py        # Step 3
-docs/v2/         # 设计文档（step1-data-model.md + step3-testpoint-generator.md + 本文件）
+  strategy/      # Step 4 策略引擎包
+    boundary.py equivalence.py permission.py                              #   三策略
+    engine.py deriver.py orchestrator.py                                  #   汇总/派生/编排
+docs/v2/         # 设计文档（step1-data-model.md + step3-testpoint-generator.md + step4-strategy-engine.md + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
+                 # strategy_boundary/strategy_equivalence/strategy_permission
+                 # tp_strategy_deriver/strategy_orchestrator/step4_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 345 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 497 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 4「测试策略引擎」（未开始，需先讨论）
+## 9. 下一步 = Step 5「重构 测试点 → 测试用例」（未开始，需先讨论）
 
-**预期范围**：基于 Step 2 IR 的 `FieldSpec / BusinessRule / PermissionRule`，用**代码**确定性推导 `CoverageObligation`（边界值/等价类/权限矩阵/决策表/状态迁移），再派生 `TestPoint(provenance=STRATEGY, technique=<对应技术>, obligation_id=<回链>)` 硬兜底覆盖率。与 Step 3 的 LLM 派生 TestPoint 合流写入同一张表，用 `provenance` 区分。
+**预期范围**：Test Case Synthesizer —— 消费 Step 3+4 合流后的 `TestPoint[]`（LLM + STRATEGY 两种 provenance），LLM 生成完整 `TestCase`（含 `steps: list[TestStep]` / `expected` / `precondition`）+ 代码校验 + 持久化。对应蓝图 `Test Case Generator`。
 
 **开工前需与用户讨论确认的点**（沿用"先讨论→确认→实现"节奏）：
-- 覆盖义务推导的**技术选型优先级**：boundary_value / equivalence_class / decision_table / state_transition / permission_matrix / error_guessing / scenario 中哪几类先做
-- **CoverageObligation 与 TestPoint 的派生关系**：一个 obligation 派生一个 TestPoint，还是一个 obligation 派生多个（例如边界值 6 个点）
-- **覆盖率硬指标**：Step 4 完成后是否要求 `obligation_coverage` 关系表达到 100%（Step 3 的软报告升级为硬约束）
-- 是否复用 Step 3 的 `fingerprint` 幂等机制（strategy TestPoint 的 fingerprint 公式是否需含 `technique + obligation_id`）
-- Step 3 未覆盖的 item 在 Step 4 如何**硬兜底**：例如 `field_spec` 有 min/max 但 Phase A 没生成 boundary TestPoint，Step 4 是否强制派生
+- **TestCase 与 TestPoint 的派生关系**：1 TestPoint → 1 TestCase，还是 1 TestPoint → N TestCase（例如一个边界值义务派生多个用例）
+- **strategy TestPoint 的具体测试数据生成**：Step 4 只产出抽象类标识（如 `class="invalid_pattern"`），Step 5 需要 TestDataGenerator 生成真实数据（如非法邮箱 "abc"）——是代码规则生成还是 LLM 生成
+- **TestCase 状态机**：`GENERATED → VALIDATED → REVIEWED → CONFIRMED` 的转移触发时机
+- **fingerprint 幂等**：TestCase 已有 `fingerprint` 字段（Step 1 预留），公式是否复用 Step 3/4 的思路
+- **steps 结构化**：`TestStep(seq, action, data, expected)` 的生成粒度（LLM 自由发挥 vs 代码模板约束）
+- **Run 状态机**：Step 5 是否复用同一 Run（`GENERATING` 状态），还是新建 Run
 
 ## 10. 协作约定（重要）
 
