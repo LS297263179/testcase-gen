@@ -21,6 +21,10 @@ output/
 
 # 调试文件
 _debug_*.txt
+_remote_diag/
+
+# 备份文件
+*.bak
 
 # IDE
 .idea/
