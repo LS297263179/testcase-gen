@@ -25,6 +25,20 @@ def tmp_db(tmp_path):
 
 
 @pytest.fixture
+def v2_db(tmp_path):
+    """V2 独立数据库（临时）+ 建表；产出 repository 模块，测试后恢复路径"""
+    from core.v2 import db as v2db
+    from core.v2 import ddl, repository
+
+    db_path = str(tmp_path / "test_v2.db")
+    old_path = v2db.get_v2_db_path()
+    v2db.set_v2_db_path(db_path)
+    ddl.create_v2_schema()
+    yield repository
+    v2db.set_v2_db_path(old_path)
+
+
+@pytest.fixture
 def app():
     """创建 Flask 测试客户端"""
     from core import db
