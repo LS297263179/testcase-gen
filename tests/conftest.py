@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 def tmp_db(tmp_path):
     """创建临时数据库，测试结束后自动清理"""
     from core import db
+
     db_path = str(tmp_path / "test.db")
     old_path = db._DB_PATH
     db.set_db_path(db_path)
@@ -49,6 +50,7 @@ def app():
 def client(app):
     """Flask 测试客户端（重置速率限制）"""
     from web import utils as web_utils
+
     web_utils._rate_limit_store.clear()
     return app.test_client()
 
@@ -57,6 +59,7 @@ def client(app):
 def auth_client(client):
     """已登录的 Flask 测试客户端"""
     from web import utils as web_utils
+
     web_utils._rate_limit_store.clear()
     # 注册
     rv = client.post("/api/register", json={"username": "testuser", "password": "testpass123"})

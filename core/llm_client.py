@@ -14,9 +14,11 @@ logger = logging.getLogger(__name__)
 @dataclass
 class UsageStats:
     """Token 用量统计"""
+
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_cost: float = 0.0
+
 
 # 项目根目录（此文件所在目录）
 _PROJECT_ROOT = Path(__file__).parent.parent
@@ -25,6 +27,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 def load_config(path: str | None = None) -> dict:
     """加载配置文件（默认使用项目根目录下的 config.yaml）"""
     from core.config import load_yaml_config
+
     if path is not None:
         # 自定义路径时直接读取（兼容 CLI 传参场景）
         with open(path, encoding="utf-8") as f:
@@ -33,11 +36,17 @@ def load_config(path: str | None = None) -> dict:
 
 
 class LLMClient:
-    def __init__(self, base_url: str, api_key: str, model: str,
-                 api_type: str = "openai",
-                 temperature: float = 0.3, max_tokens: int = 8192,
-                 max_retries: int = 3,
-                 enable_thinking: bool = False):
+    def __init__(
+        self,
+        base_url: str,
+        api_key: str,
+        model: str,
+        api_type: str = "openai",
+        temperature: float = 0.3,
+        max_tokens: int = 8192,
+        max_retries: int = 3,
+        enable_thinking: bool = False,
+    ):
         self.api_type = api_type
         self.model = model
         self.temperature = temperature
@@ -47,14 +56,16 @@ class LLMClient:
 
         if api_type == "anthropic":
             import anthropic
+
             self.client = anthropic.Anthropic(base_url=base_url, api_key=api_key)
         else:
             from openai import OpenAI
+
             self.client = OpenAI(base_url=base_url, api_key=api_key)
 
-    def chat(self, system_prompt: str, user_prompt: str,
-             images: list[dict] | None = None,
-             max_tokens: int | None = None) -> str:
+    def chat(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int | None = None
+    ) -> str:
         """调用 LLM，带智能重试
         images: [{"data": "base64...", "media_type": "image/png"}]
         max_tokens: 可选，覆盖默认的 max_tokens
@@ -81,17 +92,17 @@ class LLMClient:
                 if attempt < self.max_retries - 1:
                     # 速率限制等更久
                     if any(kw in err_str for kw in ("429", "rate_limit", "too_many_requests")):
-                        wait = min(2 ** attempt * 5, 60)
+                        wait = min(2**attempt * 5, 60)
                     else:
-                        wait = 2 ** attempt
+                        wait = 2**attempt
                     logger.warning(f"LLM 调用失败（第 {attempt + 1} 次），{wait}s 后重试: {e}")
                     time.sleep(wait)
 
         raise RuntimeError(f"LLM 调用失败（已重试 {self.max_retries} 次）: {last_error}")
 
-    def chat_stream(self, system_prompt: str, user_prompt: str,
-                    images: list[dict] | None = None,
-                    max_tokens: int | None = None) -> Generator[str, None, None]:
+    def chat_stream(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int | None = None
+    ) -> Generator[str, None, None]:
         """流式调用 LLM，yield 每个文本 chunk。
 
         用法:
@@ -104,16 +115,19 @@ class LLMClient:
         else:
             yield from self._stream_openai(system_prompt, user_prompt, images, effective_max_tokens)
 
-    def _stream_openai(self, system_prompt: str, user_prompt: str,
-                       images: list[dict] | None, max_tokens: int) -> Generator[str, None, None]:
+    def _stream_openai(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None, max_tokens: int
+    ) -> Generator[str, None, None]:
         """OpenAI 兼容接口的流式调用"""
         content = []
         if images:
             for img in images:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
-                })
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{img['media_type']};base64,{img['data']}"},
+                    }
+                )
         content.append({"type": "text", "text": user_prompt})
 
         kwargs = {
@@ -133,16 +147,19 @@ class LLMClient:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield chunk.choices[0].delta.content
 
-    def _stream_anthropic(self, system_prompt: str, user_prompt: str,
-                          images: list[dict] | None, max_tokens: int) -> Generator[str, None, None]:
+    def _stream_anthropic(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None, max_tokens: int
+    ) -> Generator[str, None, None]:
         """Anthropic 接口的流式调用"""
         content = []
         if images:
             for img in images:
-                content.append({
-                    "type": "image",
-                    "source": {"type": "base64", "media_type": img["media_type"], "data": img["data"]},
-                })
+                content.append(
+                    {
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": img["media_type"], "data": img["data"]},
+                    }
+                )
         content.append({"type": "text", "text": user_prompt})
 
         kwargs = {
@@ -158,28 +175,30 @@ class LLMClient:
         with self.client.messages.stream(**kwargs) as stream:
             yield from stream.text_stream
 
-    def _call(self, system_prompt: str, user_prompt: str,
-              images: list[dict] | None = None,
-              max_tokens: int = 4096) -> str:
+    def _call(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int = 4096
+    ) -> str:
         if self.api_type == "anthropic":
             return self._call_anthropic(system_prompt, user_prompt, images, max_tokens)
         else:
             return self._call_openai(system_prompt, user_prompt, images, max_tokens)
 
-    def _call_anthropic(self, system_prompt: str, user_prompt: str,
-                        images: list[dict] | None = None,
-                        max_tokens: int = 4096) -> str:
+    def _call_anthropic(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int = 4096
+    ) -> str:
         content = []
         if images:
             for img in images:
-                content.append({
-                    "type": "image",
-                    "source": {
-                        "type": "base64",
-                        "media_type": img["media_type"],
-                        "data": img["data"],
-                    },
-                })
+                content.append(
+                    {
+                        "type": "image",
+                        "source": {
+                            "type": "base64",
+                            "media_type": img["media_type"],
+                            "data": img["data"],
+                        },
+                    }
+                )
         content.append({"type": "text", "text": user_prompt})
 
         kwargs = {
@@ -194,7 +213,7 @@ class LLMClient:
 
         response = self.client.messages.create(**kwargs)
         # 检查是否因 max_tokens 截断
-        if hasattr(response, 'stop_reason') and response.stop_reason == 'max_tokens':
+        if hasattr(response, "stop_reason") and response.stop_reason == "max_tokens":
             logger.warning(f"LLM 响应因 max_tokens={max_tokens} 被截断，内容可能不完整")
         # 思考模式下，跳过 thinking block，取 text block
         for block in response.content:
@@ -202,18 +221,20 @@ class LLMClient:
                 return block.text
         return response.content[0].text
 
-    def _call_openai(self, system_prompt: str, user_prompt: str,
-                     images: list[dict] | None = None,
-                     max_tokens: int = 4096) -> str:
+    def _call_openai(
+        self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int = 4096
+    ) -> str:
         content = []
         if images:
             for img in images:
-                content.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:{img['media_type']};base64,{img['data']}",
-                    },
-                })
+                content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{img['media_type']};base64,{img['data']}",
+                        },
+                    }
+                )
         content.append({"type": "text", "text": user_prompt})
 
         kwargs = {

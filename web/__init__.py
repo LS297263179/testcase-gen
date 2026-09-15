@@ -49,6 +49,7 @@ app.register_blueprint(generate_bp)
 # 全局请求日志
 # ============================================================
 
+
 @app.before_request
 def _log_request():
     """记录请求日志"""
@@ -60,12 +61,13 @@ def _log_request():
 # 全局错误处理
 # ============================================================
 
+
 @app.errorhandler(404)
 def not_found(e):
     """404 统一返回 JSON"""
     if request.path.startswith("/api/"):
         return jsonify({"error": "接口不存在"}), 404
-    return e.get_response() if hasattr(e, 'get_response') else ("Not Found", 404)
+    return e.get_response() if hasattr(e, "get_response") else ("Not Found", 404)
 
 
 @app.errorhandler(500)
@@ -73,7 +75,7 @@ def internal_error(e):
     """500 统一返回 JSON"""
     if request.path.startswith("/api/"):
         return jsonify({"error": "服务器内部错误"}), 500
-    return e.get_response() if hasattr(e, 'get_response') else ("Internal Server Error", 500)
+    return e.get_response() if hasattr(e, "get_response") else ("Internal Server Error", 500)
 
 
 @app.errorhandler(413)
@@ -85,6 +87,7 @@ def too_large(e):
 # ============================================================
 # 页面路由 + 健康检查
 # ============================================================
+
 
 @app.route("/")
 def index():

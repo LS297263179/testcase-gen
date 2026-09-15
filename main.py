@@ -50,16 +50,13 @@ def print_summary(testcases: list[dict]):
 
 def main():
     parser = argparse.ArgumentParser(description="AI 测试用例生成器")
-    parser.add_argument("source", nargs="?", default=None,
-                        help="需求文档路径 (.md/.txt/.xlsx)，不指定则手动输入")
-    parser.add_argument("-c", "--config", default="config.yaml",
-                        help="配置文件路径 (默认: config.yaml)")
-    parser.add_argument("-o", "--output", default=None,
-                        help="输出目录 (覆盖配置文件)")
-    parser.add_argument("-f", "--format", choices=["excel", "markdown", "all"],
-                        default=None, help="输出格式 (覆盖配置文件)")
-    parser.add_argument("-r", "--review", action="store_true",
-                        help="启用 AI 评审用例")
+    parser.add_argument("source", nargs="?", default=None, help="需求文档路径 (.md/.txt/.xlsx)，不指定则手动输入")
+    parser.add_argument("-c", "--config", default="config.yaml", help="配置文件路径 (默认: config.yaml)")
+    parser.add_argument("-o", "--output", default=None, help="输出目录 (覆盖配置文件)")
+    parser.add_argument(
+        "-f", "--format", choices=["excel", "markdown", "all"], default=None, help="输出格式 (覆盖配置文件)"
+    )
+    parser.add_argument("-r", "--review", action="store_true", help="启用 AI 评审用例")
     args = parser.parse_args()
 
     config = load_config(args.config)
@@ -68,11 +65,12 @@ def main():
 
     gen_model = config["generate"]["model"]
     logger.info("启动测试用例生成器")
-    console.print(Panel.fit(
-        f"[bold blue]AI 测试用例生成器[/]\n"
-        f"生成模型: [green]{gen_model}[/]",
-        border_style="blue",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold blue]AI 测试用例生成器[/]\n生成模型: [green]{gen_model}[/]",
+            border_style="blue",
+        )
+    )
 
     # 读取需求
     console.print("\n[bold]1. 读取需求文档...[/]")
@@ -91,7 +89,8 @@ def main():
     gen_client = build_client(config["generate"])
     try:
         testcases = generate_testcases(
-            gen_client, requirement,
+            gen_client,
+            requirement,
             default_priority=config["testcase"]["default_priority"],
             case_types=config["testcase"]["case_types"],
             max_testcases=config["testcase"].get("max_testcases", 100),

@@ -31,6 +31,7 @@ bp = Blueprint("data", __name__)
 # 项目资料 API
 # ============================================================
 
+
 @bp.route("/api/materials", methods=["GET"])
 @login_required
 def api_materials_list():
@@ -117,10 +118,12 @@ def _normalize_points_format(points: list) -> list:
             normalized.append(m)
         elif "points" in m:
             # 旧格式：module -> points，包装为 module -> subcategories -> points
-            normalized.append({
-                "module": m.get("module", "未分类"),
-                "subcategories": [{"name": "测试点", "points": m["points"]}],
-            })
+            normalized.append(
+                {
+                    "module": m.get("module", "未分类"),
+                    "subcategories": [{"name": "测试点", "points": m["points"]}],
+                }
+            )
         else:
             normalized.append(m)
     return normalized
@@ -259,7 +262,8 @@ def api_generate_points():
             text = response.strip()
 
             import re
-            json_match = re.search(r'\[[\s\S]*\]', text)
+
+            json_match = re.search(r"\[[\s\S]*\]", text)
             if json_match:
                 points = json.loads(json_match.group())
             else:
@@ -268,18 +272,21 @@ def api_generate_points():
             # 兼容旧格式（无 subcategories）：自动转换为新格式
             points = _normalize_points_format(points)
 
-            total = sum(
-                len(p) for m in points for sc in m.get("subcategories", []) for p in [sc.get("points", [])]
-            )
+            total = sum(len(p) for m in points for sc in m.get("subcategories", []) for p in [sc.get("points", [])])
             title = (requirement or "测试点").strip()[:30]
             tp_id = db.save_test_points(session["user_id"], title, requirement, points, total)
 
-            yield sse_format({"type": "done", "data": {
-                "success": True,
-                "points": points,
-                "total": total,
-                "tp_id": tp_id,
-            }})
+            yield sse_format(
+                {
+                    "type": "done",
+                    "data": {
+                        "success": True,
+                        "points": points,
+                        "total": total,
+                        "tp_id": tp_id,
+                    },
+                }
+            )
         except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
@@ -366,6 +373,7 @@ def api_test_points_delete(tp_id):
 # 历史记录 API
 # ============================================================
 
+
 @bp.route("/api/history")
 @login_required
 def api_history():
@@ -418,6 +426,7 @@ def api_history_save_review(session_id):
 # 偏好 API
 # ============================================================
 
+
 @bp.route("/api/preferences")
 @login_required
 def api_preferences():
@@ -446,11 +455,16 @@ def api_preferences_extract():
             yield sse_format({"type": "progress", "message": "正在分析修改差异..."})
             diffs = compute_diffs(original, edited)
             if not diffs:
-                yield sse_format({"type": "done", "data": {
-                    "success": True,
-                    "preferences": [],
-                    "message": "未检测到有效修改",
-                }})
+                yield sse_format(
+                    {
+                        "type": "done",
+                        "data": {
+                            "success": True,
+                            "preferences": [],
+                            "message": "未检测到有效修改",
+                        },
+                    }
+                )
                 return
 
             yield sse_format({"type": "progress", "message": f"检测到 {len(diffs)} 处修改，正在提取偏好规则..."})
@@ -458,14 +472,18 @@ def api_preferences_extract():
             prefs = extract_preferences(diffs, client)
 
             if prefs and session_id:
-                db.save_preferences(prefs, session_id, source_diffs=diffs,
-                                    user_id=session.get("user_id"))
+                db.save_preferences(prefs, session_id, source_diffs=diffs, user_id=session.get("user_id"))
 
-            yield sse_format({"type": "done", "data": {
-                "success": True,
-                "preferences": prefs,
-                "count": len(prefs),
-            }})
+            yield sse_format(
+                {
+                    "type": "done",
+                    "data": {
+                        "success": True,
+                        "preferences": prefs,
+                        "count": len(prefs),
+                    },
+                }
+            )
         except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
@@ -511,6 +529,7 @@ def api_preferences_delete(pref_id):
 # ============================================================
 # 文件下载
 # ============================================================
+
 
 @bp.route("/api/download/<path:filename>")
 @login_required

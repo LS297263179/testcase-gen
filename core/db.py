@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # API Key 加密/解密（基于 Fernet 对称加密）
 # ============================================================
 
+
 def _get_fernet_key() -> bytes:
     """从环境变量或配置文件获取/生成加密密钥"""
     # 优先从环境变量获取
@@ -34,10 +35,12 @@ def _get_fernet_key() -> bytes:
     # 生成新密钥并保存
     try:
         from cryptography.fernet import Fernet
+
         new_key = Fernet.generate_key().decode()
     except ImportError:
         # cryptography 未安装时，使用基于 secret_key 的确定性密钥（32 字节 base64）
         import yaml
+
         cfg_path = Path(__file__).parent.parent / "config.yaml"
         secret = ""
         if cfg_path.exists():
@@ -62,6 +65,7 @@ def encrypt_api_key(plaintext: str) -> str:
         return plaintext
     try:
         from cryptography.fernet import Fernet
+
         f = Fernet(_get_fernet_key())
         return f.encrypt(plaintext.encode()).decode()
     except ImportError:
@@ -79,11 +83,13 @@ def decrypt_api_key(ciphertext: str) -> str:
         return ciphertext
     try:
         from cryptography.fernet import Fernet
+
         f = Fernet(_get_fernet_key())
         return f.decrypt(ciphertext.encode()).decode()
     except Exception as e:
         logger.debug(f"API Key 解密失败，返回原文: {e}")
         return ciphertext
+
 
 _DB_PATH = str(Path(__file__).parent.parent / "data" / "data.db")
 _write_lock = threading.Lock()  # 写操作互斥锁，防止 SQLite 写冲突
@@ -179,8 +185,17 @@ def _migrate_old_db():
                     new_conn.execute(
                         "INSERT INTO sessions (created_at, user_id, requirement, priority, case_types, "
                         "testcases, tc_count, review_report, is_deleted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        (s["created_at"], new_uid, s["requirement"], s["priority"], s["case_types"],
-                         s["testcases"], s["tc_count"], s["review_report"], s["is_deleted"]),
+                        (
+                            s["created_at"],
+                            new_uid,
+                            s["requirement"],
+                            s["priority"],
+                            s["case_types"],
+                            s["testcases"],
+                            s["tc_count"],
+                            s["review_report"],
+                            s["is_deleted"],
+                        ),
                     )
 
                 # 迁移 materials
@@ -200,6 +215,7 @@ def _migrate_old_db():
         # 新库为空，直接复制旧库
         logger.info(f"新数据库为空，正在从 {old_db_path} 迁移...")
         import shutil
+
         try:
             shutil.copy2(old_db_path, _DB_PATH)
             logger.info("数据库迁移完成")
@@ -312,6 +328,7 @@ def init_db():
 # Users CRUD
 # ============================================================
 
+
 def create_user(username: str, password: str) -> int:
     """注册新用户，返回 user_id"""
     with db_conn() as conn:
@@ -351,12 +368,16 @@ def get_user_by_id(user_id: int) -> dict | None:
 # Sessions CRUD
 # ============================================================
 
-def create_session(requirement: str, testcases: list[dict],
-                   priority: str | None = None,
-                   case_types: list[str] | None = None,
-                   images: list[dict] | None = None,
-                   review_report: str | None = None,
-                   user_id: int | None = None) -> int:
+
+def create_session(
+    requirement: str,
+    testcases: list[dict],
+    priority: str | None = None,
+    case_types: list[str] | None = None,
+    images: list[dict] | None = None,
+    review_report: str | None = None,
+    user_id: int | None = None,
+) -> int:
     """保存一次生成记录，返回 session_id"""
     with db_conn() as conn:
         cur = conn.execute(
@@ -388,9 +409,7 @@ def create_session(requirement: str, testcases: list[dict],
 def get_session(session_id: int) -> dict | None:
     """获取单条历史记录（含图片）"""
     with db_read_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM sessions WHERE id = ? AND is_deleted = 0", (session_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM sessions WHERE id = ? AND is_deleted = 0", (session_id,)).fetchone()
         if not row:
             return None
 
@@ -400,16 +419,15 @@ def get_session(session_id: int) -> dict | None:
             session["case_types"] = json.loads(session["case_types"])
 
         images = conn.execute(
-            "SELECT filename, media_type, data FROM session_images "
-            "WHERE session_id = ? ORDER BY sort_order", (session_id,)
+            "SELECT filename, media_type, data FROM session_images WHERE session_id = ? ORDER BY sort_order",
+            (session_id,),
         ).fetchall()
         session["images"] = [dict(img) for img in images]
 
     return session
 
 
-def list_sessions(limit: int = 50, offset: int = 0,
-                  user_id: int | None = None) -> list[dict]:
+def list_sessions(limit: int = 50, offset: int = 0, user_id: int | None = None) -> list[dict]:
     """列出历史记录摘要（不含 testcases 和 image data）"""
     with db_read_conn() as conn:
         if user_id is not None:
@@ -448,6 +466,7 @@ def delete_session(session_id: int):
 # Preferences CRUD
 # ============================================================
 
+
 def get_active_preferences(limit: int = 10, user_id: int | None = None) -> list[dict]:
     """获取活跃偏好规则，按权重降序。user_id 不为 None 时只返回该用户的偏好"""
     with db_read_conn() as conn:
@@ -460,8 +479,7 @@ def get_active_preferences(limit: int = 10, user_id: int | None = None) -> list[
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id, category, pattern, weight FROM preferences "
-                "WHERE active = 1 ORDER BY weight DESC LIMIT ?",
+                "SELECT id, category, pattern, weight FROM preferences WHERE active = 1 ORDER BY weight DESC LIMIT ?",
                 (limit,),
             ).fetchall()
     return [dict(r) for r in rows]
@@ -476,9 +494,9 @@ def get_preference_context(max_prefs: int = 10, user_id: int | None = None) -> s
     return "\n".join(lines)
 
 
-def save_preferences(preferences: list[dict], session_id: int,
-                     source_diffs: list[dict] | None = None,
-                     user_id: int | None = None):
+def save_preferences(
+    preferences: list[dict], session_id: int, source_diffs: list[dict] | None = None, user_id: int | None = None
+):
     """保存新偏好规则，同时衰减同 category 的旧规则"""
     with db_conn() as conn:
         # 如果未指定 user_id，从 session 中获取
@@ -501,7 +519,9 @@ def save_preferences(preferences: list[dict], session_id: int,
                 )
             # user_id 为 None 时不执行衰减，避免误操作全局数据
             # 插入新规则
-            source_diff = json.dumps(source_diffs[i], ensure_ascii=False) if source_diffs and i < len(source_diffs) else None
+            source_diff = (
+                json.dumps(source_diffs[i], ensure_ascii=False) if source_diffs and i < len(source_diffs) else None
+            )
             cur = conn.execute(
                 "INSERT INTO preferences (category, pattern, source_diff, weight, user_id) VALUES (?, ?, ?, 1.0, ?)",
                 (category, pref["pattern"], source_diff, user_id),
@@ -560,6 +580,7 @@ def list_all_preferences(user_id: int | None = None) -> list[dict]:
 # Settings (key-value)
 # ============================================================
 
+
 def get_setting(key: str) -> str | None:
     """获取单个设置值"""
     with db_read_conn() as conn:
@@ -573,8 +594,7 @@ def set_setting(key: str, value: str):
     """写入/更新设置"""
     with db_conn() as conn:
         conn.execute(
-            "INSERT INTO settings (key, value) VALUES (?, ?) "
-            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
             (key, value),
         )
 
@@ -611,8 +631,8 @@ def get_dashboard_stats(user_id: int) -> dict:
 # Materials CRUD
 # ============================================================
 
-def create_material(user_id: int, title: str, content: str = "",
-                    images: list[dict] | None = None) -> int:
+
+def create_material(user_id: int, title: str, content: str = "", images: list[dict] | None = None) -> int:
     """创建项目资料，返回 material_id"""
     with db_conn() as conn:
         cur = conn.execute(
@@ -650,15 +670,13 @@ def list_materials(user_id: int) -> list[dict]:
 def get_material(material_id: int) -> dict | None:
     """获取单条项目资料（含图片）"""
     with db_read_conn() as conn:
-        row = conn.execute(
-            "SELECT * FROM materials WHERE id = ?", (material_id,)
-        ).fetchone()
+        row = conn.execute("SELECT * FROM materials WHERE id = ?", (material_id,)).fetchone()
         if not row:
             return None
         m = dict(row)
         images = conn.execute(
-            "SELECT id, filename, media_type, data FROM material_images "
-            "WHERE material_id = ? ORDER BY sort_order", (material_id,)
+            "SELECT id, filename, media_type, data FROM material_images WHERE material_id = ? ORDER BY sort_order",
+            (material_id,),
         ).fetchall()
         m["images"] = [dict(img) for img in images]
     return m
@@ -688,13 +706,16 @@ def get_materials_for_prompt(user_id: int, material_ids: list[int] | None = None
     return "\n".join(lines)
 
 
-def update_material(material_id: int, title: str, content: str = "",
-                    images: list[dict] | None = None,
-                    keep_image_ids: list[int] | None = None):
+def update_material(
+    material_id: int,
+    title: str,
+    content: str = "",
+    images: list[dict] | None = None,
+    keep_image_ids: list[int] | None = None,
+):
     """更新项目资料（标题、内容、图片）"""
     with db_conn() as conn:
-        conn.execute("UPDATE materials SET title=?, content=? WHERE id=?",
-                     (title, content, material_id))
+        conn.execute("UPDATE materials SET title=?, content=? WHERE id=?", (title, content, material_id))
         # 删除不在保留列表中的旧图片
         if keep_image_ids is not None:
             placeholders = ",".join("?" * len(keep_image_ids))
@@ -729,8 +750,8 @@ def delete_material(material_id: int):
 # Test Points CRUD
 # ============================================================
 
-def save_test_points(user_id: int, title: str, requirement: str,
-                     points: list[dict], total: int) -> int:
+
+def save_test_points(user_id: int, title: str, requirement: str, points: list[dict], total: int) -> int:
     """保存测试点，返回 id"""
     with db_conn() as conn:
         cur = conn.execute(
@@ -802,6 +823,7 @@ def get_test_points_for_prompt(tp_id: int) -> str:
 def get_model_config() -> dict:
     """获取模型配置（优先数据库，fallback 到 config.yaml）"""
     import yaml
+
     raw = get_setting("model_config")
     if raw:
         config = json.loads(raw)

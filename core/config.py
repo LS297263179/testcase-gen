@@ -60,6 +60,7 @@ _DEFAULTS = {
 # 文件配置加载
 # ============================================================
 
+
 def load_yaml_config(path: str | None = None) -> dict:
     """从 config.yaml 加载配置（仅用于 fallback）"""
     if path is None:
@@ -78,6 +79,7 @@ def load_yaml_config(path: str | None = None) -> dict:
 # ============================================================
 # 模型配置（数据库优先，fallback 到文件）
 # ============================================================
+
 
 def get_model_config() -> dict:
     """获取模型配置（优先数据库，fallback 到 config.yaml）
@@ -135,6 +137,7 @@ def get_output_config() -> dict:
 # ============================================================
 # Flask Secret Key
 # ============================================================
+
 
 def get_secret_key() -> bytes | str:
     """获取 Flask secret_key

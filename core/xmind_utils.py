@@ -31,6 +31,7 @@ def parse_xmind(filepath: str) -> list[dict]:
         # 旧版格式：content.xml
         if "content.xml" in names:
             import xml.etree.ElementTree as ET
+
             root = ET.fromstring(zf.read("content.xml"))
             return _parse_xml_format(root)
     raise ValueError("无法识别的 XMind 文件格式")
@@ -44,10 +45,12 @@ def _parse_json_format(data: list) -> list[dict]:
         root_topic = sheet.get("rootTopic")
         if not root_topic:
             continue
-        sheets.append({
-            "title": title,
-            "root": _extract_topic_json(root_topic),
-        })
+        sheets.append(
+            {
+                "title": title,
+                "root": _extract_topic_json(root_topic),
+            }
+        )
     return sheets
 
 
@@ -77,10 +80,12 @@ def _parse_xml_format(root) -> list[dict]:
         topic_el = sheet.find("x:topic", ns)
         if topic_el is None:
             continue
-        sheets.append({
-            "title": title,
-            "root": _extract_topic_xml(topic_el, ns),
-        })
+        sheets.append(
+            {
+                "title": title,
+                "root": _extract_topic_xml(topic_el, ns),
+            }
+        )
     return sheets
 
 
@@ -105,11 +110,13 @@ def flatten_topics(node: dict, path: str = "") -> list[dict]:
     """
     items = []
     current_path = f"{path} > {node['title']}" if path else node["title"]
-    items.append({
-        "path": current_path,
-        "title": node["title"],
-        "depth": current_path.count(">") + 1,
-    })
+    items.append(
+        {
+            "path": current_path,
+            "title": node["title"],
+            "depth": current_path.count(">") + 1,
+        }
+    )
     for child in node.get("children", []):
         items.extend(flatten_topics(child, current_path))
     return items
@@ -176,7 +183,11 @@ def generate_template(output_path: str) -> str:
                                         "title": "第2层：功能模块 → Excel【module】字段",
                                         "children": {
                                             "attached": [
-                                                {"id": "demo_l2_ex", "class": "topic", "title": "示例：登录模块、用户管理、订单管理"},
+                                                {
+                                                    "id": "demo_l2_ex",
+                                                    "class": "topic",
+                                                    "title": "示例：登录模块、用户管理、订单管理",
+                                                },
                                             ]
                                         },
                                     },
@@ -186,7 +197,11 @@ def generate_template(output_path: str) -> str:
                                         "title": "第3层：测试场景/功能点（用于归类用例）",
                                         "children": {
                                             "attached": [
-                                                {"id": "demo_l3_ex", "class": "topic", "title": "示例：正常登录、异常登录、密码找回"},
+                                                {
+                                                    "id": "demo_l3_ex",
+                                                    "class": "topic",
+                                                    "title": "示例：正常登录、异常登录、密码找回",
+                                                },
                                             ]
                                         },
                                     },
@@ -196,7 +211,11 @@ def generate_template(output_path: str) -> str:
                                         "title": "第4层：用例标题 → Excel【title】字段",
                                         "children": {
                                             "attached": [
-                                                {"id": "demo_l4_ex", "class": "topic", "title": "示例：用户名密码登录成功"},
+                                                {
+                                                    "id": "demo_l4_ex",
+                                                    "class": "topic",
+                                                    "title": "示例：用户名密码登录成功",
+                                                },
                                             ]
                                         },
                                     },
@@ -206,8 +225,16 @@ def generate_template(output_path: str) -> str:
                                         "title": "第5层：用例详情（每个用例下挂2个子节点）",
                                         "children": {
                                             "attached": [
-                                                {"id": "demo_f1", "class": "topic", "title": "步骤：xxx → Excel【steps】字段，操作步骤用换行分隔"},
-                                                {"id": "demo_f2", "class": "topic", "title": "预期结果：xxx → Excel【expected】字段"},
+                                                {
+                                                    "id": "demo_f1",
+                                                    "class": "topic",
+                                                    "title": "步骤：xxx → Excel【steps】字段，操作步骤用换行分隔",
+                                                },
+                                                {
+                                                    "id": "demo_f2",
+                                                    "class": "topic",
+                                                    "title": "预期结果：xxx → Excel【expected】字段",
+                                                },
                                             ]
                                         },
                                     },
@@ -217,10 +244,18 @@ def generate_template(output_path: str) -> str:
                                         "title": "以下字段由 AI 自动生成，无需在模板中填写",
                                         "children": {
                                             "attached": [
-                                                {"id": "demo_a1", "class": "topic", "title": "priority：优先级（P0=阻塞/P1=严重/P2=一般/P3=轻微）"},
+                                                {
+                                                    "id": "demo_a1",
+                                                    "class": "topic",
+                                                    "title": "priority：优先级（P0=阻塞/P1=严重/P2=一般/P3=轻微）",
+                                                },
                                                 {"id": "demo_a2", "class": "topic", "title": "precondition：前置条件"},
                                                 {"id": "demo_a3", "class": "topic", "title": "remark：备注"},
-                                                {"id": "demo_a4", "class": "topic", "title": "id：用例编号（系统自动生成）"},
+                                                {
+                                                    "id": "demo_a4",
+                                                    "class": "topic",
+                                                    "title": "id：用例编号（系统自动生成）",
+                                                },
                                             ]
                                         },
                                     },
@@ -239,9 +274,24 @@ def generate_template(output_path: str) -> str:
                                         "title": "正常登录",
                                         "children": {
                                             "attached": [
-                                                _make_case("t1_1_1", "用户名密码登录", "输入正确用户名和密码，点击登录按钮", "跳转到首页"),
-                                                _make_case("t1_1_2", "手机号验证码登录", "输入手机号，获取验证码并填写，点击登录", "跳转到首页"),
-                                                _make_case("t1_1_3", "记住我功能", "勾选'记住我'后登录，关闭浏览器重新打开", "自动登录，无需再次输入"),
+                                                _make_case(
+                                                    "t1_1_1",
+                                                    "用户名密码登录",
+                                                    "输入正确用户名和密码，点击登录按钮",
+                                                    "跳转到首页",
+                                                ),
+                                                _make_case(
+                                                    "t1_1_2",
+                                                    "手机号验证码登录",
+                                                    "输入手机号，获取验证码并填写，点击登录",
+                                                    "跳转到首页",
+                                                ),
+                                                _make_case(
+                                                    "t1_1_3",
+                                                    "记住我功能",
+                                                    "勾选'记住我'后登录，关闭浏览器重新打开",
+                                                    "自动登录，无需再次输入",
+                                                ),
                                             ]
                                         },
                                     },
@@ -251,9 +301,24 @@ def generate_template(output_path: str) -> str:
                                         "title": "异常登录",
                                         "children": {
                                             "attached": [
-                                                _make_case("t1_2_1", "密码错误", "输入正确用户名和错误密码，点击登录", "提示'用户名或密码错误'"),
-                                                _make_case("t1_2_2", "账号不存在", "输入不存在的用户名，点击登录", "提示'账号不存在'"),
-                                                _make_case("t1_2_3", "账号锁定", "连续5次输入错误密码", "账号锁定30分钟，提示'账号已锁定'"),
+                                                _make_case(
+                                                    "t1_2_1",
+                                                    "密码错误",
+                                                    "输入正确用户名和错误密码，点击登录",
+                                                    "提示'用户名或密码错误'",
+                                                ),
+                                                _make_case(
+                                                    "t1_2_2",
+                                                    "账号不存在",
+                                                    "输入不存在的用户名，点击登录",
+                                                    "提示'账号不存在'",
+                                                ),
+                                                _make_case(
+                                                    "t1_2_3",
+                                                    "账号锁定",
+                                                    "连续5次输入错误密码",
+                                                    "账号锁定30分钟，提示'账号已锁定'",
+                                                ),
                                             ]
                                         },
                                     },
@@ -272,8 +337,15 @@ def generate_template(output_path: str) -> str:
                                         "title": "数据展示",
                                         "children": {
                                             "attached": [
-                                                _make_case("t2_1_1", "统计数据加载", "登录后进入首页", "统计数据正确显示，无加载错误"),
-                                                _make_case("t2_1_2", "数据刷新", "点击刷新按钮", "数据实时更新，显示最新状态"),
+                                                _make_case(
+                                                    "t2_1_1",
+                                                    "统计数据加载",
+                                                    "登录后进入首页",
+                                                    "统计数据正确显示，无加载错误",
+                                                ),
+                                                _make_case(
+                                                    "t2_1_2", "数据刷新", "点击刷新按钮", "数据实时更新，显示最新状态"
+                                                ),
                                             ]
                                         },
                                     },
@@ -283,7 +355,12 @@ def generate_template(output_path: str) -> str:
                                         "title": "导航跳转",
                                         "children": {
                                             "attached": [
-                                                _make_case("t2_2_1", "菜单跳转", "点击左侧菜单项", "正确跳转到对应页面，URL正确"),
+                                                _make_case(
+                                                    "t2_2_1",
+                                                    "菜单跳转",
+                                                    "点击左侧菜单项",
+                                                    "正确跳转到对应页面，URL正确",
+                                                ),
                                             ]
                                         },
                                     },
@@ -302,8 +379,18 @@ def generate_template(output_path: str) -> str:
                                         "title": "新增用户",
                                         "children": {
                                             "attached": [
-                                                _make_case("t3_1_1", "正常新增用户", "填写所有必填项，点击保存", "用户创建成功，列表中显示新用户"),
-                                                _make_case("t3_1_2", "用户名重复", "填写已存在的用户名，点击保存", "提示'用户名已存在'"),
+                                                _make_case(
+                                                    "t3_1_1",
+                                                    "正常新增用户",
+                                                    "填写所有必填项，点击保存",
+                                                    "用户创建成功，列表中显示新用户",
+                                                ),
+                                                _make_case(
+                                                    "t3_1_2",
+                                                    "用户名重复",
+                                                    "填写已存在的用户名，点击保存",
+                                                    "提示'用户名已存在'",
+                                                ),
                                             ]
                                         },
                                     },
@@ -313,7 +400,12 @@ def generate_template(output_path: str) -> str:
                                         "title": "编辑用户",
                                         "children": {
                                             "attached": [
-                                                _make_case("t3_2_1", "修改用户信息", "修改用户姓名，点击保存", "更新成功，列表显示新姓名"),
+                                                _make_case(
+                                                    "t3_2_1",
+                                                    "修改用户信息",
+                                                    "修改用户姓名，点击保存",
+                                                    "更新成功，列表显示新姓名",
+                                                ),
                                             ]
                                         },
                                     },
@@ -323,7 +415,12 @@ def generate_template(output_path: str) -> str:
                                         "title": "删除用户",
                                         "children": {
                                             "attached": [
-                                                _make_case("t3_3_1", "删除确认", "点击删除按钮，在确认弹框中点击确定", "用户被移除，列表中不再显示"),
+                                                _make_case(
+                                                    "t3_3_1",
+                                                    "删除确认",
+                                                    "点击删除按钮，在确认弹框中点击确定",
+                                                    "用户被移除，列表中不再显示",
+                                                ),
                                             ]
                                         },
                                     },
@@ -344,9 +441,7 @@ def generate_template(output_path: str) -> str:
             "metadata.json": {},
         }
     }
-    metadata = {
-        "creator": {"name": "testcase-gen", "version": "1.0.0"}
-    }
+    metadata = {"creator": {"name": "testcase-gen", "version": "1.0.0"}}
 
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("content.json", json.dumps(content, ensure_ascii=False, indent=2))

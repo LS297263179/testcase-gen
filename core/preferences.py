@@ -36,11 +36,13 @@ def compute_diffs(original: list[dict], edited: list[dict]) -> list[dict]:
                 field_diffs[field] = {"before": old_val, "after": new_val}
 
         if field_diffs:
-            diffs.append({
-                "id": tc_id,
-                "title": orig_tc.get("title", ""),
-                "field_diffs": field_diffs,
-            })
+            diffs.append(
+                {
+                    "id": tc_id,
+                    "title": orig_tc.get("title", ""),
+                    "field_diffs": field_diffs,
+                }
+            )
 
     return diffs
 

@@ -80,8 +80,14 @@ def api_me():
     """获取当前登录用户信息"""
     if "user_id" in session:
         csrf_token = session.get("csrf_token") or generate_csrf_token()
-        return jsonify({"logged_in": True, "user": {
-            "id": session["user_id"],
-            "username": session["username"],
-        }, "csrf_token": csrf_token})
+        return jsonify(
+            {
+                "logged_in": True,
+                "user": {
+                    "id": session["user_id"],
+                    "username": session["username"],
+                },
+                "csrf_token": csrf_token,
+            }
+        )
     return jsonify({"logged_in": False})

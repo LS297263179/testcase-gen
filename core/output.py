@@ -31,10 +31,10 @@ def _normalize_steps(steps: str) -> str:
         line = line.strip()
         if not line:
             continue
-        m = re.match(r'^(\d+[.、]\s*)', line)
+        m = re.match(r"^(\d+[.、]\s*)", line)
         if m:
             prefix = m.group(1)
-            content = line[len(prefix):].strip()
+            content = line[len(prefix) :].strip()
             while content and content[-1] in ("。", ".", "，", ",", "；", ";", "：", ":"):
                 content = content[:-1].rstrip()
             normalized.append(prefix + content)
@@ -65,7 +65,7 @@ def _split_steps(steps: str) -> list[str]:
     if "\n" in steps:
         return steps.split("\n")
     # 兼容分号分隔的格式：1. xxx; 2. xxx
-    parts = re.split(r';\s*(?=\d+\.)', steps)
+    parts = re.split(r";\s*(?=\d+\.)", steps)
     return parts if len(parts) > 1 else [steps]
 
 
@@ -159,8 +159,7 @@ def to_markdown(testcases: list[dict], output_dir: str, filename: str | None = N
         lines.append("|------|------|--------|------|")
         for tc in tcs:
             lines.append(
-                f"| {tc.get('id', '')} | {tc.get('title', '')} "
-                f"| {tc.get('priority', '')} | {tc.get('type', '')} |"
+                f"| {tc.get('id', '')} | {tc.get('title', '')} | {tc.get('priority', '')} | {tc.get('type', '')} |"
             )
         lines.append("")
 

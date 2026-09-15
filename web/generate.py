@@ -39,6 +39,7 @@ bp = Blueprint("generate", __name__)
 # JSON 提取工具（从 LLM 响应中提取 JSON 数组）
 # ============================================================
 
+
 def _extract_json_array(text: str) -> list[dict] | None:
     """从 LLM 响应中提取 JSON 数组（兼容 thinking 模式、markdown 包裹等）"""
     text = text.strip()
@@ -54,6 +55,7 @@ def _extract_json_array(text: str) -> list[dict] | None:
             pass
         try:
             import json5
+
             result = json5.loads(s)
             if isinstance(result, list):
                 return result
@@ -86,7 +88,7 @@ def _extract_json_array(text: str) -> list[dict] | None:
         start = source.find("[")
         end = source.rfind("]")
         if start != -1 and end != -1 and end > start:
-            result = _try_parse(source[start:end + 1])
+            result = _try_parse(source[start : end + 1])
             if result:
                 return result
 
@@ -102,6 +104,7 @@ def _extract_json_array(text: str) -> list[dict] | None:
 # ============================================================
 # XMind 树描述工具
 # ============================================================
+
 
 def _build_tree_description(sheets: list[dict]) -> str:
     """构建思维导图的文字描述，供 LLM 理解"""
@@ -124,6 +127,7 @@ def _format_node(node: dict, lines: list, indent: int):
 # 需求分析 API
 # ============================================================
 
+
 @bp.route("/api/analyze", methods=["POST"])
 @login_required
 @csrf_protect
@@ -141,6 +145,7 @@ def api_analyze():
     def sse_stream():
         try:
             from core.generator import analyze_modules
+
             client = get_generate_client()
             _ct = case_types or load_config()["testcase"]["case_types"]
 
@@ -148,17 +153,29 @@ def api_analyze():
             complexity, modules = analyze_modules(client, requirement, _ct, None)
 
             if not modules:
-                yield sse_format({"type": "done", "data": {
-                    "success": True, "complexity": complexity, "modules": [],
-                    "message": "模块分析失败，请直接生成"
-                }})
+                yield sse_format(
+                    {
+                        "type": "done",
+                        "data": {
+                            "success": True,
+                            "complexity": complexity,
+                            "modules": [],
+                            "message": "模块分析失败，请直接生成",
+                        },
+                    }
+                )
                 return
 
-            yield sse_format({"type": "done", "data": {
-                "success": True,
-                "complexity": complexity,
-                "modules": modules,
-            }})
+            yield sse_format(
+                {
+                    "type": "done",
+                    "data": {
+                        "success": True,
+                        "complexity": complexity,
+                        "modules": modules,
+                    },
+                }
+            )
         except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
@@ -173,6 +190,7 @@ def api_analyze():
 # ============================================================
 # 测试用例生成 API
 # ============================================================
+
 
 @bp.route("/api/generate", methods=["POST"])
 @login_required
@@ -260,6 +278,7 @@ def api_generate():
                 generate_for_module,
                 limit_testcases,
             )
+
             client = get_generate_client()
             image_client = get_image_client() if images else None
             active_client = image_client if (images and image_client) else client
@@ -269,20 +288,43 @@ def api_generate():
 
             if not modules:
                 yield sse_format({"type": "progress", "message": "模块分析失败，使用一次性生成模式..."})
-                testcases = generate_all_in_one(active_client, requirement, default_priority, _case_types, images if images else None, max_testcases, pref_context or None)
+                testcases = generate_all_in_one(
+                    active_client,
+                    requirement,
+                    default_priority,
+                    _case_types,
+                    images if images else None,
+                    max_testcases,
+                    pref_context or None,
+                )
             else:
                 # 按模块并行生成
                 from concurrent.futures import ThreadPoolExecutor, as_completed
+
                 total_modules = len(modules)
                 max_workers = min(total_modules, 5)
                 complexity_label = {"simple": "简单", "medium": "中等", "complex": "复杂"}.get(complexity, "中等")
-                yield sse_format({"type": "progress", "message": f"需求复杂度：{complexity_label}，正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）..."})
+                yield sse_format(
+                    {
+                        "type": "progress",
+                        "message": f"需求复杂度：{complexity_label}，正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）...",
+                    }
+                )
 
                 all_testcases = []
                 _images = images if images else None
                 with ThreadPoolExecutor(max_workers=max_workers) as executor:
                     future_to_module = {
-                        executor.submit(generate_for_module, active_client, requirement, mod, default_priority, _images, complexity, pref_context or None): mod
+                        executor.submit(
+                            generate_for_module,
+                            active_client,
+                            requirement,
+                            mod,
+                            default_priority,
+                            _images,
+                            complexity,
+                            pref_context or None,
+                        ): mod
                         for mod in modules
                     }
                     for completed, future in enumerate(as_completed(future_to_module), 1):
@@ -290,9 +332,19 @@ def api_generate():
                         try:
                             cases = future.result()
                             all_testcases.extend(cases)
-                            yield sse_format({"type": "progress", "message": f"「{mod['name']}」模块完成，生成 {len(cases)} 条用例 ({completed}/{total_modules})"})
+                            yield sse_format(
+                                {
+                                    "type": "progress",
+                                    "message": f"「{mod['name']}」模块完成，生成 {len(cases)} 条用例 ({completed}/{total_modules})",
+                                }
+                            )
                         except Exception as e:
-                            yield sse_format({"type": "progress", "message": f"「{mod['name']}」模块生成失败: {e} ({completed}/{total_modules})"})
+                            yield sse_format(
+                                {
+                                    "type": "progress",
+                                    "message": f"「{mod['name']}」模块生成失败: {e} ({completed}/{total_modules})",
+                                }
+                            )
 
                 if not all_testcases:
                     raise ValueError("分段生成未产出任何用例")
@@ -308,10 +360,17 @@ def api_generate():
                 testcases = deduplicate_by_steps(testcases)
                 step_dedup_count = step_dedup_before - len(testcases)
                 if step_dedup_count > 0:
-                    yield sse_format({"type": "progress", "message": f"步骤语义去重完成，移除 {step_dedup_count} 条相似用例"})
+                    yield sse_format(
+                        {"type": "progress", "message": f"步骤语义去重完成，移除 {step_dedup_count} 条相似用例"}
+                    )
 
                 if len(testcases) > max_testcases:
-                    yield sse_format({"type": "progress", "message": f"用例数 ({len(testcases)}) 超过上限 {max_testcases}，按优先级保留"})
+                    yield sse_format(
+                        {
+                            "type": "progress",
+                            "message": f"用例数 ({len(testcases)}) 超过上限 {max_testcases}，按优先级保留",
+                        }
+                    )
                     testcases = limit_testcases(testcases, max_testcases)
 
                 for i, tc in enumerate(testcases):
@@ -444,9 +503,16 @@ def api_regenerate_single():
             new_tc = json.loads(json_str)
 
             # 补全字段
-            for field, default in [("id", testcase.get("id", "")), ("module", testcase.get("module", "")),
-                                   ("title", ""), ("precondition", ""), ("steps", ""), ("expected", ""),
-                                   ("priority", testcase.get("priority", "P1")), ("type", testcase.get("type", ""))]:
+            for field, default in [
+                ("id", testcase.get("id", "")),
+                ("module", testcase.get("module", "")),
+                ("title", ""),
+                ("precondition", ""),
+                ("steps", ""),
+                ("expected", ""),
+                ("priority", testcase.get("priority", "P1")),
+                ("type", testcase.get("type", "")),
+            ]:
                 if not new_tc.get(field):
                     new_tc[field] = default
 
@@ -466,6 +532,7 @@ def api_regenerate_single():
 # ============================================================
 # 评审 & 优化 API
 # ============================================================
+
 
 @bp.route("/api/review", methods=["POST"])
 @login_required
@@ -495,11 +562,16 @@ def api_review():
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(f"# 测试用例评审报告\n\n{result}")
 
-            yield sse_format({"type": "done", "data": {
-                "success": True,
-                "review": result,
-                "report_path": str(report_path),
-            }})
+            yield sse_format(
+                {
+                    "type": "done",
+                    "data": {
+                        "success": True,
+                        "review": result,
+                        "report_path": str(report_path),
+                    },
+                }
+            )
         except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
@@ -542,12 +614,17 @@ def api_optimize():
             excel_path = to_excel(optimized, user_dir, f"testcases_optimized_{file_id}.xlsx")
             md_path = to_markdown(optimized, user_dir, f"testcases_optimized_{file_id}.md")
 
-            yield sse_format({"type": "done", "data": {
-                "success": True,
-                "count": len(optimized),
-                "testcases": optimized,
-                "files": {"excel": excel_path, "markdown": md_path},
-            }})
+            yield sse_format(
+                {
+                    "type": "done",
+                    "data": {
+                        "success": True,
+                        "count": len(optimized),
+                        "testcases": optimized,
+                        "files": {"excel": excel_path, "markdown": md_path},
+                    },
+                }
+            )
         except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
@@ -562,6 +639,7 @@ def api_optimize():
 # ============================================================
 # XMind 转测试用例
 # ============================================================
+
 
 @bp.route("/api/xmind2case", methods=["POST"])
 @login_required
@@ -600,7 +678,9 @@ def api_xmind2case():
 
             tree_desc = _build_tree_description(sheets)
 
-            yield sse_format({"type": "progress", "message": f"已解析 {len(all_items)} 个节点，正在调用 AI 生成测试用例..."})
+            yield sse_format(
+                {"type": "progress", "message": f"已解析 {len(all_items)} 个节点，正在调用 AI 生成测试用例..."}
+            )
 
             client = get_generate_client()
             system_prompt = (
@@ -652,11 +732,16 @@ def api_xmind2case():
             filepath = xmind_to_excel(testcases, user_dir, f"xmind_cases_{file_id}.xlsx")
             filename = os.path.basename(filepath)
 
-            yield sse_format({"type": "done", "data": {
-                "filename": filename,
-                "count": len(testcases),
-                "testcases": testcases,
-            }})
+            yield sse_format(
+                {
+                    "type": "done",
+                    "data": {
+                        "filename": filename,
+                        "count": len(testcases),
+                        "testcases": testcases,
+                    },
+                }
+            )
 
         except Exception as e:
             logger.error(f"XMind 转换失败: {e}\n{traceback.format_exc()}")
@@ -675,6 +760,7 @@ def api_xmind_template():
     import importlib
 
     import core.xmind_utils as xmind_utils
+
     importlib.reload(xmind_utils)
     from core.xmind_utils import generate_template
 

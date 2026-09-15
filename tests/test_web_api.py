@@ -1,14 +1,12 @@
 """Web API 集成测试"""
 
 
-
-
 # ============================================================
 # 认证流程
 # ============================================================
 
-class TestAuth:
 
+class TestAuth:
     def test_register_success(self, client):
         rv = client.post("/api/register", json={"username": "alice", "password": "password123"})
         assert rv.status_code == 200
@@ -62,8 +60,8 @@ class TestAuth:
 # CSRF 保护
 # ============================================================
 
-class TestCSRF:
 
+class TestCSRF:
     def test_post_without_csrf_token(self, auth_client):
         # 登录状态下不带 CSRF token 的 POST 应被拒
         rv = auth_client.post(
@@ -87,8 +85,8 @@ class TestCSRF:
 # 受保护接口
 # ============================================================
 
-class TestProtectedEndpoints:
 
+class TestProtectedEndpoints:
     def test_dashboard_requires_login(self, client):
         rv = client.get("/api/dashboard")
         assert rv.status_code == 401
@@ -106,8 +104,8 @@ class TestProtectedEndpoints:
 # 健康检查
 # ============================================================
 
-class TestHealth:
 
+class TestHealth:
     def test_health_check(self, client):
         rv = client.get("/api/health")
         assert rv.status_code == 200
@@ -120,8 +118,8 @@ class TestHealth:
 # 项目资料 CRUD
 # ============================================================
 
-class TestMaterialsAPI:
 
+class TestMaterialsAPI:
     def test_create_material(self, auth_client):
         rv = auth_client.post(
             "/api/materials",
@@ -169,8 +167,8 @@ class TestMaterialsAPI:
 # 历史记录
 # ============================================================
 
-class TestHistoryAPI:
 
+class TestHistoryAPI:
     def test_list_history_empty(self, auth_client):
         rv = auth_client.get("/api/history")
         assert rv.status_code == 200
@@ -181,8 +179,8 @@ class TestHistoryAPI:
 # 模型配置
 # ============================================================
 
-class TestModelConfigAPI:
 
+class TestModelConfigAPI:
     def test_get_model_presets(self, auth_client):
         rv = auth_client.get("/api/model-presets")
         assert rv.status_code == 200
@@ -200,6 +198,7 @@ class TestModelConfigAPI:
 # ============================================================
 # 工具函数
 # ============================================================
+
 
 def _get_csrf(client):
     """从 session 中获取 CSRF token"""

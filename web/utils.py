@@ -35,6 +35,7 @@ def get_user_output_dir(user_id: int | None = None) -> str:
 # 认证 & CSRF 装饰器
 # ============================================================
 
+
 def generate_csrf_token() -> str:
     """生成 CSRF token 并存入 session"""
     token = secrets.token_hex(32)
@@ -44,16 +45,19 @@ def generate_csrf_token() -> str:
 
 def login_required(f):
     """登录校验装饰器"""
+
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if "user_id" not in session:
             return jsonify({"error": "未登录，请先登录"}), 401
         return f(*args, **kwargs)
+
     return decorated
 
 
 def csrf_protect(f):
     """CSRF 保护装饰器（POST/PUT/DELETE 请求必须携带有效 token）"""
+
     @functools.wraps(f)
     def decorated(*args, **kwargs):
         if request.method in ("POST", "PUT", "DELETE"):
@@ -62,6 +66,7 @@ def csrf_protect(f):
             if not token or not expected or token != expected:
                 return jsonify({"error": "CSRF token 无效，请刷新页面"}), 403
         return f(*args, **kwargs)
+
     return decorated
 
 
@@ -93,10 +98,7 @@ def check_rate_limit(ip: str) -> bool:
     with _rate_limit_lock:
         if now - _rate_limit_last_cleanup > RATE_LIMIT_WINDOW:
             _rate_limit_last_cleanup = now
-            expired_ips = [
-                k for k, v in _rate_limit_store.items()
-                if not v or v[-1] <= window_start
-            ]
+            expired_ips = [k for k, v in _rate_limit_store.items() if not v or v[-1] <= window_start]
             for k in expired_ips:
                 del _rate_limit_store[k]
 
@@ -113,6 +115,7 @@ def check_rate_limit(ip: str) -> bool:
 # SSE 工具
 # ============================================================
 
+
 def sse_format(data: dict) -> str:
     """格式化 SSE 事件"""
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -121,6 +124,7 @@ def sse_format(data: dict) -> str:
 # ============================================================
 # 文件处理
 # ============================================================
+
 
 def process_uploaded_files(files) -> tuple[list[dict], str]:
     """处理上传的文件，返回 (images, text_content)。
@@ -138,11 +142,13 @@ def process_uploaded_files(files) -> tuple[list[dict], str]:
                 tmp_path = tmp.name
             f.save(tmp_path)
             if is_image(tmp_path):
-                images.append({
-                    "data": image_to_base64(tmp_path),
-                    "media_type": get_image_media_type(tmp_path),
-                    "filename": f.filename,
-                })
+                images.append(
+                    {
+                        "data": image_to_base64(tmp_path),
+                        "media_type": get_image_media_type(tmp_path),
+                        "filename": f.filename,
+                    }
+                )
             elif suffix in (".xlsx", ".xls"):
                 text_parts.append(read_excel(tmp_path))
             else:
@@ -176,9 +182,11 @@ def cleanup_old_output_files():
 # LLM Client 工厂
 # ============================================================
 
+
 def get_generate_client() -> LLMClient:
     """获取生成用 LLM 客户端"""
     from core.config import get_model_config
+
     cfg = get_model_config()
     return build_client(cfg["generate"])
 
@@ -186,6 +194,7 @@ def get_generate_client() -> LLMClient:
 def get_review_client() -> LLMClient:
     """获取评审用 LLM 客户端（可能与生成用不同模型）"""
     from core.config import get_model_config
+
     cfg = get_model_config()
     review_cfg = cfg.get("review", {})
     if review_cfg.get("enabled", False):
@@ -196,6 +205,7 @@ def get_review_client() -> LLMClient:
 def get_image_client() -> LLMClient | None:
     """获取图片识别 LLM 客户端"""
     from core.config import get_model_config
+
     cfg = get_model_config()
     gen_cfg = cfg["generate"]
     image_model = gen_cfg.get("image_model")

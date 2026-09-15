@@ -1,6 +1,5 @@
 """db.py 数据库层测试"""
 
-
 import pytest
 
 from core import db
@@ -9,8 +8,8 @@ from core import db
 # 用户 CRUD
 # ============================================================
 
-class TestUserCRUD:
 
+class TestUserCRUD:
     def test_create_user(self, tmp_db):
         uid = db.create_user("alice", "password123")
         assert uid > 0
@@ -49,8 +48,8 @@ class TestUserCRUD:
 # Session CRUD
 # ============================================================
 
-class TestSessionCRUD:
 
+class TestSessionCRUD:
     def test_create_and_get_session(self, tmp_db):
         uid = db.create_user("alice", "password123")
         tc = [{"id": "TC_001", "title": "test"}]
@@ -107,8 +106,8 @@ class TestSessionCRUD:
 # Settings
 # ============================================================
 
-class TestSettings:
 
+class TestSettings:
     def test_set_and_get(self, tmp_db):
         db.set_setting("my_key", "my_value")
         assert db.get_setting("my_key") == "my_value"
@@ -126,8 +125,8 @@ class TestSettings:
 # API Key 加密
 # ============================================================
 
-class TestApiKeyEncryption:
 
+class TestApiKeyEncryption:
     def test_encrypt_decrypt_roundtrip(self, tmp_db):
         original = "sk-test-api-key-12345"
         encrypted = db.encrypt_api_key(original)
@@ -150,8 +149,8 @@ class TestApiKeyEncryption:
 # 偏好规则
 # ============================================================
 
-class TestPreferences:
 
+class TestPreferences:
     def test_save_and_list_preferences(self, tmp_db):
         uid = db.create_user("alice", "password123")
         sid = db.create_session(
@@ -205,8 +204,8 @@ class TestPreferences:
 # 项目资料
 # ============================================================
 
-class TestMaterials:
 
+class TestMaterials:
     def test_create_and_list(self, tmp_db):
         uid = db.create_user("alice", "password123")
         mid = db.create_material(uid, "需求文档", "内容")
@@ -240,8 +239,8 @@ class TestMaterials:
 # 仪表盘统计
 # ============================================================
 
-class TestDashboard:
 
+class TestDashboard:
     def test_empty_dashboard(self, tmp_db):
         uid = db.create_user("alice", "password123")
         stats = db.get_dashboard_stats(uid)

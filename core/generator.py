@@ -295,14 +295,17 @@ USER_PROMPT_WITH_IMAGE = """请根据以下需求描述和图片生成测试用�
 - 请尽量细化测试步骤，确保可执行性"""
 
 
-def generate_testcases(client: LLMClient, requirement: str,
-                       default_priority: str = "P1",
-                       case_types: list[str] | None = None,
-                       images: list[dict] | None = None,
-                       image_client: LLMClient | None = None,
-                       on_progress: Callable[[str], None] | None = None,
-                       max_testcases: int = 100,
-                       preferences: str | None = None) -> list[dict]:
+def generate_testcases(
+    client: LLMClient,
+    requirement: str,
+    default_priority: str = "P1",
+    case_types: list[str] | None = None,
+    images: list[dict] | None = None,
+    image_client: LLMClient | None = None,
+    on_progress: Callable[[str], None] | None = None,
+    max_testcases: int = 100,
+    preferences: str | None = None,
+) -> list[dict]:
     """分段生成测试用例：先分析模块，再按模块逐一生成，最后合并去重。
     on_progress: 进度回调，用于通知前端当前步骤
     max_testcases: 单次生成最大用例数，默认 100
@@ -323,7 +326,9 @@ def generate_testcases(client: LLMClient, requirement: str,
         # 分析失败，回退到一次性生成
         if on_progress:
             on_progress("模块分析失败，使用一次性生成模式...")
-        return generate_all_in_one(active_client, requirement, default_priority, case_types, images, max_testcases, preferences)
+        return generate_all_in_one(
+            active_client, requirement, default_priority, case_types, images, max_testcases, preferences
+        )
 
     # Step 2: 按模块并行生成
     all_testcases = []
@@ -332,11 +337,15 @@ def generate_testcases(client: LLMClient, requirement: str,
 
     complexity_label = {"simple": "简单", "medium": "中等", "complex": "复杂"}.get(complexity, "中等")
     if on_progress:
-        on_progress(f"需求复杂度：{complexity_label}，正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）...")
+        on_progress(
+            f"需求复杂度：{complexity_label}，正在并行生成 {total_modules} 个模块的测试用例（{max_workers} 路并发）..."
+        )
 
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_module = {
-            executor.submit(generate_for_module, active_client, requirement, mod, default_priority, images, complexity, preferences): mod
+            executor.submit(
+                generate_for_module, active_client, requirement, mod, default_priority, images, complexity, preferences
+            ): mod
             for mod in modules
         }
         for completed, future in enumerate(as_completed(future_to_module), 1):
@@ -377,8 +386,9 @@ def generate_testcases(client: LLMClient, requirement: str,
     return all_testcases
 
 
-def analyze_modules(client: LLMClient, requirement: str,
-                     case_types: list[str], images: list[dict] | None = None) -> tuple[str, list[dict]]:
+def analyze_modules(
+    client: LLMClient, requirement: str, case_types: list[str], images: list[dict] | None = None
+) -> tuple[str, list[dict]]:
     """Step 1: 分析需求，拆解功能模块和测试维度，返回 (complexity, modules)"""
     # 有图片时用图片版 prompt，引导 LLM 关注界面元素
     sys_prompt = ANALYSIS_PROMPT_WITH_IMAGE if images else ANALYSIS_PROMPT
@@ -408,18 +418,22 @@ def analyze_modules(client: LLMClient, requirement: str,
             if modules and isinstance(modules, list):
                 return complexity, modules
         except Exception as e:
-            logger.debug(f"分析需求结构失败 (attempt {attempt+1}): {e}")
+            logger.debug(f"分析需求结构失败 (attempt {attempt + 1}): {e}")
             if attempt < 2:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
             continue
     return "medium", []
 
 
-def generate_for_module(client: LLMClient, requirement: str,
-                         module: dict, default_priority: str,
-                         images: list[dict] | None = None,
-                         complexity: str = "medium",
-                         preferences: str | None = None) -> list[dict]:
+def generate_for_module(
+    client: LLMClient,
+    requirement: str,
+    module: dict,
+    default_priority: str,
+    images: list[dict] | None = None,
+    complexity: str = "medium",
+    preferences: str | None = None,
+) -> list[dict]:
     """Step 2: 为单个模块生成测试用例"""
     case_count_guideline = COMPLEXITY_CASE_COUNT.get(complexity, COMPLEXITY_CASE_COUNT["medium"])
     prompt = MODULE_PROMPT.format(
@@ -443,19 +457,23 @@ def generate_for_module(client: LLMClient, requirement: str,
         except (ValueError, json.JSONDecodeError):
             continue
         except Exception as e:
-            logger.warning(f"LLM 生成用例失败 (attempt {attempt+1}): {e}")
+            logger.warning(f"LLM 生成用例失败 (attempt {attempt + 1}): {e}")
             if attempt < 2:
-                time.sleep(2 ** attempt)
+                time.sleep(2**attempt)
                 continue
             raise
     return []
 
 
-def generate_all_in_one(client: LLMClient, requirement: str,
-                         default_priority: str, case_types: list[str],
-                         images: list[dict] | None = None,
-                         max_testcases: int = 100,
-                         preferences: str | None = None) -> list[dict]:
+def generate_all_in_one(
+    client: LLMClient,
+    requirement: str,
+    default_priority: str,
+    case_types: list[str],
+    images: list[dict] | None = None,
+    max_testcases: int = 100,
+    preferences: str | None = None,
+) -> list[dict]:
     """一次性生成（回退方案）"""
     if images:
         text_part = requirement if requirement else "请根据图片中的界面/需求生成测试用例。"
@@ -490,7 +508,7 @@ def _normalize_text(text: str) -> str:
     if not text:
         return ""
     # 统一空白字符，去除首尾空格
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     # 去除常见标点差异
     text = text.replace("，", ",").replace("。", ".").replace("：", ":")
     text = text.replace("（", "(").replace("）", ")").replace("、", ",")
@@ -514,9 +532,9 @@ def deduplicate(testcases: list[dict]) -> list[dict]:
 
 # 用于提取步骤中操作动词+对象的正则
 _STEP_VERB_PATTERN = re.compile(
-    r'(打开|进入|点击|输入|选择|填写|提交|确认|取消|删除|修改|查看|搜索|筛选|'
-    r'上传|下载|刷新|返回|跳转|登录|退出|注册|设置|启用|禁用|添加|移除|'
-    r'拖拽|滑动|长按|双击|右键|复制|粘贴|切换|展开|收起|关闭|启动|停止)'
+    r"(打开|进入|点击|输入|选择|填写|提交|确认|取消|删除|修改|查看|搜索|筛选|"
+    r"上传|下载|刷新|返回|跳转|登录|退出|注册|设置|启用|禁用|添加|移除|"
+    r"拖拽|滑动|长按|双击|右键|复制|粘贴|切换|展开|收起|关闭|启动|停止)"
 )
 
 
@@ -526,15 +544,15 @@ def _extract_step_fingerprint(steps: str | None) -> set[str]:
         return set()
     fingerprint = set()
     for line in steps.split("\n"):
-        line = re.sub(r'^\d+[.、]\s*', '', line.strip())
+        line = re.sub(r"^\d+[.、]\s*", "", line.strip())
         if not line:
             continue
         # 提取动词+后面紧跟的连续字符（最多10个字）
         for m in _STEP_VERB_PATTERN.finditer(line):
             verb = m.group(0)
-            rest = line[m.end():m.end() + 10].strip()
+            rest = line[m.end() : m.end() + 10].strip()
             # 取 rest 中第一个名词片段（到标点/空格为止）
-            noun = re.split(r'[，,。.、；;：:\s（(]', rest)[0] if rest else ""
+            noun = re.split(r"[，,。.、；;：:\s（(]", rest)[0] if rest else ""
             fingerprint.add(verb + noun if noun else verb)
     return fingerprint
 
@@ -666,6 +684,7 @@ def _try_json5_loads(s: str):
     """尝试用 json5 解析（支持尾逗号、单引号等）"""
     try:
         import json5
+
         return json5.loads(s)
     except Exception as e:
         logger.debug(f"json5 解析失败: {e}")
@@ -677,7 +696,7 @@ def _try_brace_matching(s: str):
     cases = []
     i = 0
     while i < len(s):
-        if s[i] == '{':
+        if s[i] == "{":
             depth = 0
             in_str = False
             escape = False
@@ -686,17 +705,17 @@ def _try_brace_matching(s: str):
                 c = s[j]
                 if escape:
                     escape = False
-                elif c == '\\':
+                elif c == "\\":
                     escape = True
                 elif c == '"':
                     in_str = not in_str
                 elif not in_str:
-                    if c == '{':
+                    if c == "{":
                         depth += 1
-                    elif c == '}':
+                    elif c == "}":
                         depth -= 1
                         if depth == 0:
-                            candidate = s[i:j + 1]
+                            candidate = s[i : j + 1]
                             try:
                                 obj = json.loads(candidate)
                                 if isinstance(obj, dict) and ("id" in obj or "title" in obj):
@@ -749,19 +768,19 @@ def _fix_control_chars(s: str) -> str:
         if escape_next:
             escape_next = False
             result.append(c)
-        elif c == '\\' and in_string:
+        elif c == "\\" and in_string:
             escape_next = True
             result.append(c)
         elif c == '"' and not escape_next:
             in_string = not in_string
             result.append(c)
-        elif in_string and c in ('\n', '\r', '\t'):
-            if c == '\n':
-                result.append('\\n')
-            elif c == '\r':
-                result.append('\\r')
-            elif c == '\t':
-                result.append('\\t')
+        elif in_string and c in ("\n", "\r", "\t"):
+            if c == "\n":
+                result.append("\\n")
+            elif c == "\r":
+                result.append("\\r")
+            elif c == "\t":
+                result.append("\\t")
         else:
             result.append(c)
-    return ''.join(result)
+    return "".join(result)

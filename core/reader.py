@@ -117,10 +117,12 @@ def read_requirement_multimodal(source: str | None, image_paths: list[str] | Non
         for p in image_paths:
             if not os.path.exists(p):
                 raise FileNotFoundError(f"图片文件不存在: {p}")
-            result["images"].append({
-                "data": image_to_base64(p),
-                "media_type": get_image_media_type(p),
-                "filename": Path(p).name,
-            })
+            result["images"].append(
+                {
+                    "data": image_to_base64(p),
+                    "media_type": get_image_media_type(p),
+                    "filename": Path(p).name,
+                }
+            )
 
     return result

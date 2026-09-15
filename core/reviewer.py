@@ -73,14 +73,14 @@ REVIEW_USER_PROMPT_TEMPLATE = """请评审以下测试用例：
 ---测试用例结束---"""
 
 
-def review_testcases(client: LLMClient, requirement: str,
-                     testcases: list[dict]) -> str:
+def review_testcases(client: LLMClient, requirement: str, testcases: list[dict]) -> str:
     """对生成的测试用例进行评审"""
     # 将用例格式化为可读文本
     lines = []
     for tc in testcases:
-        lines.append(f"[{tc.get('id', '')}] {tc.get('title', '')} "
-                     f"(优先级:{tc.get('priority', '')} 类型:{tc.get('type', '')})")
+        lines.append(
+            f"[{tc.get('id', '')}] {tc.get('title', '')} (优先级:{tc.get('priority', '')} 类型:{tc.get('type', '')})"
+        )
         lines.append(f"  前置条件: {tc.get('precondition', '无')}")
         lines.append(f"  步骤: {tc.get('steps', '')}")
         lines.append(f"  预期: {tc.get('expected', '')}")
@@ -157,16 +157,14 @@ OPTIMIZE_USER_PROMPT_TEMPLATE = """请根据评审报告优化以下测试用例
 
 def _format_tc_text(tc: dict) -> str:
     """格式化单条用例为可读文本"""
-    lines = [f"[{tc.get('id', '')}] {tc.get('title', '')} "
-             f"(优先级:{tc.get('priority', '')} 类型:{tc.get('type', '')})"]
+    lines = [f"[{tc.get('id', '')}] {tc.get('title', '')} (优先级:{tc.get('priority', '')} 类型:{tc.get('type', '')})"]
     lines.append(f"  前置条件: {tc.get('precondition', '无')}")
     lines.append(f"  步骤: {tc.get('steps', '')}")
     lines.append(f"  预期: {tc.get('expected', '')}")
     return "\n".join(lines)
 
 
-def optimize_testcases(client: LLMClient, requirement: str,
-                       testcases: list[dict], review_report: str) -> list[dict]:
+def optimize_testcases(client: LLMClient, requirement: str, testcases: list[dict], review_report: str) -> list[dict]:
     """根据评审报告优化测试用例：删除标记的重复用例 + 修复问题 + 补充遗漏"""
     from core.generator import deduplicate, deduplicate_by_steps, parse_response
 

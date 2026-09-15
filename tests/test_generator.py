@@ -20,6 +20,7 @@ from core.generator import (
 # parse_response 测试
 # ============================================================
 
+
 class TestParseResponse:
     """测试 LLM 响应解析的 5 种 fallback 策略"""
 
@@ -68,8 +69,8 @@ class TestParseResponse:
 # validate_testcases 测试
 # ============================================================
 
-class TestValidateTestcases:
 
+class TestValidateTestcases:
     def test_fills_missing_fields(self):
         raw = [{"title": "test"}]
         result = validate_testcases(raw)
@@ -79,7 +80,17 @@ class TestValidateTestcases:
         assert result[0]["type"] == "功能测试"
 
     def test_fixes_invalid_priority(self):
-        raw = [{"id": "TC_001", "title": "test", "priority": "P5", "module": "m", "steps": "s", "expected": "e", "type": "功能测试"}]
+        raw = [
+            {
+                "id": "TC_001",
+                "title": "test",
+                "priority": "P5",
+                "module": "m",
+                "steps": "s",
+                "expected": "e",
+                "type": "功能测试",
+            }
+        ]
         result = validate_testcases(raw)
         assert result[0]["priority"] == "P1"
 
@@ -93,7 +104,10 @@ class TestValidateTestcases:
             validate_testcases([])
 
     def test_skips_non_dict_items(self):
-        raw = ["not a dict", {"title": "valid", "module": "m", "steps": "s", "expected": "e", "priority": "P1", "type": "功能测试"}]
+        raw = [
+            "not a dict",
+            {"title": "valid", "module": "m", "steps": "s", "expected": "e", "priority": "P1", "type": "功能测试"},
+        ]
         result = validate_testcases(raw)
         assert len(result) == 1
 
@@ -102,36 +116,100 @@ class TestValidateTestcases:
 # deduplicate 测试
 # ============================================================
 
-class TestDeduplicate:
 
+class TestDeduplicate:
     def test_removes_exact_duplicates(self):
         cases = [
-            {"title": "登录测试", "expected": "登录成功", "id": "TC_001", "module": "m", "steps": "s", "priority": "P1", "type": "功能测试"},
-            {"title": "登录测试", "expected": "登录成功", "id": "TC_002", "module": "m", "steps": "s", "priority": "P1", "type": "功能测试"},
+            {
+                "title": "登录测试",
+                "expected": "登录成功",
+                "id": "TC_001",
+                "module": "m",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "title": "登录测试",
+                "expected": "登录成功",
+                "id": "TC_002",
+                "module": "m",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate(cases)
         assert len(result) == 1
 
     def test_keeps_different_cases(self):
         cases = [
-            {"title": "登录测试", "expected": "登录成功", "id": "TC_001", "module": "m", "steps": "s", "priority": "P1", "type": "功能测试"},
-            {"title": "密码错误", "expected": "提示错误", "id": "TC_002", "module": "m", "steps": "s", "priority": "P1", "type": "功能测试"},
+            {
+                "title": "登录测试",
+                "expected": "登录成功",
+                "id": "TC_001",
+                "module": "m",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "title": "密码错误",
+                "expected": "提示错误",
+                "id": "TC_002",
+                "module": "m",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate(cases)
         assert len(result) == 2
 
     def test_normalizes_whitespace(self):
         cases = [
-            {"title": "登录  测试", "expected": "登录  成功", "id": "TC_001", "module": "m", "steps": "s", "priority": "P1", "type": "功能测试"},
-            {"title": "登录 测试", "expected": "登录 成功", "id": "TC_002", "module": "m", "steps": "s", "priority": "P1", "type": "功能测试"},
+            {
+                "title": "登录  测试",
+                "expected": "登录  成功",
+                "id": "TC_001",
+                "module": "m",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "title": "登录 测试",
+                "expected": "登录 成功",
+                "id": "TC_002",
+                "module": "m",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate(cases)
         assert len(result) == 1
 
     def test_cross_module_dedup(self):
         cases = [
-            {"title": "登录测试", "expected": "成功", "id": "TC_001", "module": "模块A", "steps": "s", "priority": "P1", "type": "功能测试"},
-            {"title": "登录测试", "expected": "成功", "id": "TC_002", "module": "模块B", "steps": "s", "priority": "P1", "type": "功能测试"},
+            {
+                "title": "登录测试",
+                "expected": "成功",
+                "id": "TC_001",
+                "module": "模块A",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "title": "登录测试",
+                "expected": "成功",
+                "id": "TC_002",
+                "module": "模块B",
+                "steps": "s",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate(cases)
         assert len(result) == 1
@@ -141,28 +219,76 @@ class TestDeduplicate:
 # deduplicate_by_steps 测试
 # ============================================================
 
-class TestDeduplicateBySteps:
 
+class TestDeduplicateBySteps:
     def test_removes_similar_steps(self):
         cases = [
-            {"id": "TC_001", "title": "A", "steps": "1. 打开登录页\n2. 输入手机号\n3. 点击登录按钮", "expected": "e1", "module": "m", "priority": "P1", "type": "功能测试"},
-            {"id": "TC_002", "title": "B", "steps": "1. 打开登录页\n2. 输入手机号\n3. 点击登录按钮", "expected": "e2", "module": "m", "priority": "P1", "type": "功能测试"},
+            {
+                "id": "TC_001",
+                "title": "A",
+                "steps": "1. 打开登录页\n2. 输入手机号\n3. 点击登录按钮",
+                "expected": "e1",
+                "module": "m",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "id": "TC_002",
+                "title": "B",
+                "steps": "1. 打开登录页\n2. 输入手机号\n3. 点击登录按钮",
+                "expected": "e2",
+                "module": "m",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate_by_steps(cases, threshold=0.5)
         assert len(result) == 1
 
     def test_keeps_different_steps(self):
         cases = [
-            {"id": "TC_001", "title": "A", "steps": "1. 打开登录页\n2. 输入手机号\n3. 点击登录", "expected": "e1", "module": "m", "priority": "P1", "type": "功能测试"},
-            {"id": "TC_002", "title": "B", "steps": "1. 打开注册页\n2. 输入邮箱\n3. 点击注册", "expected": "e2", "module": "m", "priority": "P1", "type": "功能测试"},
+            {
+                "id": "TC_001",
+                "title": "A",
+                "steps": "1. 打开登录页\n2. 输入手机号\n3. 点击登录",
+                "expected": "e1",
+                "module": "m",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "id": "TC_002",
+                "title": "B",
+                "steps": "1. 打开注册页\n2. 输入邮箱\n3. 点击注册",
+                "expected": "e2",
+                "module": "m",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate_by_steps(cases, threshold=0.7)
         assert len(result) == 2
 
     def test_empty_steps_not_crashing(self):
         cases = [
-            {"id": "TC_001", "title": "A", "steps": "", "expected": "e1", "module": "m", "priority": "P1", "type": "功能测试"},
-            {"id": "TC_002", "title": "B", "steps": "", "expected": "e2", "module": "m", "priority": "P1", "type": "功能测试"},
+            {
+                "id": "TC_001",
+                "title": "A",
+                "steps": "",
+                "expected": "e1",
+                "module": "m",
+                "priority": "P1",
+                "type": "功能测试",
+            },
+            {
+                "id": "TC_002",
+                "title": "B",
+                "steps": "",
+                "expected": "e2",
+                "module": "m",
+                "priority": "P1",
+                "type": "功能测试",
+            },
         ]
         result = deduplicate_by_steps(cases)
         # 空步骤不参与去重，都保留
@@ -173,13 +299,37 @@ class TestDeduplicateBySteps:
 # limit_testcases 测试
 # ============================================================
 
-class TestLimitTestcases:
 
+class TestLimitTestcases:
     def test_limits_by_priority(self):
         cases = [
-            {"id": "TC_001", "priority": "P3", "title": "a", "module": "m", "steps": "s", "expected": "e", "type": "功能测试"},
-            {"id": "TC_002", "priority": "P0", "title": "b", "module": "m", "steps": "s", "expected": "e", "type": "功能测试"},
-            {"id": "TC_003", "priority": "P1", "title": "c", "module": "m", "steps": "s", "expected": "e", "type": "功能测试"},
+            {
+                "id": "TC_001",
+                "priority": "P3",
+                "title": "a",
+                "module": "m",
+                "steps": "s",
+                "expected": "e",
+                "type": "功能测试",
+            },
+            {
+                "id": "TC_002",
+                "priority": "P0",
+                "title": "b",
+                "module": "m",
+                "steps": "s",
+                "expected": "e",
+                "type": "功能测试",
+            },
+            {
+                "id": "TC_003",
+                "priority": "P1",
+                "title": "c",
+                "module": "m",
+                "steps": "s",
+                "expected": "e",
+                "type": "功能测试",
+            },
         ]
         result = limit_testcases(cases, 2)
         assert len(result) == 2
@@ -188,7 +338,15 @@ class TestLimitTestcases:
 
     def test_no_limit_if_under(self):
         cases = [
-            {"id": "TC_001", "priority": "P1", "title": "a", "module": "m", "steps": "s", "expected": "e", "type": "功能测试"},
+            {
+                "id": "TC_001",
+                "priority": "P1",
+                "title": "a",
+                "module": "m",
+                "steps": "s",
+                "expected": "e",
+                "type": "功能测试",
+            },
         ]
         result = limit_testcases(cases, 10)
         assert len(result) == 1
@@ -198,8 +356,8 @@ class TestLimitTestcases:
 # _extract_step_fingerprint 测试
 # ============================================================
 
-class TestStepFingerprint:
 
+class TestStepFingerprint:
     def test_extracts_verbs(self):
         steps = "1. 打开登录页\n2. 输入手机号\n3. 点击登录按钮"
         fp = _extract_step_fingerprint(steps)
@@ -220,8 +378,8 @@ class TestStepFingerprint:
 # fix_control_chars 测试
 # ============================================================
 
-class TestFixControlChars:
 
+class TestFixControlChars:
     def test_fixes_newline_in_string(self):
         s = '{"key": "line1\nline2"}'
         result = fix_control_chars(s)
