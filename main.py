@@ -1,4 +1,4 @@
-"""测试用例生成器 - 命令行入口"""
+"""AI 测试工程平台 - 命令行入口"""
 
 import argparse
 import logging
@@ -49,7 +49,7 @@ def print_summary(testcases: list[dict]):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI 测试用例生成器")
+    parser = argparse.ArgumentParser(description="AI 测试工程平台")
     parser.add_argument("source", nargs="?", default=None, help="需求文档路径 (.md/.txt/.xlsx)，不指定则手动输入")
     parser.add_argument("-c", "--config", default="config.yaml", help="配置文件路径 (默认: config.yaml)")
     parser.add_argument("-o", "--output", default=None, help="输出目录 (覆盖配置文件)")
@@ -64,10 +64,10 @@ def main():
     output_format = args.format or config["output"]["format"]
 
     gen_model = config["generate"]["model"]
-    logger.info("启动测试用例生成器")
+    logger.info("启动 AI 测试工程平台")
     console.print(
         Panel.fit(
-            f"[bold blue]AI 测试用例生成器[/]\n生成模型: [green]{gen_model}[/]",
+            f"[bold blue]AI 测试工程平台[/]\n生成模型: [green]{gen_model}[/]",
             border_style="blue",
         )
     )

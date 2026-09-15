@@ -8,7 +8,7 @@ from web import app
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AI 测试用例生成器 - Web 版")
+    parser = argparse.ArgumentParser(description="AI 测试工程平台 - Web 版")
     parser.add_argument("-p", "--port", type=int, default=5000, help="端口号 (默认: 5000)")
     parser.add_argument("--host", default="0.0.0.0", help="监听地址 (默认: 0.0.0.0)")
     parser.add_argument("--no-browser", action="store_true", help="不自动打开浏览器")
@@ -16,7 +16,7 @@ def main():
     args = parser.parse_args()
 
     url = f"http://localhost:{args.port}"
-    print("\n  AI 测试用例生成器")
+    print("\n  AI 测试工程平台")
     print(f"  访问地址: {url}")
     print("  按 Ctrl+C 停止服务\n")
 

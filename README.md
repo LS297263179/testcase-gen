@@ -1,6 +1,6 @@
-# AI 测试用例生成器 🧪
+# AI 测试工程平台 🧪
 
-基于大模型（LLM）的测试用例自动生成工具。输入需求描述或 UI 截图，AI 自动生成测试点和测试用例，支持 Excel / Markdown 导出。
+基于大模型（LLM）的 AI 测试工程平台（AI Test Engineering Platform）。输入需求描述或 UI 截图，AI 自动生成测试点和测试用例，支持 Excel / Markdown 导出。
 
 ---
 

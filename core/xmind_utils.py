@@ -441,7 +441,7 @@ def generate_template(output_path: str) -> str:
             "metadata.json": {},
         }
     }
-    metadata = {"creator": {"name": "testcase-gen", "version": "1.0.0"}}
+    metadata = {"creator": {"name": "AI Test Engineering Platform", "version": "1.0.0"}}
 
     with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("content.json", json.dumps(content, ensure_ascii=False, indent=2))

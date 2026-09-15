@@ -1,7 +1,7 @@
-# testcase-gen — AI 测试用例生成器
+# testcase-gen — AI 测试工程平台
 
 ## 一句话
-Flask + SQLite + LLM 的测试用例自动化生成工具。
+Flask + SQLite + LLM 的 AI 测试工程平台（AI Test Engineering Platform）。
 
 ## 技术栈
 Python >= 3.11 / Flask / SQLite / ruff (line-length 120, double-quotes) / pytest
