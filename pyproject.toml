@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "testcase-gen"
 version = "1.0.0"
@@ -20,8 +24,12 @@ dependencies = [
 dev = [
     "pytest>=8.0.0",
     "pytest-cov>=5.0.0",
-    "ruff>=0.5.0",
+    "ruff~=0.16.7",
 ]
+
+[tool.setuptools]
+# 显式声明包，禁用 flat-layout 自动发现（根目录含 data/output/static 等非包目录）
+packages = ["core", "web"]
 
 [tool.ruff]
 target-version = "py311"
@@ -47,6 +55,10 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["core", "web"]
+
+[tool.ruff.lint.per-file-ignores]
+# Blueprint 导入必须在 app 创建之后注册（Flask 标准写法），非无意放置
+"web/__init__.py" = ["E402"]
 
 [tool.ruff.format]
 quote-style = "double"
