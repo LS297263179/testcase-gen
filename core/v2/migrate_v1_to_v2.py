@@ -21,6 +21,7 @@ from collections.abc import Callable
 
 from core.schemas import (
     GenerationConfig,
+    GenerationScope,
     Preference,
     Priority,
     Provenance,
@@ -42,6 +43,7 @@ from core.schemas import (
 )
 from core.v2 import repository as repo
 from core.v2.ddl import create_v2_schema
+from core.v2.fingerprint import compute_testpoint_fingerprint
 
 logger = logging.getLogger("v2.migrate")
 
@@ -269,6 +271,15 @@ def migrate(v1_db_path: str, *, create_schema: bool = True) -> dict:
                     description=desc,
                     dimension=TestDimension.FUNCTIONAL,
                     provenance=Provenance.MIGRATED,
+                    generation_scope=GenerationScope.ITEM,
+                    fingerprint=compute_testpoint_fingerprint(
+                        version_id=ver.id,
+                        generation_scope=GenerationScope.ITEM.value,
+                        item_ids=[],
+                        module=module,
+                        subcategory=subcat,
+                        title=title,
+                    ),
                 )
                 repo.save_test_point(point)
                 stats["test_points"] += 1

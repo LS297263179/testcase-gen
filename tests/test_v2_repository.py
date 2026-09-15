@@ -12,6 +12,7 @@ from core.schemas import (
     ExpressionType,
     FieldSpec,
     GenerationConfig,
+    GenerationScope,
     ObligationStatus,
     Preference,
     Priority,
@@ -92,11 +93,11 @@ def _make_chain(repo):
 
 class TestSchema:
     def test_schema_version(self, repo):
-        assert ddl.get_schema_version() == 2
+        assert ddl.get_schema_version() == 3
 
     def test_create_is_idempotent(self, repo):
         ddl.create_v2_schema()  # 再次执行不应报错
-        assert ddl.get_schema_version() == 2
+        assert ddl.get_schema_version() == 3
 
 
 class TestRequirementChain:
@@ -173,6 +174,65 @@ class TestTraceability:
         got = repo.get_test_point(tp.id)
         assert got.item_ids == [item.id]
         assert got.technique == Technique.BOUNDARY_VALUE
+
+    def test_testpoint_fingerprint_auto_computed_and_idempotent(self, repo):
+        """Step 3：fingerprint 入库前兜底计算；同业务身份重存复用旧 id，不产生重复行"""
+        _, ver, item, _, run = _make_chain(repo)
+        tp1 = TestPoint(
+            run_id=run.id,
+            version_id=ver.id,
+            item_ids=[item.id],
+            module="登录",
+            subcategory="边界",
+            title="验证码有效期",
+            description="4:59/5:00/5:01",
+            dimension=TestDimension.BOUNDARY,
+            generation_scope=GenerationScope.ITEM,
+        )
+        repo.save_test_point(tp1)
+        assert tp1.fingerprint is not None and tp1.fingerprint.startswith("tp_")
+        first_id = tp1.id
+
+        # 重新构造一个业务身份完全相同但 ULID 不同的 TestPoint → 应复用旧 id
+        tp2 = TestPoint(
+            run_id=run.id,
+            version_id=ver.id,
+            item_ids=[item.id],
+            module="登录",
+            subcategory="边界",
+            title="验证码有效期",
+            description="4:59/5:00/5:01 更新后的描述",
+            dimension=TestDimension.BOUNDARY,
+            generation_scope=GenerationScope.ITEM,
+        )
+        repo.save_test_point(tp2)
+        assert tp2.id == first_id, "同 fingerprint 应复用旧 ULID，保证下游链接不断"
+        got = repo.get_test_point(first_id)
+        assert got.description == "4:59/5:00/5:01 更新后的描述"  # upsert 更新了非身份字段
+
+        # 按 fingerprint 查询
+        by_fp = repo.get_test_point_by_fingerprint(tp1.fingerprint)
+        assert by_fp is not None and by_fp.id == first_id
+
+    def test_testpoint_different_scope_no_collision(self, repo):
+        """Step 3：generation_scope 不同的两个 TestPoint 即使其他字段相同也不撞 fingerprint"""
+        _, ver, item, _, run = _make_chain(repo)
+        common = {
+            "run_id": run.id,
+            "version_id": ver.id,
+            "item_ids": [item.id],
+            "module": "登录",
+            "subcategory": "边界",
+            "title": "验证码有效期",
+            "description": "d",
+            "dimension": TestDimension.BOUNDARY,
+        }
+        tp_item = TestPoint(**common, generation_scope=GenerationScope.ITEM)
+        tp_cross = TestPoint(**common, generation_scope=GenerationScope.CROSS_ITEM)
+        repo.save_test_point(tp_item)
+        repo.save_test_point(tp_cross)
+        assert tp_item.fingerprint != tp_cross.fingerprint
+        assert tp_item.id != tp_cross.id
 
     def test_case_to_point_link_and_steps(self, repo):
         """追溯：TestCase.test_point_ids + 结构化步骤往返"""

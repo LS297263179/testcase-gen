@@ -28,6 +28,7 @@ from core.schemas import (
     new_ulid,
 )
 from core.v2.db import v2_conn, v2_read_conn
+from core.v2.fingerprint import compute_testpoint_fingerprint
 from core.v2.resolver import ReferentialValidator
 
 
@@ -453,7 +454,32 @@ def get_run(run_id: str) -> Run | None:
 
 
 def save_test_point(tp: TestPoint) -> None:
+    """保存测试点；以 fingerprint 为业务幂等身份，同一 fingerprint 多次保存复用旧 id。
+
+    Step 3 引入：
+      - 入库前若 tp.fingerprint 为空，自动兜底计算（避免旧调用方漏传）。
+      - 先按 fingerprint 查旧行：若存在且 id 不同，则复用旧 id 重写 tp，保证：
+          1) ULID 稳定，不造成下游 test_case_points / obligation_coverage 断链；
+          2) UNIQUE(fingerprint) 索引不被破坏。
+      - upsert 列表新增 generation_scope / fingerprint 两列。
+    """
+    if not tp.fingerprint:
+        tp.fingerprint = compute_testpoint_fingerprint(
+            version_id=tp.version_id,
+            generation_scope=tp.generation_scope.value
+            if hasattr(tp.generation_scope, "value")
+            else str(tp.generation_scope),
+            item_ids=list(tp.item_ids),
+            module=tp.module,
+            subcategory=tp.subcategory,
+            title=tp.title,
+        )
+
     with v2_conn() as conn:
+        # 幂等身份对齐：若已有同 fingerprint 行但 id 不同，复用旧 id
+        existing = conn.execute("SELECT id FROM test_points WHERE fingerprint = ?", (tp.fingerprint,)).fetchone()
+        if existing and existing["id"] != tp.id:
+            tp.id = existing["id"]
         conn.execute(
             _upsert(
                 "test_points",
@@ -471,6 +497,8 @@ def save_test_point(tp: TestPoint) -> None:
                     "priority",
                     "provenance",
                     "status",
+                    "generation_scope",
+                    "fingerprint",
                     "created_at",
                     "updated_at",
                     "schema_version",
@@ -490,6 +518,8 @@ def save_test_point(tp: TestPoint) -> None:
                 _en(tp.priority),
                 _en(tp.provenance),
                 _en(tp.status),
+                _en(tp.generation_scope),
+                tp.fingerprint,
                 _dt(tp.created_at),
                 _dt(tp.updated_at),
                 tp.schema_version,
@@ -517,6 +547,46 @@ def get_test_point(tp_id: str) -> TestPoint | None:
             "SELECT requirement_item_id FROM test_point_items WHERE test_point_id = ?", (tp_id,)
         ).fetchall()
         return _row_to_test_point(row, [r["requirement_item_id"] for r in links])
+
+
+def get_test_point_by_fingerprint(fingerprint: str) -> TestPoint | None:
+    """按业务指纹查测试点（Step 3 orchestrator 幂等重跑时用于定位旧行）。"""
+    with v2_read_conn() as conn:
+        row = conn.execute("SELECT * FROM test_points WHERE fingerprint = ?", (fingerprint,)).fetchone()
+        if not row:
+            return None
+        links = conn.execute(
+            "SELECT requirement_item_id FROM test_point_items WHERE test_point_id = ?", (row["id"],)
+        ).fetchall()
+        return _row_to_test_point(row, [r["requirement_item_id"] for r in links])
+
+
+def list_test_points_by_version(version_id: str) -> list[TestPoint]:
+    """按 RequirementVersion 列出全部测试点（Step 3 覆盖率报告与幂等清理用）。"""
+    with v2_read_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM test_points WHERE version_id = ? ORDER BY created_at", (version_id,)
+        ).fetchall()
+        result: list[TestPoint] = []
+        for row in rows:
+            links = conn.execute(
+                "SELECT requirement_item_id FROM test_point_items WHERE test_point_id = ?", (row["id"],)
+            ).fetchall()
+            result.append(_row_to_test_point(row, [r["requirement_item_id"] for r in links]))
+        return result
+
+
+def list_test_points_by_run(run_id: str) -> list[TestPoint]:
+    """按 Run 列出全部测试点（幂等重跑时清理旧产物用）。"""
+    with v2_read_conn() as conn:
+        rows = conn.execute("SELECT * FROM test_points WHERE run_id = ? ORDER BY created_at", (run_id,)).fetchall()
+        result: list[TestPoint] = []
+        for row in rows:
+            links = conn.execute(
+                "SELECT requirement_item_id FROM test_point_items WHERE test_point_id = ?", (row["id"],)
+            ).fetchall()
+            result.append(_row_to_test_point(row, [r["requirement_item_id"] for r in links]))
+        return result
 
 
 # ============================================================

@@ -13,6 +13,7 @@ from core.schemas import (
     ExpressionType,
     FieldSpec,
     GenerationConfig,
+    GenerationScope,
     ObligationStatus,
     PermissionRule,
     Priority,
@@ -171,6 +172,30 @@ class TestTestAssets:
             dimension="boundary",
         )
         assert len(tp.item_ids) == 1
+        # Step 3：默认 generation_scope=ITEM，fingerprint=None（Repository 入库前兜底计算）
+        assert tp.generation_scope == GenerationScope.ITEM
+        assert tp.fingerprint is None
+
+    def test_test_point_generation_scope_enum(self):
+        """Step 3：generation_scope 只接受 item / cross_item，非法值报错"""
+        tp = TestPoint(
+            module="m",
+            subcategory="s",
+            title="t",
+            description="d",
+            dimension="functional",
+            generation_scope="cross_item",
+        )
+        assert tp.generation_scope == GenerationScope.CROSS_ITEM
+        with pytest.raises(ValidationError):
+            TestPoint(
+                module="m",
+                subcategory="s",
+                title="t",
+                description="d",
+                dimension="functional",
+                generation_scope="unknown_scope",
+            )
 
     def test_test_case_type_is_enum(self):
         tc = TestCase(

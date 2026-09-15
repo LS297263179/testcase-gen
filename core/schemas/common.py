@@ -201,6 +201,20 @@ class ExpressionType(StrEnum):
     ENUM = "enum"  # status in {active, disabled}
 
 
+class GenerationScope(StrEnum):
+    """测试点生成范围（Step 3 两阶段生成引入）
+
+    - ITEM: Phase A 逐 RequirementItem 独立生成，item_ids 长度必为 1
+    - CROSS_ITEM: Phase B 跨项补漏生成，item_ids 长度必 ≥ 2
+    Validator 据此分别校验 item_ids 长度与追溯合法性。
+    """
+
+    __test__ = False  # 非 pytest 测试类，禁止被收集
+
+    ITEM = "item"
+    CROSS_ITEM = "cross_item"
+
+
 class TestDimension(StrEnum):
     """测试维度（测试点归类）"""
 

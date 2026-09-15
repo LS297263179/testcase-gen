@@ -1,4 +1,4 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=2）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=3）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
@@ -11,12 +11,13 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 
 from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -142,23 +143,27 @@ CREATE INDEX IF NOT EXISTS idx_runs_version ON runs(requirement_version_id);
 
 -- 测试资产
 CREATE TABLE IF NOT EXISTS test_points (
-    id             TEXT PRIMARY KEY,
-    run_id         TEXT,
-    version_id     TEXT,
-    module         TEXT NOT NULL,
-    subcategory    TEXT NOT NULL,
-    title          TEXT NOT NULL,
-    description    TEXT NOT NULL,
-    dimension      TEXT NOT NULL,
-    technique      TEXT,
-    obligation_id  TEXT,
-    priority       TEXT NOT NULL DEFAULT 'P1',
-    provenance     TEXT NOT NULL DEFAULT 'llm',
-    status         TEXT NOT NULL DEFAULT 'draft',
-    created_at     TEXT NOT NULL,
-    updated_at     TEXT NOT NULL,
-    schema_version INTEGER NOT NULL DEFAULT 2
+    id               TEXT PRIMARY KEY,
+    run_id           TEXT,
+    version_id       TEXT,
+    module           TEXT NOT NULL,
+    subcategory      TEXT NOT NULL,
+    title            TEXT NOT NULL,
+    description      TEXT NOT NULL,
+    dimension        TEXT NOT NULL,
+    technique        TEXT,
+    obligation_id    TEXT,
+    priority         TEXT NOT NULL DEFAULT 'P1',
+    provenance       TEXT NOT NULL DEFAULT 'llm',
+    status           TEXT NOT NULL DEFAULT 'draft',
+    generation_scope TEXT NOT NULL DEFAULT 'item',
+    fingerprint      TEXT,
+    created_at       TEXT NOT NULL,
+    updated_at       TEXT NOT NULL,
+    schema_version   INTEGER NOT NULL DEFAULT 2
 );
+CREATE UNIQUE INDEX IF NOT EXISTS ux_test_points_fingerprint ON test_points(fingerprint);
+CREATE INDEX IF NOT EXISTS idx_test_points_version ON test_points(version_id);
 
 CREATE TABLE IF NOT EXISTS test_cases (
     id               TEXT PRIMARY KEY,
@@ -293,10 +298,62 @@ CREATE INDEX IF NOT EXISTS idx_assets_owner ON assets(owner_type, owner_id);
 """
 
 
+def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
+    """对已存在的 schema_version=2 数据库执行 v2 → v3 升级：
+
+    Step 3 引入 test_points.generation_scope + test_points.fingerprint 两列与 UNIQUE 索引。
+    新建的数据库 CREATE TABLE 已含两列，无需进入本分支。
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(test_points)").fetchall()}
+    if "generation_scope" not in cols:
+        conn.execute("ALTER TABLE test_points ADD COLUMN generation_scope TEXT NOT NULL DEFAULT 'item'")
+        logger.info("schema v2→v3: test_points 新增列 generation_scope")
+    if "fingerprint" not in cols:
+        conn.execute("ALTER TABLE test_points ADD COLUMN fingerprint TEXT")
+        logger.info("schema v2→v3: test_points 新增列 fingerprint")
+        # 已有行补算 fingerprint（避免 UNIQUE 索引创建后旧行全为 NULL 导致后续幂等失败）
+        from core.v2.fingerprint import compute_testpoint_fingerprint
+
+        rows = conn.execute(
+            "SELECT id, version_id, generation_scope, module, subcategory, title FROM test_points"
+        ).fetchall()
+        for row in rows:
+            item_ids = [
+                r["requirement_item_id"]
+                for r in conn.execute(
+                    "SELECT requirement_item_id FROM test_point_items WHERE test_point_id = ?", (row["id"],)
+                ).fetchall()
+            ]
+            fp = compute_testpoint_fingerprint(
+                version_id=row["version_id"],
+                generation_scope=row["generation_scope"] or "item",
+                item_ids=item_ids,
+                module=row["module"],
+                subcategory=row["subcategory"],
+                title=row["title"],
+            )
+            conn.execute("UPDATE test_points SET fingerprint = ? WHERE id = ?", (fp, row["id"]))
+        logger.info("schema v2→v3: 已为 %d 行 test_points 补算 fingerprint", len(rows))
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_test_points_fingerprint ON test_points(fingerprint)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_test_points_version ON test_points(version_id)")
+
+
 def create_v2_schema() -> None:
-    """在 V2 数据库中创建全部表（幂等）并写入 schema_version"""
+    """在 V2 数据库中创建全部表（幂等）并写入 schema_version；检测到旧版本自动升级"""
     with v2_conn() as conn:
+        # 1. 先跑 executescript（新 db 直接建齐 v3 列与索引；旧 db 的 CREATE TABLE IF NOT EXISTS 不会重跑，仅补建缺失表）
         conn.executescript(V2_SCHEMA_SQL)
+        # 2. 检测旧版本（0 < existing < 3）→ 跑 ALTER 补列 + 补算 fingerprint（CREATE INDEX 已在 V2_SCHEMA_SQL 幂等执行）
+        row = conn.execute("SELECT value FROM schema_meta WHERE key = 'schema_version'").fetchone()
+        existing = 0
+        if row is not None:
+            try:
+                existing = int(row["value"])
+            except (TypeError, ValueError):
+                existing = 0
+        if 0 < existing < 3:
+            _migrate_v2_to_v3(conn)
+        # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "
             "ON CONFLICT(key) DO UPDATE SET value = excluded.value",

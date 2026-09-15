@@ -10,7 +10,7 @@
 本项目 V1 = 基于 LLM 的测试用例生成器（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度：Step 1 已完成并推送；Step 2 已完成、通过 14 项验收门槛、待/已推送；Step 3 未开始（需先讨论方案）。**
+**当前进度：Step 1 已完成并推送；Step 2 已完成、通过 14 项验收门槛、已推送；Step 3 已完成、通过 15 项验收门槛（含 12 条主门槛 + 3 条附加）、待用户确认后推送；Step 4 未开始（需先讨论方案）。**
 
 ---
 
@@ -32,7 +32,7 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 现有 V1
  ├─ Step 1：冻结数据模型 / Schema          ✅ 完成
  ├─ Step 2：建立 Requirement IR             ✅ 完成
- ├─ Step 3：重构"需求 → 测试点"             ⬜ 下一步（需讨论）
+ ├─ Step 3：重构"需求 → 测试点"             ✅ 完成
  ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务）
  ├─ Step 5：重构"测试点 → 测试用例"
  ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析
@@ -62,10 +62,11 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | Step | 状态 | 关键产物 | 提交 |
 |---|---|---|---|
 | 1 冻结数据模型 | ✅ 完成+验证 | 设计文档 + `core/schemas/`(10) + `core/v2/`持久层 + 迁移 + 测试(209) | 已推 origin+gitee |
-| 2 Requirement IR | ✅ 完成+验证(14门槛全过) | `core/v2/`{prompts,ingestion,parser,validator,ir} + 4 测试文件 + 修复 Step1 upsert bug | 见 §5/§6 |
-| 3~13 | ⬜ 未开始 | — | — |
+| 2 Requirement IR | ✅ 完成+验证(14门槛全过) | `core/v2/`{prompts,ingestion,parser,validator,ir} + 4 测试文件 + 修复 Step1 upsert bug | 已推 origin+gitee |
+| 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 待用户确认后推 |
+| 4~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 287 passed**，ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 345 passed**（Step 1 层 290 + Step 3 新增 55），ruff check/format 全绿。
 
 ---
 
@@ -114,6 +115,70 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 
 ---
 
+## 5.5 Step 3 详情（测试点生成引擎）✅
+
+**目标**：消费 Step 2 的 `RequirementVersion + RequirementItem[]`，两阶段 LLM 生成 `TestPoint(provenance=LLM)`，M:N 关联回 `item_ids`。对应蓝图 `Requirement IR → Test Point Generator`。
+
+**两阶段生成策略**（用户确认）：
+- **Phase A**（`test-point-generator-v1`）：逐 `RequirementItem` 独立调 LLM，产基础 TestPoint（`generation_scope=item`、`item_ids` 强制覆写为 `[当前 item.id]`）。
+- **Phase B**（`test-point-completer-v1`）：全量 items + Phase A 摘要一起喂 LLM，只补跨项交互/联动/状态迁移测试点（`generation_scope=cross_item`、`item_ids ≥ 2`）；items 数量 > 30 时按 module 分批。
+
+**Step 3 硬性约束**（Validator 代码强制覆写，与 Step 4 策略引擎边界对齐）：
+- `provenance = LLM`、`technique = None`、`obligation_id = None`、`status = DRAFT`
+- `module` 必须来自关联 `RequirementItem.module`（Phase A 直接覆写；Phase B 校验 ∈ items.module 集合）
+- `subcategory` 允许 LLM 在 IR 语义范围内合理归纳（如"输入校验"/"字段联动"）
+- `generation_scope ∈ {item, cross_item}`、`fingerprint` 非空
+
+**业务确定性 fingerprint**（幂等身份，替代不稳定的 ULID）：
+```
+fingerprint = sha256(version_id | generation_scope | sorted(item_ids) | module | subcategory | normalize(title))[:32]
+            = "tp_" + 32位十六进制
+```
+DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerprint 查旧行，同 fingerprint 复用旧 ULID（保证下游 `test_case_points`/`obligation_coverage` 不断链）。
+
+**交付文件**（全在 `core/v2/`）：
+| 文件 | 职责 |
+|---|---|
+| `fingerprint.py` | `compute_testpoint_fingerprint` + `normalize_text`（业务确定性指纹计算） |
+| `tp_prompts.py` | Phase A/B 两个 Prompt + 版本号 + user prompt 模板 |
+| `tp_generator.py` | LLM 调用 + 鲁棒 JSON 提取（复用 Step 2 `parser.extract_json`）+ Phase B 按 module 分批 |
+| `tp_validator.py` | 白名单过滤 + Pydantic 严格校验 + Step 3 硬性覆写 + item_ids 归一 + 枚举兜底 + fingerprint 计算 + 去重 + 覆盖率报告 + 语义相似 warning |
+| `tp_orchestrator.py` | `generate_test_points`（Run+GenerationConfig 强制创建 → Phase A/B → Validator → dedupe → upsert → coverage → Run.DONE）；`generate_test_points_from_files`（Step 2+3 一步链式入口） |
+
+**Schema/DDL/Repository 升级**（`schema_version` 2 → 3）：
+- `core/schemas/common.py`：新增 `GenerationScope(StrEnum)` = ITEM / CROSS_ITEM
+- `core/schemas/testpoint.py`：TestPoint 新增 `generation_scope`（默认 ITEM）+ `fingerprint`（可选，Repository 入库前兜底计算）
+- `core/v2/ddl.py`：`test_points` 表新增两列 + `UNIQUE(fingerprint)` 索引；`create_v2_schema()` 含 v2→v3 自动升级分支（ALTER TABLE 补列 + 已有行补算 fingerprint）
+- `core/v2/repository.py`：`save_test_point` 按 fingerprint upsert（同 fingerprint 复用旧 ULID）；新增 `get_test_point_by_fingerprint` / `list_test_points_by_version` / `list_test_points_by_run`
+- `core/v2/migrate_v1_to_v2.py`：V1 迁移过来的 TestPoint 显式设 `generation_scope=ITEM` + 补算 fingerprint
+
+**测试**（全 mock，不依赖真实 API）：
+- `tests/test_tp_generator.py`（17 例）：Phase A/B JSON 提取、异常处理、分批、prompt 内容验证
+- `tests/test_tp_validator.py`（27 例）：硬性覆写、item_ids 归一、枚举兜底、去重、覆盖率、语义 warning
+- `tests/test_tp_orchestrator.py`（13 例）：端到端、Run/Config 落库、幂等重跑、关联表、边界情况
+- `tests/test_step3_acceptance.py`（15 例）：12 条主门槛 + 3 条附加（generation_scope / fingerprint / V1 零回归）
+
+**12 条主验收门槛 + 3 条附加：全部 PASSED**
+1. ✅ orchestrator 能生成 TestPoint[] 并全部通过 Pydantic 严格校验
+2. ✅ 每个 TestPoint 的 `item_ids` 全部指向真实存在的 RequirementItem
+3. ✅ Phase A 的 `item_ids` 严格等于 `[输入 item.id]`，LLM 乱写被代码覆写
+4. ✅ Phase B 的 `len(item_ids) >= 2`；过滤非法 id 后 <2 的被丢弃
+5. ✅ dimension/priority 非法值被代码兜底；`technique=None`、`obligation_id=None`、`provenance=LLM` 硬性覆写
+6. ✅ 按 fingerprint 严格去重；跨 phase 不做语义合并（generation_scope 不同即业务身份不同）
+7. ✅ items 过多时 Phase B 能按 module 分批 + 合并结果不重不漏
+8. ✅ Run + GenerationConfig 正确落库；`run.status` 终态 DONE；`run.requirement_version_id` 指向输入 version
+9. ✅ `test_point_items` 关联表 M:N 写入正确；删 TestPoint 不级联删 RequirementItem
+10. ✅ 幂等：同 version 重复调用不产生孤儿/重复（fingerprint upsert 复用 ULID）
+11. ✅ 覆盖率报告能列出未被任何 TestPoint 引用的 RequirementItem（软指标，不阻塞入库）
+12. ✅ module 必须来自 IR items；subcategory 允许 LLM 语义归纳
+附加 A. ✅ `generation_scope` 正确赋值（Phase A=item, Phase B=cross_item）
+附加 B. ✅ `fingerprint` 非空、格式正确（`tp_` + 32 hex）、DB UNIQUE 约束生效
+附加 C. ✅ V1 零回归（`web/data.py`、`core/generator.py`、`data.db` 不动）
+
+**诚实边界**：门槛 12 "subcategory 不得引入 IR 中不存在的业务实体/业务规则" 靠 Prompt 约束，代码侧只校验非空；真实 LLM 是否越界需真实 API 抽查（mock 无法确定性验证）。覆盖率软指标只报告不阻塞，未覆盖的 item 由 Step 4 策略引擎硬兜底（例如 field_spec 有 min/max 但 Phase A 没生成 boundary 测试点，Step 4 会派生 obligation → strategy TestPoint）。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -126,31 +191,41 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=3）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version
-  repository.py  #   Pydantic↔SQLite 映射（全部 upsert）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3 自动升级分支）
+  repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint 按 fingerprint upsert）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
+  fingerprint.py #   TestPoint 业务确定性指纹（Step 3 新增）
   migrate_v1_to_v2.py
-  prompts.py ingestion.py parser.py validator.py ir.py   # Step 2
-docs/v2/         # 设计文档（step1-data-model.md + 本文件）
-tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration/ir_*/step2_acceptance
+  prompts.py ingestion.py parser.py validator.py ir.py                    # Step 2
+  tp_prompts.py tp_generator.py tp_validator.py tp_orchestrator.py        # Step 3
+docs/v2/         # 设计文档（step1-data-model.md + step3-testpoint-generator.md + 本文件）
+tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
+                 # ir_*/step2_acceptance
+                 # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 287 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 345 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 3「重构 需求→测试点」（未开始，需先讨论）
+## 9. 下一步 = Step 4「测试策略引擎」（未开始，需先讨论）
 
-**预期范围**：Test Point Generator —— 消费 Step 2 的 IR（`RequirementItem`），LLM 生成 `TestPoint`（带 `item_ids` 追溯到需求项）+ 代码校验 + 持久化；与 Step 4 策略引擎的产物（代码派生的测试点/义务）合流。
-**开工前需与用户讨论确认的点**（沿用"先讨论→确认→实现"节奏）：LLM 测试点生成 vs Step 4 代码策略派生的**分工边界**、测试点与需求项的**关联粒度**、是否复用/替换 V1 `TEST_POINTS_PROMPT`、覆盖度约束。
+**预期范围**：基于 Step 2 IR 的 `FieldSpec / BusinessRule / PermissionRule`，用**代码**确定性推导 `CoverageObligation`（边界值/等价类/权限矩阵/决策表/状态迁移），再派生 `TestPoint(provenance=STRATEGY, technique=<对应技术>, obligation_id=<回链>)` 硬兜底覆盖率。与 Step 3 的 LLM 派生 TestPoint 合流写入同一张表，用 `provenance` 区分。
+
+**开工前需与用户讨论确认的点**（沿用"先讨论→确认→实现"节奏）：
+- 覆盖义务推导的**技术选型优先级**：boundary_value / equivalence_class / decision_table / state_transition / permission_matrix / error_guessing / scenario 中哪几类先做
+- **CoverageObligation 与 TestPoint 的派生关系**：一个 obligation 派生一个 TestPoint，还是一个 obligation 派生多个（例如边界值 6 个点）
+- **覆盖率硬指标**：Step 4 完成后是否要求 `obligation_coverage` 关系表达到 100%（Step 3 的软报告升级为硬约束）
+- 是否复用 Step 3 的 `fingerprint` 幂等机制（strategy TestPoint 的 fingerprint 公式是否需含 `technique + obligation_id`）
+- Step 3 未覆盖的 item 在 Step 4 如何**硬兜底**：例如 `field_spec` 有 min/max 但 Phase A 没生成 boundary TestPoint，Step 4 是否强制派生
 
 ## 10. 协作约定（重要）
 

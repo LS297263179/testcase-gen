@@ -17,6 +17,7 @@ from core.schemas import (
     ExpressionType,
     FieldSpec,
     GenerationConfig,
+    GenerationScope,
     ObligationStatus,
     PermissionRule,
     Preference,
@@ -205,6 +206,8 @@ def test_testpoint_all_fields(chain):
         priority=Priority.P0,
         provenance=Provenance.STRATEGY,
         status=EntityStatus.CONFIRMED,
+        generation_scope=GenerationScope.CROSS_ITEM,
+        fingerprint="tp_deadbeefdeadbeefdeadbeefdeadbeef",
     )
     repo.save_test_point(tp)
     got = repo.get_test_point(tp.id)
@@ -214,6 +217,9 @@ def test_testpoint_all_fields(chain):
     assert got.obligation_id == tp.obligation_id
     assert got.priority == Priority.P0 and got.provenance == Provenance.STRATEGY
     assert got.status == EntityStatus.CONFIRMED
+    # Step 3 新增字段往返保真
+    assert got.generation_scope == GenerationScope.CROSS_ITEM
+    assert got.fingerprint == "tp_deadbeefdeadbeefdeadbeefdeadbeef"
 
 
 def test_testcase_all_fields(chain):
