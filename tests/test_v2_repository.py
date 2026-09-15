@@ -370,3 +370,37 @@ class TestPreferenceAndStatus:
         repo.save_test_case(tc)
         got = repo.get_test_case(tc.id)
         assert got.status == TestCaseStatus.REVIEWED
+
+
+class TestUpsertNoCascade:
+    """回归：重存父实体不得级联删光子实体。
+
+    防护 INSERT OR REPLACE + ON DELETE CASCADE 陷阱：REPLACE = 先 DELETE 再 INSERT，
+    DELETE 会级联删光子表。Repository 已全面改用 upsert(ON CONFLICT DO UPDATE)。
+    """
+
+    def test_resave_doc_preserves_versions_and_items(self, repo):
+        doc, ver, item, cfg, run = _make_chain(repo)
+        doc.latest_version_id = ver.id
+        repo.save_doc(doc)  # 重存 doc（更新指针）
+        assert repo.get_version(ver.id) is not None
+        assert repo.get_item(item.id) is not None
+        assert repo.get_doc(doc.id).latest_version_id == ver.id
+
+    def test_resave_version_preserves_items(self, repo):
+        _, ver, item, _, _ = _make_chain(repo)
+        ver.change_summary = "更新了描述"
+        repo.save_version(ver)
+        assert repo.get_item(item.id) is not None
+        assert repo.get_version(ver.id).change_summary == "更新了描述"
+
+    def test_resave_run_preserves_cases(self, repo):
+        _, _, _, _, run = _make_chain(repo)
+        tc = TestCase(
+            run_id=run.id, display_id="TC_001", module="m", title="t", expected="e", type=TestCaseType.FUNCTIONAL
+        )
+        repo.save_test_case(tc)
+        run.status = RunStatus.DONE
+        repo.save_run(run)  # 重存 run（更新状态）
+        assert repo.get_test_case(tc.id) is not None
+        assert len(repo.list_test_cases(run.id)) == 1

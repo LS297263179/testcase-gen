@@ -52,6 +52,20 @@ def _loads(text: str | None, default: object) -> object:
     return json.loads(text) if text else default
 
 
+def _upsert(table: str, columns: list[str]) -> str:
+    """生成 upsert SQL：INSERT ... ON CONFLICT(id) DO UPDATE。
+
+    ★ 必须用 upsert 而非 INSERT OR REPLACE：后者的语义是"先 DELETE 再 INSERT"，
+    而 DELETE 会触发子表的 ON DELETE CASCADE，导致重存父实体时静默级联删光子数据
+    （如重存 doc 会删掉其所有 version→item；重存 run 会删掉其所有 case）。
+    upsert 原地更新、不删行，故不触发级联。
+    """
+    cols = ", ".join(columns)
+    marks = ", ".join("?" for _ in columns)
+    updates = ", ".join(f"{c}=excluded.{c}" for c in columns if c != "id")
+    return f"INSERT INTO {table} ({cols}) VALUES ({marks}) ON CONFLICT(id) DO UPDATE SET {updates}"
+
+
 # ============================================================
 # 用户（V2：ULID 主键）
 # ============================================================
@@ -60,8 +74,10 @@ def _loads(text: str | None, default: object) -> object:
 def save_user(uid: str, username: str, password_hash: str, legacy_int_id: int | None = None) -> None:
     with v2_conn() as conn:
         conn.execute(
-            "INSERT OR REPLACE INTO users (id, legacy_int_id, username, password_hash, created_at) "
-            "VALUES (?, ?, ?, ?, datetime('now'))",
+            "INSERT INTO users (id, legacy_int_id, username, password_hash, created_at) "
+            "VALUES (?, ?, ?, ?, datetime('now')) "
+            "ON CONFLICT(id) DO UPDATE SET legacy_int_id=excluded.legacy_int_id, "
+            "username=excluded.username, password_hash=excluded.password_hash",
             (uid, legacy_int_id, username, password_hash),
         )
 
@@ -79,10 +95,22 @@ def get_user_by_legacy_id(legacy_int_id: int) -> sqlite3.Row | None:
 def save_doc(doc: RequirementDoc) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO requirement_docs
-               (id, user_id, title, source_type, asset_ids_json, material_ids_json,
-                latest_version_id, status, created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "requirement_docs",
+                [
+                    "id",
+                    "user_id",
+                    "title",
+                    "source_type",
+                    "asset_ids_json",
+                    "material_ids_json",
+                    "latest_version_id",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 doc.id,
                 doc.user_id,
@@ -124,10 +152,22 @@ def get_doc(doc_id: str) -> RequirementDoc | None:
 def save_version(version: RequirementVersion) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO requirement_versions
-               (id, doc_id, version_no, raw_text, change_summary, source_ref_json,
-                provenance, status, created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "requirement_versions",
+                [
+                    "id",
+                    "doc_id",
+                    "version_no",
+                    "raw_text",
+                    "change_summary",
+                    "source_ref_json",
+                    "provenance",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 version.id,
                 version.doc_id,
@@ -173,11 +213,29 @@ def save_item(item: RequirementItem) -> None:
     """保存需求项及其 FieldSpec 子表（先删后插，子表 id 为 DB 代理键）"""
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO requirement_items
-               (id, version_id, seq, type, module, statement, rules_json, permissions_json,
-                acceptance_json, source_ref_json, priority_hint, confidence, confidence_level,
-                provenance, status, created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "requirement_items",
+                [
+                    "id",
+                    "version_id",
+                    "seq",
+                    "type",
+                    "module",
+                    "statement",
+                    "rules_json",
+                    "permissions_json",
+                    "acceptance_json",
+                    "source_ref_json",
+                    "priority_hint",
+                    "confidence",
+                    "confidence_level",
+                    "provenance",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 item.id,
                 item.version_id,
@@ -309,10 +367,13 @@ def list_items(version_id: str) -> list[RequirementItem]:
 def save_generation_config(cfg: GenerationConfig) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO generation_configs
-               (id, model_provider, model_name, temperature, max_tokens, enable_thinking,
-                prompt_version, generator_version, reviewer_version, created_at)
-               VALUES (?,?,?,?,?,?,?,?,?,datetime('now'))""",
+            "INSERT INTO generation_configs (id, model_provider, model_name, temperature, max_tokens, "
+            "enable_thinking, prompt_version, generator_version, reviewer_version, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?,datetime('now')) "
+            "ON CONFLICT(id) DO UPDATE SET model_provider=excluded.model_provider, "
+            "model_name=excluded.model_name, temperature=excluded.temperature, max_tokens=excluded.max_tokens, "
+            "enable_thinking=excluded.enable_thinking, prompt_version=excluded.prompt_version, "
+            "generator_version=excluded.generator_version, reviewer_version=excluded.reviewer_version",
             (
                 cfg.id,
                 cfg.model_provider,
@@ -341,10 +402,23 @@ def get_generation_config(cfg_id: str) -> GenerationConfig | None:
 def save_run(run: Run) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO runs
-               (id, user_id, doc_id, requirement_version_id, generation_config_id, strategy_profile,
-                status, counts_json, legacy_session_id, created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "runs",
+                [
+                    "id",
+                    "user_id",
+                    "doc_id",
+                    "requirement_version_id",
+                    "generation_config_id",
+                    "strategy_profile",
+                    "status",
+                    "counts_json",
+                    "legacy_session_id",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 run.id,
                 run.user_id,
@@ -381,10 +455,27 @@ def get_run(run_id: str) -> Run | None:
 def save_test_point(tp: TestPoint) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO test_points
-               (id, run_id, version_id, module, subcategory, title, description, dimension,
-                technique, obligation_id, priority, provenance, status, created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "test_points",
+                [
+                    "id",
+                    "run_id",
+                    "version_id",
+                    "module",
+                    "subcategory",
+                    "title",
+                    "description",
+                    "dimension",
+                    "technique",
+                    "obligation_id",
+                    "priority",
+                    "provenance",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 tp.id,
                 tp.run_id,
@@ -436,11 +527,29 @@ def get_test_point(tp_id: str) -> TestPoint | None:
 def save_test_case(tc: TestCase) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO test_cases
-               (id, run_id, display_id, module, title, precondition, steps_json, expected, priority,
-                type, remark, fingerprint, provenance, status, confidence_level,
-                created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "test_cases",
+                [
+                    "id",
+                    "run_id",
+                    "display_id",
+                    "module",
+                    "title",
+                    "precondition",
+                    "steps_json",
+                    "expected",
+                    "priority",
+                    "type",
+                    "remark",
+                    "fingerprint",
+                    "provenance",
+                    "status",
+                    "confidence_level",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 tc.id,
                 tc.run_id,
@@ -512,10 +621,22 @@ def update_test_case_status(tc_id: str, status: str) -> None:
 def save_obligation(ob: CoverageObligation) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO coverage_obligations
-               (id, run_id, item_id, technique, target, description, params_json, status,
-                created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "coverage_obligations",
+                [
+                    "id",
+                    "run_id",
+                    "item_id",
+                    "technique",
+                    "target",
+                    "description",
+                    "params_json",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 ob.id,
                 ob.run_id,
@@ -606,10 +727,22 @@ def save_review_report(report: ReviewReport) -> None:
         validator.validate(f.target_type, f.target_id)
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO review_reports
-               (id, run_id, revision, trigger_type, scores_json, overall_score, summary,
-                obligation_coverage, created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "review_reports",
+                [
+                    "id",
+                    "run_id",
+                    "revision",
+                    "trigger_type",
+                    "scores_json",
+                    "overall_score",
+                    "summary",
+                    "obligation_coverage",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 report.id,
                 report.run_id,
@@ -685,10 +818,21 @@ def list_review_reports(run_id: str) -> list[ReviewReport]:
 def save_preference(pref: Preference) -> None:
     with v2_conn() as conn:
         conn.execute(
-            """INSERT OR REPLACE INTO preferences
-               (id, user_id, category, pattern, weight, active, source_diff_json,
-                created_at, updated_at, schema_version)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            _upsert(
+                "preferences",
+                [
+                    "id",
+                    "user_id",
+                    "category",
+                    "pattern",
+                    "weight",
+                    "active",
+                    "source_diff_json",
+                    "created_at",
+                    "updated_at",
+                    "schema_version",
+                ],
+            ),
             (
                 pref.id,
                 pref.user_id,
