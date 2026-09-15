@@ -1,21 +1,20 @@
 """generator.py 核心逻辑测试"""
 
 import json
-from unittest.mock import MagicMock
 
 import pytest
 
 from core.generator import (
+    _extract_step_fingerprint,
     deduplicate,
     deduplicate_by_steps,
     limit_testcases,
     parse_response,
     validate_testcases,
-    _extract_step_fingerprint,
-    _fix_control_chars as fix_control_chars,
-    _normalize_result as normalize_result,
 )
-
+from core.generator import (
+    _fix_control_chars as fix_control_chars,
+)
 
 # ============================================================
 # parse_response 测试

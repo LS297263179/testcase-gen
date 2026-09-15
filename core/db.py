@@ -7,13 +7,12 @@ import logging
 import os
 import sqlite3
 import threading
-from contextlib import contextmanager
-from datetime import datetime
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
-
 from werkzeug.security import check_password_hash, generate_password_hash
+
+logger = logging.getLogger(__name__)
 
 
 # ============================================================
@@ -301,16 +300,12 @@ def init_db():
                 ON test_points(user_id);
         """)
         # 兼容已有数据库：为 sessions 表添加 user_id 列
-        try:
+        with suppress(sqlite3.OperationalError):  # 列已存在
             conn.execute("ALTER TABLE sessions ADD COLUMN user_id INTEGER REFERENCES users(id)")
-        except sqlite3.OperationalError:
-            pass  # 列已存在
 
         # 兼容已有数据库：为 preferences 表添加 user_id 列
-        try:
+        with suppress(sqlite3.OperationalError):  # 列已存在
             conn.execute("ALTER TABLE preferences ADD COLUMN user_id INTEGER REFERENCES users(id)")
-        except sqlite3.OperationalError:
-            pass  # 列已存在
 
 
 # ============================================================
@@ -327,7 +322,7 @@ def create_user(username: str, password: str) -> int:
             )
             return cur.lastrowid
         except sqlite3.IntegrityError:
-            raise ValueError("用户名已存在")
+            raise ValueError("用户名已存在") from None
 
 
 def verify_user(username: str, password: str) -> dict | None:
@@ -818,7 +813,7 @@ def get_model_config() -> dict:
     # fallback 到 config.yaml（使用绝对路径）
     try:
         cfg_path = Path(__file__).parent.parent / "config.yaml"
-        with open(cfg_path, "r", encoding="utf-8") as f:
+        with open(cfg_path, encoding="utf-8") as f:
             cfg = yaml.safe_load(f)
         return {
             "generate": cfg.get("generate", {}),

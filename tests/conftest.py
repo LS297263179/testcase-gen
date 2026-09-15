@@ -1,9 +1,9 @@
 """Pytest 共享 fixtures"""
 
-import json
 import os
 import sys
 import tempfile
+from contextlib import suppress
 
 import pytest
 
@@ -41,10 +41,8 @@ def app():
     yield flask_app
 
     db.set_db_path(old_path)
-    try:
+    with suppress(OSError):
         os.unlink(db_path)
-    except OSError:
-        pass
 
 
 @pytest.fixture
@@ -73,6 +71,7 @@ def auth_client(client):
 def mock_llm_client():
     """Mock LLM 客户端，不实际调用 API"""
     from unittest.mock import MagicMock
+
     from core.llm_client import LLMClient
 
     client = MagicMock(spec=LLMClient)

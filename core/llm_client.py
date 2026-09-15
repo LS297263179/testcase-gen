@@ -3,7 +3,7 @@
 import logging
 import time
 from collections.abc import Generator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
@@ -27,7 +27,7 @@ def load_config(path: str | None = None) -> dict:
     from core.config import load_yaml_config
     if path is not None:
         # 自定义路径时直接读取（兼容 CLI 传参场景）
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             return yaml.safe_load(f)
     return load_yaml_config()
 
@@ -156,8 +156,7 @@ class LLMClient:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
 
         with self.client.messages.stream(**kwargs) as stream:
-            for text in stream.text_stream:
-                yield text
+            yield from stream.text_stream
 
     def _call(self, system_prompt: str, user_prompt: str,
               images: list[dict] | None = None,

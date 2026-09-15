@@ -1,8 +1,8 @@
 """启动器 - 启动 Web 服务"""
 
 import argparse
-import webbrowser
 import threading
+import webbrowser
 
 from web import app
 
@@ -16,9 +16,9 @@ def main():
     args = parser.parse_args()
 
     url = f"http://localhost:{args.port}"
-    print(f"\n  AI 测试用例生成器")
+    print("\n  AI 测试用例生成器")
     print(f"  访问地址: {url}")
-    print(f"  按 Ctrl+C 停止服务\n")
+    print("  按 Ctrl+C 停止服务\n")
 
     if not args.no_browser:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()

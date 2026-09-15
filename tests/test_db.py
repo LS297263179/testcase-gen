@@ -1,12 +1,9 @@
 """db.py 数据库层测试"""
 
-import json
-import time
 
 import pytest
 
 from core import db
-
 
 # ============================================================
 # 用户 CRUD

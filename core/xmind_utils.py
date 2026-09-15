@@ -1,9 +1,8 @@
 """XMind 文件解析与模板生成"""
 
 import json
-import zipfile
 import os
-import io
+import zipfile
 
 
 def parse_xmind(filepath: str) -> list[dict]:

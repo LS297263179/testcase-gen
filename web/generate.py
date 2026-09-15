@@ -7,6 +7,7 @@ import re
 import tempfile
 import traceback
 import uuid
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 
@@ -16,9 +17,18 @@ from core import db
 from core.llm_client import load_config
 from core.output import to_excel, to_markdown, xmind_to_excel
 from core.reviewer import optimize_testcases, review_testcases
-from web.utils import (OUTPUT_DIR, cleanup_old_output_files, csrf_protect,
-                       get_generate_client, get_image_client, get_review_client,
-                       get_user_output_dir, login_required, process_uploaded_files, sse_format)
+from web.utils import (
+    OUTPUT_DIR,
+    cleanup_old_output_files,
+    csrf_protect,
+    get_generate_client,
+    get_image_client,
+    get_review_client,
+    get_user_output_dir,
+    login_required,
+    process_uploaded_files,
+    sse_format,
+)
 
 logger = logging.getLogger("web")
 
@@ -149,7 +159,7 @@ def api_analyze():
                 "complexity": complexity,
                 "modules": modules,
             }})
-        except Exception as e:
+        except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
@@ -204,10 +214,8 @@ def api_generate():
                     return jsonify({"error": "material_ids 格式错误，应为逗号分隔的数字"}), 400
             tp_id_raw = request.form.get("test_point_id", "")
             if tp_id_raw and tp_id_raw.strip():
-                try:
+                with suppress(ValueError):
                     test_point_id = int(tp_id_raw)
-                except ValueError:
-                    pass
 
             images, file_text = process_uploaded_files(request.files.getlist("files"))
             if file_text:
@@ -244,8 +252,14 @@ def api_generate():
             if tp_context:
                 requirement = requirement + "\n\n【参考测试点】\n" + tp_context
 
-            from core.generator import (analyze_modules, generate_for_module, deduplicate,
-                                       deduplicate_by_steps, generate_all_in_one, limit_testcases)
+            from core.generator import (
+                analyze_modules,
+                deduplicate,
+                deduplicate_by_steps,
+                generate_all_in_one,
+                generate_for_module,
+                limit_testcases,
+            )
             client = get_generate_client()
             image_client = get_image_client() if images else None
             active_client = image_client if (images and image_client) else client
@@ -271,10 +285,8 @@ def api_generate():
                         executor.submit(generate_for_module, active_client, requirement, mod, default_priority, _images, complexity, pref_context or None): mod
                         for mod in modules
                     }
-                    completed = 0
-                    for future in as_completed(future_to_module):
+                    for completed, future in enumerate(as_completed(future_to_module), 1):
                         mod = future_to_module[future]
-                        completed += 1
                         try:
                             cases = future.result()
                             all_testcases.extend(cases)
@@ -337,7 +349,7 @@ def api_generate():
             }
             yield sse_format({"type": "done", "data": result})
 
-        except Exception as e:
+        except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
@@ -404,7 +416,6 @@ def api_regenerate_single():
 
     def sse_stream():
         try:
-            from core.generator import parse_response
             client = get_generate_client()
 
             yield sse_format({"type": "progress", "message": f"正在重新生成: {testcase.get('title', '')}"})
@@ -489,7 +500,7 @@ def api_review():
                 "review": result,
                 "report_path": str(report_path),
             }})
-        except Exception as e:
+        except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
@@ -537,7 +548,7 @@ def api_optimize():
                 "testcases": optimized,
                 "files": {"excel": excel_path, "markdown": md_path},
             }})
-        except Exception as e:
+        except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
@@ -557,7 +568,7 @@ def api_optimize():
 @csrf_protect
 def api_xmind2case():
     """上传 XMind 文件，通过 LLM 生成测试用例，返回 Excel 下载"""
-    from core.xmind_utils import parse_xmind, flatten_topics
+    from core.xmind_utils import flatten_topics, parse_xmind
 
     file = request.files.get("file")
     if not file or not file.filename:
@@ -662,6 +673,7 @@ def api_xmind2case():
 def api_xmind_template():
     """下载 XMind 参考模板"""
     import importlib
+
     import core.xmind_utils as xmind_utils
     importlib.reload(xmind_utils)
     from core.xmind_utils import generate_template

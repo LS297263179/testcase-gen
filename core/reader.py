@@ -11,7 +11,7 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}
 
 def read_text(path: str) -> str:
     """读取 Markdown 或 TXT 文件"""
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return f.read()
 
 
@@ -96,7 +96,7 @@ def read_requirement(source: str | None) -> str:
     if ext in (".xlsx", ".xls"):
         return read_excel(source)
     elif ext in IMAGE_EXTS:
-        raise ValueError(f"图片文件请使用 Web 版上传，或通过 --image 参数指定")
+        raise ValueError("图片文件请使用 Web 版上传，或通过 --image 参数指定")
     else:
         return read_text(source)
 

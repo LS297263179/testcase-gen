@@ -3,17 +3,24 @@
 import json
 import logging
 import os
+from contextlib import suppress
 from datetime import datetime
-from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, request, send_file, session, stream_with_context
 
 from core import db
 from core.output import to_excel, to_markdown
 from core.preferences import compute_diffs, extract_preferences
-from web.utils import (OUTPUT_DIR, cleanup_old_output_files, csrf_protect,
-                       get_generate_client, get_image_client, get_user_output_dir,
-                       login_required, process_uploaded_files, sse_format)
+from web.utils import (
+    OUTPUT_DIR,
+    csrf_protect,
+    get_generate_client,
+    get_image_client,
+    get_user_output_dir,
+    login_required,
+    process_uploaded_files,
+    sse_format,
+)
 
 logger = logging.getLogger("web")
 
@@ -89,10 +96,8 @@ def api_materials_update(mid):
     keep_ids_raw = request.form.get("keep_image_ids")
     keep_image_ids = None
     if keep_ids_raw:
-        try:
+        with suppress(json.JSONDecodeError, ValueError):
             keep_image_ids = [int(x) for x in json.loads(keep_ids_raw)]
-        except (json.JSONDecodeError, ValueError):
-            pass
     db.update_material(mid, title, content, images, keep_image_ids)
     return jsonify({"success": True})
 
@@ -275,7 +280,7 @@ def api_generate_points():
                 "total": total,
                 "tp_id": tp_id,
             }})
-        except Exception as e:
+        except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 
@@ -461,7 +466,7 @@ def api_preferences_extract():
                 "preferences": prefs,
                 "count": len(prefs),
             }})
-        except Exception as e:
+        except Exception:
             logger.exception("SSE 流处理异常")
             yield sse_format({"type": "error", "message": "服务器内部错误，请查看日志详情"})
 

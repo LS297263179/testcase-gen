@@ -14,12 +14,8 @@
 11. CLI 入口（main.py）
 """
 
-import json
 import os
 import sys
-import tempfile
-
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -71,8 +67,8 @@ class TestConfig:
         assert "review" in cfg
 
     def test_get_model_config_from_db(self, tmp_db):
-        from core.config import get_model_config
         from core import db
+        from core.config import get_model_config
         # 保存到数据库
         db.save_model_config({
             "generate": {"api_key": "test-key", "model": "test-model", "base_url": "http://test"},
@@ -497,7 +493,7 @@ class TestWebE2E:
         # 注册
         rv = client.post("/api/register", json={"username": "e2e_user", "password": "pass123456"})
         assert rv.status_code == 200
-        csrf = rv.get_json()["csrf_token"]
+        assert rv.get_json()["csrf_token"]
 
         # 确认已登录
         rv = client.get("/api/me")
@@ -655,8 +651,9 @@ class TestLLMStream:
 
     def test_chat_stream_is_generator(self):
         """chat_stream 返回生成器"""
-        from core.llm_client import LLMClient
         from unittest.mock import MagicMock
+
+        from core.llm_client import LLMClient
 
         # 直接构造 LLMClient 并 mock 内部 client
         llm = object.__new__(LLMClient)

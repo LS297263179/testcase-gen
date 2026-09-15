@@ -168,7 +168,7 @@ def _format_tc_text(tc: dict) -> str:
 def optimize_testcases(client: LLMClient, requirement: str,
                        testcases: list[dict], review_report: str) -> list[dict]:
     """根据评审报告优化测试用例：删除标记的重复用例 + 修复问题 + 补充遗漏"""
-    from core.generator import parse_response, deduplicate, deduplicate_by_steps
+    from core.generator import deduplicate, deduplicate_by_steps, parse_response
 
     total = len(testcases)
 

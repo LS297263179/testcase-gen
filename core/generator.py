@@ -4,8 +4,8 @@ import json
 import logging
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logger = logging.getLogger(__name__)
 
@@ -339,10 +339,8 @@ def generate_testcases(client: LLMClient, requirement: str,
             executor.submit(generate_for_module, active_client, requirement, mod, default_priority, images, complexity, preferences): mod
             for mod in modules
         }
-        completed = 0
-        for future in as_completed(future_to_module):
+        for completed, future in enumerate(as_completed(future_to_module), 1):
             mod = future_to_module[future]
-            completed += 1
             try:
                 cases = future.result()
                 all_testcases.extend(cases)
@@ -477,7 +475,7 @@ def generate_all_in_one(client: LLMClient, requirement: str,
     if preferences:
         user_prompt += "\n\n## 用户偏好（请遵循）\n" + preferences
 
-    for attempt in range(3):
+    for _ in range(3):
         try:
             raw = client.chat(SYSTEM_PROMPT, user_prompt, images=images)
             return parse_response(raw)
@@ -614,7 +612,7 @@ def parse_response(raw: str) -> list[dict]:
             testcases = _normalize_result(result)
             return validate_testcases(testcases)
 
-    raise ValueError(f"无法解析 LLM 返回的 JSON")
+    raise ValueError("无法解析 LLM 返回的 JSON")
 
 
 def validate_testcases(testcases: list[dict]) -> list[dict]:

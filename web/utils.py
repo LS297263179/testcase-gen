@@ -6,12 +6,12 @@ import logging
 import os
 import secrets
 import tempfile
+import threading
 import time
 from pathlib import Path
 
 from flask import jsonify, request, session
 
-from core import db
 from core.llm_client import LLMClient, build_client
 from core.reader import get_image_media_type, image_to_base64, is_image, read_excel, read_text
 
@@ -68,8 +68,6 @@ def csrf_protect(f):
 # ============================================================
 # 速率限制（基于 IP）
 # ============================================================
-
-import threading
 
 _rate_limit_store: dict[str, list[float]] = {}
 _rate_limit_lock = threading.Lock()

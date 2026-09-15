@@ -174,7 +174,7 @@ def to_markdown(testcases: list[dict], output_dir: str, filename: str | None = N
             lines.append(f"- **类型**: {tc.get('type', '')}")
             if tc.get("precondition"):
                 lines.append(f"- **前置条件**: {tc.get('precondition', '')}")
-            lines.append(f"- **测试步骤**:")
+            lines.append("- **测试步骤**:")
             for step in _split_steps(tc.get("steps", "")):
                 step = step.strip()
                 if step:

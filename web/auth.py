@@ -1,11 +1,10 @@
 """认证相关路由 - 注册、登录、登出、用户信息"""
 
-import json
 import logging
 
 from flask import Blueprint, jsonify, request, session
 
-from core import config, db
+from core import db
 from web.utils import check_rate_limit, generate_csrf_token, get_real_ip
 
 logger = logging.getLogger("web")
