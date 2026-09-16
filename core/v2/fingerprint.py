@@ -1,8 +1,14 @@
-"""V2 业务确定性指纹 - TestPoint 幂等身份计算。
+"""V2 业务确定性指纹 - TestPoint / TestCase 幂等身份计算。
 
 Step 3 引入：TestPoint 的 ULID 是每次新生成的，无法用于跨轮次的幂等识别。
 业务身份由 (version_id, generation_scope, sorted(item_ids), module, subcategory, normalize(title))
 六元组唯一确定 → sha256 得到 fingerprint，DB 层加 UNIQUE 索引，Repository 层按 fingerprint upsert。
+
+Step 5 引入 TestCase 的双指纹（身份/内容分离）：
+  - fingerprint（身份）：基于 TestPoint 来源身份（version_id | generation_mode | sorted(test_point_ids)），
+    不依赖 title/steps 等可编辑内容 → 人工修改 title 不改变身份（Step 9 Revision 的基础）。
+  - content_hash（内容）：基于 title/precondition/steps/expected/type/priority，
+    用于判断内容是否变化（Step 9 Revision / Preference Learning 数据源）。
 
 不放在 Schema 层的原因：Schema 保持纯声明，指纹算法属于持久化/领域逻辑。
 """
@@ -109,3 +115,68 @@ def compute_strategy_testpoint_fingerprint(
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
     return f"tp_{digest}"
+
+
+def compute_testcase_fingerprint(
+    *,
+    version_id: str | None,
+    generation_mode: str,
+    test_point_ids: list[str],
+) -> str:
+    """计算 TestCase 的身份指纹（32 位十六进制，前缀 tc_）。
+
+    ★ 身份/内容分离设计（Step 5 核心决策）：
+    fingerprint 标识“这是哪一个 TestCase”（身份），而非“当前文本长什么样”（内容）。
+    公式只含来源身份三元组，不含 title/precondition/steps 等可编辑内容：
+      - version_id：不同 RequirementVersion 天然隔离
+      - generation_mode：code/llm/hybrid 三种生成方式视为不同身份
+        （code 生成的模板用例与 llm 生成的自然语言用例业务身份不同）
+      - sorted(test_point_ids)：1:1 派生下单元素，身份天然稳定；排序保证顺序无关
+
+    不含 run_id：同 version 跨 run 幂等复用旧 ULID（对齐 Step 3 D5 决策）。
+    人工修改 title 后 fingerprint 不变 → 同一 TestCase 不同 revision（Step 9 基础）。
+
+    返回格式：tc_<sha256 前 32 位十六进制>，共 35 字符。
+    """
+    payload = "|".join(
+        [
+            version_id or "",
+            generation_mode or "",
+            ",".join(sorted(test_point_ids or [])),
+        ]
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    return f"tc_{digest}"
+
+
+def compute_testcase_content_hash(
+    *,
+    title: str,
+    precondition: str,
+    steps_text: str,
+    expected: str,
+    type: str,
+    priority: str,
+) -> str:
+    """计算 TestCase 的内容哈希（32 位十六进制，前缀 tch_）。
+
+    与 fingerprint（身份）分离：content_hash 追踪“内容是否变化”。
+    人工修改 title/steps/expected 后 content_hash 变，但 fingerprint（身份）不变。
+    用途：Step 9 Revision / Preference Learning 据此判断用例内容是否被修改。
+
+    steps_text 由 TestCase.render_steps_text() 序列化后传入（保持本函数与模型解耦）。
+
+    返回格式：tch_<sha256 前 32 位十六进制>，共 36 字符。
+    """
+    payload = "|".join(
+        [
+            normalize_text(title),
+            normalize_text(precondition),
+            normalize_text(steps_text),
+            normalize_text(expected),
+            type or "",
+            priority or "",
+        ]
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    return f"tch_{digest}"

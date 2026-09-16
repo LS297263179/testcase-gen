@@ -12,6 +12,7 @@ from core.schemas.common import (
     EntityBase,
     EntityStatus,
     ExpressionType,
+    GenerationMode,
     GenerationScope,
     ObligationStatus,
     Priority,
@@ -46,7 +47,7 @@ from core.schemas.reserved import LLMInvocation, TestCaseRevision, TestScenario
 from core.schemas.review import ReviewFinding, ReviewReport, ReviewScores
 from core.schemas.run import GenerationConfig, Run, RunCounts
 from core.schemas.strategy import CoverageObligation
-from core.schemas.testcase import TestCase, TestStep
+from core.schemas.testcase import DataPlanItem, TestCase, TestStep
 from core.schemas.testpoint import TestPoint
 
 __all__ = [
@@ -58,6 +59,7 @@ __all__ = [
     "EntityBase",
     "EntityStatus",
     "ExpressionType",
+    "GenerationMode",
     "GenerationScope",
     "ObligationStatus",
     "Priority",
@@ -89,6 +91,7 @@ __all__ = [
     "TestPoint",
     "TestCase",
     "TestStep",
+    "DataPlanItem",
     "CoverageObligation",
     # review
     "ReviewScores",

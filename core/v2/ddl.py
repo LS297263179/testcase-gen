@@ -1,4 +1,4 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=4）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=5）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
@@ -17,7 +17,7 @@ from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -182,12 +182,16 @@ CREATE TABLE IF NOT EXISTS test_cases (
     provenance       TEXT NOT NULL DEFAULT 'llm',
     status           TEXT NOT NULL DEFAULT 'generated',
     confidence_level TEXT NOT NULL DEFAULT 'medium',
+    generation_mode  TEXT NOT NULL DEFAULT 'llm',
+    content_hash     TEXT,
+    validation_errors_json TEXT NOT NULL DEFAULT '[]',
+    data_plan_json   TEXT NOT NULL DEFAULT '[]',
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL,
     schema_version   INTEGER NOT NULL DEFAULT 2
 );
 CREATE INDEX IF NOT EXISTS idx_cases_run ON test_cases(run_id);
-CREATE INDEX IF NOT EXISTS idx_cases_fp ON test_cases(fingerprint);
+CREATE UNIQUE INDEX IF NOT EXISTS ux_test_cases_fingerprint ON test_cases(fingerprint);
 
 CREATE TABLE IF NOT EXISTS coverage_obligations (
     id             TEXT PRIMARY KEY,
@@ -351,6 +355,109 @@ def _migrate_v2_to_v3(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_test_points_version ON test_points(version_id)")
 
 
+def _migrate_v4_to_v5(conn: sqlite3.Connection) -> None:
+    """对已存在的 schema_version=4 数据库执行 v4 → v5 升级：
+
+    Step 5 引入 test_cases 的 4 个新列（generation_mode / content_hash /
+    validation_errors_json / data_plan_json）与 fingerprint UNIQUE 索引。
+    新建的数据库 CREATE TABLE 已含该等列与索引，无需进入本分支。
+
+    幂等身份回填策略：
+      - content_hash：所有行都可补算（仅依赖 title/precondition/steps/expected/type/priority）。
+      - fingerprint：仅对 test_point_ids 非空的行补算（需从 run 反查 version_id）；
+        迁移自 V1 的旧用例无 test_point_ids，fingerprint 留 NULL（SQLite UNIQUE 索引允许多个 NULL，不冲突）。
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(test_cases)").fetchall()}
+    if "generation_mode" not in cols:
+        conn.execute("ALTER TABLE test_cases ADD COLUMN generation_mode TEXT NOT NULL DEFAULT 'llm'")
+        logger.info("schema v4→v5: test_cases 新增列 generation_mode")
+    if "content_hash" not in cols:
+        conn.execute("ALTER TABLE test_cases ADD COLUMN content_hash TEXT")
+        logger.info("schema v4→v5: test_cases 新增列 content_hash")
+    if "validation_errors_json" not in cols:
+        conn.execute("ALTER TABLE test_cases ADD COLUMN validation_errors_json TEXT NOT NULL DEFAULT '[]'")
+        logger.info("schema v4→v5: test_cases 新增列 validation_errors_json")
+    if "data_plan_json" not in cols:
+        conn.execute("ALTER TABLE test_cases ADD COLUMN data_plan_json TEXT NOT NULL DEFAULT '[]'")
+        logger.info("schema v4→v5: test_cases 新增列 data_plan_json")
+
+    # 已有行补算 content_hash（总是可行）与 fingerprint（仅 test_point_ids 非空时）
+    from core.v2.fingerprint import compute_testcase_content_hash, compute_testcase_fingerprint
+
+    rows = conn.execute(
+        "SELECT id, run_id, title, precondition, steps_json, expected, type, priority, "
+        "generation_mode, fingerprint FROM test_cases"
+    ).fetchall()
+    backfilled_fp = 0
+    for row in rows:
+        # content_hash：从 steps_json 重建 steps_text（与 TestCase.render_steps_text 一致）
+        steps_text = _render_steps_text_from_json(row["steps_json"])
+        ch = compute_testcase_content_hash(
+            title=row["title"],
+            precondition=row["precondition"] or "",
+            steps_text=steps_text,
+            expected=row["expected"],
+            type=row["type"],
+            priority=row["priority"],
+        )
+        # fingerprint：仅当有 test_point_ids 时补算（version_id 从 run 反查）
+        fp = row["fingerprint"]
+        if not fp:
+            point_ids = [
+                r["test_point_id"]
+                for r in conn.execute(
+                    "SELECT test_point_id FROM test_case_points WHERE test_case_id = ?", (row["id"],)
+                ).fetchall()
+            ]
+            if point_ids:
+                run_row = conn.execute(
+                    "SELECT requirement_version_id FROM runs WHERE id = ?", (row["run_id"],)
+                ).fetchone()
+                version_id = run_row["requirement_version_id"] if run_row else None
+                fp = compute_testcase_fingerprint(
+                    version_id=version_id,
+                    generation_mode=row["generation_mode"] or "llm",
+                    test_point_ids=point_ids,
+                )
+                backfilled_fp += 1
+        conn.execute(
+            "UPDATE test_cases SET content_hash = ?, fingerprint = COALESCE(?, fingerprint) WHERE id = ?",
+            (ch, fp, row["id"]),
+        )
+    logger.info(
+        "schema v4→v5: 已为 %d 行 test_cases 补算 content_hash，%d 行补算 fingerprint", len(rows), backfilled_fp
+    )
+
+    # 索引升级：drop 普通索引 idx_cases_fp，建 UNIQUE 索引 ux_test_cases_fingerprint
+    conn.execute("DROP INDEX IF EXISTS idx_cases_fp")
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS ux_test_cases_fingerprint ON test_cases(fingerprint)")
+
+
+def _render_steps_text_from_json(steps_json: str | None) -> str:
+    """从 steps_json 重建与 TestCase.render_steps_text() 一致的文本（仅用于迁移补算 content_hash）。"""
+    import json as _json
+
+    if not steps_json:
+        return ""
+    try:
+        steps = _json.loads(steps_json)
+    except (ValueError, TypeError):
+        return ""
+    if not isinstance(steps, list):
+        return ""
+    lines = []
+    for step in sorted(steps, key=lambda s: s.get("seq", 0) if isinstance(s, dict) else 0):
+        if not isinstance(step, dict):
+            continue
+        text = f"{step.get('seq', '')}. {step.get('action', '')}"
+        if step.get("data"):
+            text += f"（输入：{step['data']}）"
+        if step.get("expected"):
+            text += f" → {step['expected']}"
+        lines.append(text)
+    return "\n".join(lines)
+
+
 def create_v2_schema() -> None:
     """在 V2 数据库中创建全部表（幂等）并写入 schema_version；检测到旧版本自动升级"""
     with v2_conn() as conn:
@@ -368,6 +475,8 @@ def create_v2_schema() -> None:
             _migrate_v2_to_v3(conn)
         if 0 < existing < 4:
             _migrate_v3_to_v4(conn)
+        if 0 < existing < 5:
+            _migrate_v4_to_v5(conn)
         # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "

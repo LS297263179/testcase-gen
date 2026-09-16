@@ -10,6 +10,7 @@
 | 2️⃣ | `docs/v2/step1-data-model.md` | ~740 | Step 1 数据模型详细设计（Schema/DDL/实体关系/迁移铁律） | 要改 Schema/数据模型时读 |
 | 3️⃣ | `docs/v2/step3-testpoint-generator.md` | ~283 | Step 3 测试点生成引擎设计（两阶段 LLM 派生 + fingerprint） | 要改测试点生成时读 |
 | 4️⃣ | `docs/v2/step4-strategy-engine.md` | ~321 | Step 4 策略引擎设计（三策略代码派生 + 覆盖率双指标） | 要改策略引擎时读 |
+| 5️⃣ | `docs/v2/step5-testcase-synthesizer.md` | ~396 | Step 5 用例合成设计（TestDataPlanner + 双指纹身份/内容分离 + 不双写覆盖） | 要改用例合成时读 |
 
 辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
@@ -20,7 +21,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~4 已全部完成并推送（origin + gitee 三方同步至 `8cc469c`）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 5「测试点 → 测试用例」（未开始，需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~5 已全部完成（Step 5 「测试点→测试用例」已实现并本地验证，632 passed / ruff 全绿 / schema_version=5，待用户确认后推送）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 6「Traceability 追溯链 + 变更影响分析」（未开始，需先讨论方案）。**
 
 ---
 
@@ -44,8 +45,8 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 2：建立 Requirement IR             ✅ 完成
  ├─ Step 3：重构"需求 → 测试点"             ✅ 完成
  ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务） ✅ 完成
- ├─ Step 5：重构"测试点 → 测试用例"（LLM 合成 TestCase + steps/expected/precondition） ← 下一步
- ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析
+ ├─ Step 5：重构"测试点 → 测试用例"（LLM 合成 TestCase + steps/expected/precondition） ✅ 完成
+ ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析 ← 下一步
  ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator）
  ├─ Step 8：升级去重体系（精确 + 语义双重去重）
  ├─ Step 9：加入人工编辑/确认闭环（TestCase 状态机 EDITED→RE_REVIEW）
@@ -75,10 +76,11 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 2 Requirement IR | ✅ 完成+验证(14门槛全过) | `core/v2/`{prompts,ingestion,parser,validator,ir} + 4 测试文件 + 修复 Step1 upsert bug | 已推 origin+gitee |
 | 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 已推 origin+gitee (e7ab544) |
 | 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 已推 origin+gitee (9fb3842) |
+| 5 测试点→测试用例 | ✅ 完成+验证(18门槛全过) | `core/v2/`{tc_prompts,test_data_planner,tc_generator,tc_validator,tc_orchestrator} + Schema/DDL/Repo 升级(v4→v5：TestCase 双指纹身份/内容分离 + DataPlan) + 5 测试文件 | 本地完成，待推送 |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 5~13 | ⬜ 未开始 | — | — |
+| 6~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 497 passed**（Step 3 后 362 + Step 4 新增 135），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 632 passed**（Step 4 后 497 + Step 5 新增 135），ruff check/format 全绿。
 
 ---
 
@@ -260,6 +262,56 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ---
 
+## 5.7 Step 5 详情（测试点 → 测试用例）✅
+
+**设计文档**：`docs/v2/step5-testcase-synthesizer.md`（含 7 核心原则 + 架构 + 18 门槛 + ADR）。
+
+**目标**：消费 Step 3+4 合流后的 `TestPoint[]`（LLM + STRATEGY 两种 provenance），1:1 合成可执行的 `TestCase`（含 `steps: list[TestStep]` / `expected` / `precondition`）。对应蓝图 `Test Case Generator`。
+
+**7 条核心原则（用户冻结）**：
+1. **1 TestPoint → 1 TestCase**（无论 LLM 还是 STRATEGY）
+2. **TestDataGenerator：Code-first + LLM fallback**（数据来源优先级 example→default→strategy_params→enum→builtin→llm）
+3. **TestStep：LLM generation + Code validation**
+4. **fingerprint：基于 TestPoint 来源身份**（version_id | generation_mode | sorted(test_point_ids)），不依赖 title/steps 等可编辑内容；**身份指纹 fingerprint 与内容哈希 content_hash 分离**
+5. **obligation coverage：Step 4 的 obligation_coverage 关系表是唯一事实源**，TestCase 通过 TestPoint 间接继承，**不双写**
+6. **Validator：先修复可修复项，修不了再 VALIDATION_FAILED + 保存 validation_errors**
+7. **V1 运行时完全不修改**
+
+**架构数据流**：`TestPoint[] → TestDataPlanner（Code Generator + LLM Fallback，含 re.fullmatch 验证）→ DataPlan[] → TestCase Synthesizer（strategy 走代码模板 / LLM 走 LLM 合成）→ Validator（修复/判定）→ fingerprint+content_hash → SQLite`。
+
+**generation_mode 判定**（参与 fingerprint 身份）：strategy TP + 纯代码数据 + 模板 steps → `CODE`；strategy TP + LLM 兜底数据（复杂正则）→ `HYBRID`；LLM TP + LLM steps → `LLM`。
+
+**★ 关键设计（用户反馈修订）**：
+- **双指纹分离**：`fingerprint`（身份，不含 title/steps）保证人工修改标题后仍是同一 TestCase（Step 9 Revision 基础）；`content_hash`（内容）追踪内容变化。公式见 `core/v2/fingerprint.py`。
+- **obligation coverage 不双写**：查询路径 `TestCase → test_case_points → TestPoint.obligation_id → CoverageObligation`（间接继承）；需直接查询时用 SQL View（派生，非事实源），Step 5 暂未建 View。
+- **DataPlan 中间层持久化**：`TestPoint → DataPlan → TestCase`（非直接改 TestCase），DataPlan 存 `TestCase.data_plan`，便于审计 + 未来 Playwright/API 复用。
+- **LLM 复杂正则数据必过代码验证**：LLM 生成样例 → `re.fullmatch` 验证 → 不符合预期 retry（≤3 次）/ fail（记 validation_errors）。LLM 不能自证正确。
+- **迁移用例 fingerprint 留 NULL**：V1 迁移用例无 test_point_ids，若强算会 UNIQUE 碰撞坦缩，故 `save_test_case` 仅在 test_point_ids 非空时算 fingerprint（SQLite UNIQUE 允许多 NULL）。
+
+**交付文件**（全在 `core/v2/`）：
+| 文件 | 职责 |
+|---|---|
+| `tc_prompts.py` | 用例合成 Prompt（`test-case-synthesizer-v1`）+ 复杂正则数据 Prompt（`test-data-pattern-v1`） |
+| `test_data_planner.py` | TestDataPlanner：数据来源优先级 6 级 + Code Generator（boundary/equivalence/permission）+ LLM Fallback（复杂正则 + re.fullmatch 验证）→ DataPlan[] |
+| `tc_generator.py` | strategy 代码模板合成（`synthesize_strategy_template`）+ LLM 合成（`synthesize_with_llm`，复用 `parser.extract_json`） |
+| `tc_validator.py` | 可修复项修正（seq 重排/空 step 丢弃/枚举兜底/module 覆写）+ 不可修复判定 + fingerprint/content_hash + validation_errors + 去重 |
+| `tc_orchestrator.py` | `synthesize_test_cases`（复用 Run，GENERATING→DONE）+ `generate_test_cases_full`（Step 3+4+5 一站式） |
+
+**Schema/DDL/Repository 升级**（`schema_version` 4 → 5）：
+- `core/schemas/common.py`：新增 `GenerationMode(StrEnum)` = CODE / LLM / HYBRID
+- `core/schemas/testcase.py`：新增 `DataPlanItem`（field/strategy/value/source/generator/expected_valid）+ TestCase 4 字段（generation_mode / content_hash / validation_errors / data_plan）
+- `core/v2/fingerprint.py`：新增 `compute_testcase_fingerprint`（身份）+ `compute_testcase_content_hash`（内容）
+- `core/v2/ddl.py`：`test_cases` 加 4 列 + `idx_cases_fp` 升级为 `UNIQUE(fingerprint)` + v4→v5 自动升级分支（补列 + 补算 content_hash/fingerprint + 索引升级）
+- `core/v2/repository.py`：`save_test_case` 改 fingerprint 幂等 upsert（复用旧 ULID，仅 test_point_ids 非空时算）+ 序列化新字段 + 新增 `get_test_case_by_fingerprint` / `list_test_cases_by_version`
+
+**测试**（全 mock，不调真实 API）：`test_test_data_planner.py`(44) + `test_tc_generator.py`(18) + `test_tc_validator.py`(31) + `test_tc_orchestrator.py`(21) + `test_step5_acceptance.py`(21) = **135 例**。
+
+**18 条验收门槛：全部 PASSED**（1 test_point_ids 真实 / 2 1:1 派生 / 3 steps 良构 / 4 type 枚举兜底 / 5 fingerprint 格式+UNIQUE / 6 幂等 / 7 Run 复用+DONE / 8 状态机 VALIDATED·VALIDATION_FAILED / 9 关联表+不级联删 TP / 10 数据来源优先级+LLM 兜底 / 11 V1 零回归+schema=5 / 12 一站式入口 / 13 数据满足 FieldSpec 约束 / 14 复杂正则 re.fullmatch 验证 / 15 同 TP 同 Version 唯一 TC / 16 改 title·steps 不改身份指纹 / 17 TC→TP→obligation 反查 / 18 VALIDATION_FAILED 保存 validation_errors）。
+
+**诚实边界**：LLM 合成的 steps 质量（可执行性/业务贴合度）靠 Prompt 约束，需真实 API 抽查；复杂正则 LLM 兜底样例多样性 mock 无法确定性验证；content_hash 的实际用途在 Step 9 Revision 才真正消费（Step 5 只计算并持久化）。纯代码模板合成的 strategy 用例文案较机械，可读性优化留待 Step 7 Reviewer / Step 9 人工编辑。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -272,47 +324,55 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=4）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=5）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4 自动升级分支）
-  repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint 按 fingerprint upsert；obligation 按 natural key 对齐）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5 自动升级分支）
+  repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint/TestCase 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
-  fingerprint.py #   TestPoint 业务确定性指纹（Step 3 LLM 公式 + Step 4 strategy 公式）
+  fingerprint.py #   TestPoint/TestCase 业务确定性指纹（Step3 LLM + Step4 strategy + Step5 身份/内容双指纹）
   migrate_v1_to_v2.py
   prompts.py ingestion.py parser.py validator.py ir.py                    # Step 2
   tp_prompts.py tp_generator.py tp_validator.py tp_orchestrator.py        # Step 3
   strategy/      # Step 4 策略引擎包
     boundary.py equivalence.py permission.py                              #   三策略
     engine.py deriver.py orchestrator.py                                  #   汇总/派生/编排
-docs/v2/         # 设计文档（step1-data-model.md + step3-testpoint-generator.md + step4-strategy-engine.md + 本文件）
+  tc_prompts.py test_data_planner.py tc_generator.py tc_validator.py tc_orchestrator.py  # Step 5
+docs/v2/         # 设计文档（step1-data-model.md + step3-testpoint-generator.md + step4-strategy-engine.md + step5-testcase-synthesizer.md + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
                  # strategy_boundary/strategy_equivalence/strategy_permission
                  # tp_strategy_deriver/strategy_orchestrator/step4_acceptance
+                 # test_data_planner/tc_generator/tc_validator/tc_orchestrator/step5_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 497 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 632 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 5「重构 测试点 → 测试用例」（未开始，需先讨论）
+## 9. 下一步 = Step 6「Traceability 追溯链 + 变更影响分析」（未开始，需先讨论）
 
-**预期范围**：Test Case Synthesizer —— 消费 Step 3+4 合流后的 `TestPoint[]`（LLM + STRATEGY 两种 provenance），LLM 生成完整 `TestCase`（含 `steps: list[TestStep]` / `expected` / `precondition`）+ 代码校验 + 持久化。对应蓝图 `Test Case Generator`。
+**预期范围**：基于 Step 1~5 已落地的追溯链（`RequirementDoc → Version → Item → TestPoint → TestCase`，以及 `CoverageObligation → TestPoint`），建立**正/反向追溯查询能力** + **需求变更影响分析**（diff 两个 RequirementVersion 的 items → 沿追溯链定位受影响、需重生/复审的 TestPoint 与 TestCase）。对应蓝图 `Traceability`。
 
-**开工前需与用户讨论确认的点**（沿用"先讨论→确认→实现"节奏）：
-- **TestCase 与 TestPoint 的派生关系**：1 TestPoint → 1 TestCase，还是 1 TestPoint → N TestCase（例如一个边界值义务派生多个用例）
-- **strategy TestPoint 的具体测试数据生成**：Step 4 只产出抽象类标识（如 `class="invalid_pattern"`），Step 5 需要 TestDataGenerator 生成真实数据（如非法邮箱 "abc"）——是代码规则生成还是 LLM 生成
-- **TestCase 状态机**：`GENERATED → VALIDATED → REVIEWED → CONFIRMED` 的转移触发时机
-- **fingerprint 幂等**：TestCase 已有 `fingerprint` 字段（Step 1 预留），公式是否复用 Step 3/4 的思路
-- **steps 结构化**：`TestStep(seq, action, data, expected)` 的生成粒度（LLM 自由发挥 vs 代码模板约束）
-- **Run 状态机**：Step 5 是否复用同一 Run（`GENERATING` 状态），还是新建 Run
+**已具备的基础**（Step 1~5 已落地的关联表与字段）：
+- `test_point_items`（TestPoint ↔ RequirementItem M:N）、`test_case_points`（TestCase ↔ TestPoint M:N）
+- `obligation_coverage`（覆盖唯一事实源）、`CoverageObligation.item_id`、`TestPoint.obligation_id`
+- `RequirementVersion`（需求版本快照）+ `Run.requirement_version_id`（基于哪个版本生成）
+- TestCase 双指纹（fingerprint 身份 / content_hash 内容）为变更影响判定提供基础
+
+**开工前需与用户讨论确认的点**（沿用“先讨论→确认→实现”节奏）：
+- **追溯链查询 API 形态**：正向（item→TP→TC）/ 反向（TC→TP→item→version）的返回结构与粒度
+- **变更影响分析的 diff 策略**：RequirementItem 的“变更”如何判定（按 fingerprint / seq / statement 语义相似 / 字段级 diff）
+- **受影响资产的处置**：标记“需复审” vs 自动重生成 vs 仅报告（与 Step 9 人工确认闭环的边界）
+- **是否建 SQL View**：如 `obligation_test_cases` 等派生查询视图（Step 5 留的口子，非事实源）
+- **跨版本追溯**：旧版本 TestCase 在新版本下的状态标记（“基于旧版，需复审”而非删除）
+- **Run 与多版本**：同一 Doc 多个 Version 的追溯链如何隔离与展示
 
 ## 10. 协作约定（重要）
 

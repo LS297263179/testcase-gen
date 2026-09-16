@@ -29,7 +29,12 @@ from core.schemas import (
     new_ulid,
 )
 from core.v2.db import v2_conn, v2_read_conn
-from core.v2.fingerprint import compute_strategy_testpoint_fingerprint, compute_testpoint_fingerprint
+from core.v2.fingerprint import (
+    compute_strategy_testpoint_fingerprint,
+    compute_testcase_content_hash,
+    compute_testcase_fingerprint,
+    compute_testpoint_fingerprint,
+)
 from core.v2.resolver import ReferentialValidator
 
 
@@ -611,7 +616,45 @@ def list_test_points_by_run(run_id: str) -> list[TestPoint]:
 
 
 def save_test_case(tc: TestCase) -> None:
+    """保存测试用例；以 fingerprint 为业务幂等身份，同一 fingerprint 多次保存复用旧 id。
+
+    Step 5 引入（对齐 save_test_point 的幂等模式）：
+      - 入库前若 tc.content_hash 为空，自动兜底计算（仅依赖内容字段）。
+      - 入库前若 tc.fingerprint 为空，自动兜底计算（version_id 从 run 反查，
+        因为 TestCase 模型本身不存 version_id）。
+      - 先按 fingerprint 查旧行：若存在且 id 不同，复用旧 id，保证：
+          1) ULID 稳定，不造成下游 test_case_points 断链；
+          2) UNIQUE(fingerprint) 索引不被破坏。
+      - upsert 列表新增 generation_mode / content_hash / validation_errors_json / data_plan_json 四列。
+    """
     with v2_conn() as conn:
+        # content_hash 兜底（总是可算，仅依赖内容字段）
+        if not tc.content_hash:
+            tc.content_hash = compute_testcase_content_hash(
+                title=tc.title,
+                precondition=tc.precondition,
+                steps_text=tc.render_steps_text(),
+                expected=tc.expected,
+                type=_en(tc.type) or "",
+                priority=_en(tc.priority) or "",
+            )
+        # fingerprint 兜底（version_id 从 run 反查）
+        # ★ 仅当 test_point_ids 非空时才计算：迁移自 V1 的旧用例无 test_point_ids，
+        #   若强算会得到 sha256(version_id|mode|"") 的相同指纹 → 同 run 下多个迁移用例 UNIQUE 碰撞坦缩。
+        #   留 NULL（SQLite UNIQUE 索引允许多个 NULL，不冲突）；Step 5 生成的用例必然有 test_point_ids（1:1 派生）。
+        if not tc.fingerprint and tc.test_point_ids:
+            run_row = conn.execute("SELECT requirement_version_id FROM runs WHERE id = ?", (tc.run_id,)).fetchone()
+            version_id = run_row["requirement_version_id"] if run_row else None
+            tc.fingerprint = compute_testcase_fingerprint(
+                version_id=version_id,
+                generation_mode=_en(tc.generation_mode) or "",
+                test_point_ids=list(tc.test_point_ids),
+            )
+        # 幂等身份对齐：若已有同 fingerprint 行但 id 不同，复用旧 id（fingerprint 为 NULL 时跳过）
+        if tc.fingerprint:
+            existing = conn.execute("SELECT id FROM test_cases WHERE fingerprint = ?", (tc.fingerprint,)).fetchone()
+            if existing and existing["id"] != tc.id:
+                tc.id = existing["id"]
         conn.execute(
             _upsert(
                 "test_cases",
@@ -631,6 +674,10 @@ def save_test_case(tc: TestCase) -> None:
                     "provenance",
                     "status",
                     "confidence_level",
+                    "generation_mode",
+                    "content_hash",
+                    "validation_errors_json",
+                    "data_plan_json",
                     "created_at",
                     "updated_at",
                     "schema_version",
@@ -652,6 +699,10 @@ def save_test_case(tc: TestCase) -> None:
                 _en(tc.provenance),
                 _en(tc.status),
                 _en(tc.confidence_level),
+                _en(tc.generation_mode),
+                tc.content_hash,
+                _j(tc.validation_errors),
+                _j([d.model_dump(mode="json") for d in tc.data_plan]),
                 _dt(tc.created_at),
                 _dt(tc.updated_at),
                 tc.schema_version,
@@ -668,6 +719,10 @@ def _row_to_test_case(row: sqlite3.Row, point_ids: list[str]) -> TestCase:
     data = dict(row)
     data["steps"] = _loads(row["steps_json"], [])
     data.pop("steps_json", None)
+    data["validation_errors"] = _loads(row["validation_errors_json"], [])
+    data.pop("validation_errors_json", None)
+    data["data_plan"] = _loads(row["data_plan_json"], [])
+    data.pop("data_plan_json", None)
     data["test_point_ids"] = point_ids
     return TestCase.model_validate(data)
 
@@ -697,6 +752,35 @@ def update_test_case_status(tc_id: str, status: str) -> None:
     """更新用例状态（状态机合法性由应用层 TestCase.transition_to 保证）"""
     with v2_conn() as conn:
         conn.execute("UPDATE test_cases SET status = ?, updated_at = datetime('now') WHERE id = ?", (status, tc_id))
+
+
+def get_test_case_by_fingerprint(fingerprint: str) -> TestCase | None:
+    """按业务身份指纹查 TestCase（Step 5 幂等：同 version+mode+test_point_ids 复用旧行）。"""
+    with v2_read_conn() as conn:
+        row = conn.execute("SELECT * FROM test_cases WHERE fingerprint = ?", (fingerprint,)).fetchone()
+        if not row:
+            return None
+        links = conn.execute(
+            "SELECT test_point_id FROM test_case_points WHERE test_case_id = ?", (row["id"],)
+        ).fetchall()
+        return _row_to_test_case(row, [r["test_point_id"] for r in links])
+
+
+def list_test_cases_by_version(version_id: str) -> list[TestCase]:
+    """按 RequirementVersion 查 TestCase（通过 run.requirement_version_id 联结）。"""
+    with v2_read_conn() as conn:
+        rows = conn.execute(
+            "SELECT tc.* FROM test_cases tc JOIN runs r ON tc.run_id = r.id "
+            "WHERE r.requirement_version_id = ? ORDER BY tc.display_id",
+            (version_id,),
+        ).fetchall()
+        result = []
+        for row in rows:
+            links = conn.execute(
+                "SELECT test_point_id FROM test_case_points WHERE test_case_id = ?", (row["id"],)
+            ).fetchall()
+            result.append(_row_to_test_case(row, [r["test_point_id"] for r in links]))
+        return result
 
 
 # ============================================================

@@ -218,6 +218,24 @@ class GenerationScope(StrEnum):
     STRATEGY = "strategy"
 
 
+class GenerationMode(StrEnum):
+    """TestCase 生成方式（Step 5 引入，参与 TestCase fingerprint 身份计算）
+
+    - CODE:   纯代码生成（strategy TestPoint + 代码数据 + 模板 steps）
+    - LLM:    LLM 生成（LLM TestPoint + LLM steps）
+    - HYBRID: 混合（strategy TestPoint + LLM 兜底数据，或 LLM TestPoint + 代码数据）
+
+    generation_mode 参与 fingerprint：同一 TestPoint 用不同 mode 生成视为不同业务身份
+    （code 生成的模板用例与 llm 生成的自然语言用例业务身份不同）。
+    """
+
+    __test__ = False  # 非 pytest 测试类，禁止被收集
+
+    CODE = "code"
+    LLM = "llm"
+    HYBRID = "hybrid"
+
+
 class TestDimension(StrEnum):
     """测试维度（测试点归类）"""
 
