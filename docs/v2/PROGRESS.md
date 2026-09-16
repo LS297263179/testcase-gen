@@ -14,6 +14,7 @@
 | 6️⃣ | `docs/v2/step6-traceability-change-impact.md` | ~330 | Step 6 追溯链 + 变更影响分析设计（item 双 hash + 四态匹配 + 只读报告） | 要改追溯/变更影响时读 |
 | 7️⃣ | `docs/v2/step7-ai-reviewer.md` | ~340 | Step 7 AI Reviewer 设计（6 维硬/软混合分工 + executability 加权 + coverage 双指标 + 证据锤定） | 要改评审时读 |
 | 8️⃣ | `docs/v2/step8-dedup-optimizer.md` | ~271 | Step 8 Dedup Optimizer 设计（canonicalize pairs + survivor 优先级 + 双边状态检查 + 有条件重评审） | 要改去重/优化时读 |
+| 9️⃣ | `docs/v2/step9-human-edit.md` | ~283 | Step 9 Human Editor 设计（编辑白名单 + Revision 快照 + changed_fields + 乐观锁 + Validator + AFTER_HUMAN_EDIT 重评审） | 要改人工编辑时读 |
 
 辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
@@ -24,7 +25,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~7 已完成并推送（三方同步至 `cb68f01`）；Step 8「去重体系（Dedup Optimizer）」已实现并本地验证（819 passed / ruff 全绿 / schema_version=8，待用户确认后推送）；项目已形成「生成→验证→评审→优化→复审」自动质量闭环；下一步 = Step 9「人工编辑/确认闭环」（未开始，需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~8 已完成并推送（三方同步至 `909d6dd`）；Step 9「人工编辑/确认闭环」已实现并本地验证（875 passed / ruff 全绿 / schema_version=9，待用户确认后推送）；项目已形成「AI + 代码 + 人」三者协同的完整测试设计流程（生成→验证→评审→优化→人工修改→再验证→再评审）；下一步 = Step 10「Preference Learning」（未开始，需先讨论方案）。**
 
 ---
 
@@ -82,11 +83,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 5 测试点→测试用例 | ✅ 完成+验证(18门槛全过) | `core/v2/`{tc_prompts,test_data_planner,tc_generator,tc_validator,tc_orchestrator} + Schema/DDL/Repo 升级(v4→v5：TestCase 双指纹身份/内容分离 + DataPlan) + 5 测试文件 | 已推 origin+gitee (957a42c) |
 | 6 追溯链+变更影响 | ✅ 完成+验证(13门槛全过) | `core/v2/`{traceability,change_impact} + Schema/DDL/Repo 升级(v5→v6：RequirementItem 双 hash identity/content + 3 枚举 + 2 追溯查询) + 3 测试文件 | 已推 origin+gitee (fcaa197) |
 | 7 AI Reviewer 6维评审 | ✅ 完成+验证(14门槛全过) | `core/v2/`{review_prompts,review_hard,review_soft,review_orchestrator} + Schema/DDL/Repo 升级(v6→v7：ReviewReport 5 字段 + ReviewFinding.detail + CoverageDetail/ExecutabilityDetail + DuplicateLevel) + 4 测试文件 | 已推 origin+gitee (cb68f01) |
-| 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 本地完成，待推送 |
+| 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 已推 origin+gitee (909d6dd) |
+| 9 人工编辑/确认闭环 | ✅ 完成+验证(19门槛全过) | `core/v2/`{human_editor,human_editor_orchestrator} + Schema/DDL/Repo 升级(v8→v9：TestCaseRevision 激活 + 乐观锁 + 状态机放开 VALIDATION_FAILED→EDITED) + 3 测试文件 | 本地完成，待推送 |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 9~13 | ⬜ 未开始 | — | — |
+| 10~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 819 passed**（Step 7 后 752 + Step 8 新增 67），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 875 passed**（Step 8 后 819 + Step 9 新增 56），ruff check/format 全绿。
 
 ---
 
@@ -440,6 +442,54 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ---
 
+## 5.11 Step 9 详情（人工编辑/确认闭环）✅
+
+**设计文档**：`docs/v2/step9-human-edit.md`（含 9 核心原则 + 数据流 + 19 门槛 + ADR）。
+
+**目标**：实现 TestCase 人工编辑闭环，激活 `TestCaseRevision` 快照（修改前完整内容 + changed_fields），引入乐观锁并发控制，保护 identity fingerprint 不变、content_hash 重算，编辑后必须过 Validator，用户主动触发 `AFTER_HUMAN_EDIT` 重评审。形成 **AI + 代码 + 人** 三者协同的完整测试设计流程。对应蓝图 `Human Review(人工确认/编辑)`。
+
+**9 条核心原则（用户冻结）**：
+1. **编辑范围白名单**：title/steps/expected/precondition/priority/module/remark 可改；test_point_ids + 系统字段不可改
+2. **不自动重评审**：保存=标记 RE_REVIEW_REQUIRED；用户主动点击才触发 Review(AFTER_HUMAN_EDIT)
+3. **激活 TestCaseRevision**：编辑前创建快照（revision_no+1），保存修改前完整 TestCase + changed_fields
+4. **revision_no 语义区分**：test_case_revision_no（内容版本）vs review_revision（评审版本），代码不混叫
+5. **fingerprint/content_hash 区分**：identity fingerprint 不变（同一 TestCase），content_hash 重算（内容变了）
+6. **编辑后必须过 Validator**：FAIL→VALIDATION_FAILED，PASS→RE_REVIEW_REQUIRED
+7. **VALIDATION_FAILED 可恢复**：用户重新编辑 → EDITED → Validator（不是死状态）
+8. **乐观锁并发控制**：保存时 WHERE updated_at=?，冲突→整体事务回滚
+9. **provenance 语义**：Revision.provenance="这一版谁改的"；TestCase.provenance="当前生效版本来源"（编辑后=HUMAN）
+
+**架构数据流**：`TestCase(REVIEWED) → Edit API → 白名单过滤 → 状态检查 → 乐观锁 → Revision 快照(修改前) → 更新(provenance=HUMAN, fingerprint不变, content_hash重算) → Validator → FAIL:VALIDATION_FAILED / PASS:RE_REVIEW_REQUIRED → 用户点击重新评审 → Review(AFTER_HUMAN_EDIT, review_revision+1) → REVIEWED`。
+
+**★ 关键设计（用户反馈修订）**：
+- **Revision 保存修改前快照**：snapshot 是“修改前完整 TestCase”，不是修改后。这样才能恢复历史。
+- **changed_fields 记录**：为 Step 10 Preference Learning 提供数据源（用户最常改什么字段）。
+- **乐观锁 + 事务回滚**：updated_at 冲突→整体回滚，无错误 Revision，无半截 TestCase。
+- **VALIDATION_FAILED 可恢复**：状态机放开 VALIDATION_FAILED→EDITED，用户重新编辑修复。
+- **fingerprint 不变 / content_hash 重算**：Step 5 双指纹设计的实际消费场景。
+- **不自动重评审**：避免每次编辑都调 LLM（成本/延迟），用户主动点击才 Review。
+
+**交付文件**（全在 `core/v2/`）：
+| 文件 | 职责 |
+|---|---|
+| `human_editor.py` | 编辑逻辑：白名单过滤 + Revision 快照 + changed_fields + Validator + fingerprint/content_hash + 乐观锁 + provenance |
+| `human_editor_orchestrator.py` | 编排：edit_case（单条）+ re_review_test_cases（批量接口预留，第一版内部统一 Review） |
+
+**Schema/DDL/Repository 升级**（`schema_version` 8 → 9）：
+- `core/schemas/common.py`：状态机放开 `VALIDATION_FAILED → EDITED`
+- `core/schemas/reserved.py`：TestCaseRevision 扩展（revision→revision_no + changed_by + change_source）
+- `core/v2/ddl.py`：SCHEMA_VERSION=9 + `test_case_revisions` 表 + `_migrate_v8_to_v9` 分支
+- `core/v2/repository.py`：save/get TestCaseRevision + get_latest_revision_no + update_test_case_with_lock（乐观锁）+ ConcurrentModificationError
+- `core/v2/review_orchestrator.py`：支持 RE_REVIEW_REQUIRED 状态用例的重评审
+
+**测试**（全 mock + 集成）：`test_human_editor.py`(30) + `test_human_editor_orchestrator.py`(7) + `test_step9_acceptance.py`(22) = **59 例**。
+
+**19 条验收门槛：全部 PASSED**（1-3 编辑范围白名单+系统字段保护 / 4-5 Revision快照+changed_fields / 6-7 provenance记录 / 8-9 fingerprint不变+content_hash重算 / 10-12 Validator+VALIDATION_FAILED可恢复 / 13 全流程状态机 / 14-15 乐观锁+事务回滚 / 16-17 不自动重评审+AFTER_HUMAN_EDIT / 18 批量接口预留 / 19 schema=9+V1零回归）。
+
+**诚实边界**：不做前端 UI（Step 13）；不引入 batch queue/parallel/retry（批量接口仅 list 参数）；不做 Re-link TestCase（test_point_ids 修改留未来）；不加 auto_review_on_edit 配置项（太早）；不做 Revision 差异对比 UI（仅保存 snapshot+changed_fields）；不做多用户协同编辑锁（仅乐观锁）。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -452,9 +502,9 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=8）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=9）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6→v7→v8 自动升级分支）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6→v7→v8→v9 自动升级分支）
   repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint/TestCase 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
   fingerprint.py #   业务确定性指纹（Step3 LLM + Step4 strategy + Step5 TestCase 身份/内容 + Step6 Item identity/content）
@@ -468,7 +518,8 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
   traceability.py change_impact.py                                       # Step 6 追溯链 + 变更影响分析
   review_prompts.py review_hard.py review_soft.py review_orchestrator.py  # Step 7 AI Reviewer（硬/软混合）
   optimizer.py optimizer_orchestrator.py                                 # Step 8 Dedup Optimizer（去重归档 + 有条件重评审）
-docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8 + 本文件）
+  human_editor.py human_editor_orchestrator.py                           # Step 9 Human Editor（人工编辑 + Revision 快照 + 乐观锁 + Validator）
+docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8/step9 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
@@ -478,35 +529,36 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
                  # traceability/change_impact/step6_acceptance
                  # review_hard/review_soft/review_orchestrator/step7_acceptance
                  # optimizer/optimizer_orchestrator/step8_acceptance
+                 # human_editor/human_editor_orchestrator/step9_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 819 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 875 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 9「人工编辑/确认闭环」（未开始，需先讨论）
+## 9. 下一步 = Step 10「Preference Learning」（未开始，需先讨论）
 
-**预期范围**：实现 TestCase 状态机 EDITED → RE_REVIEW_REQUIRED → REVIEWED 闭环，允许人工编辑已评审用例并触发重评审（trigger_type=AFTER_HUMAN_EDIT）。对应蓝图 `Human Review(人工确认/编辑)`。
+**预期范围**：消费 Step 9 的 `TestCaseRevision.changed_fields` 数据源（用户最常改什么字段），提取偏好规则，应用到 Prompt/生成策略。对应蓝图 `Preference Learning`。
 
-**已具备的基础**（Step 1~8 已落地）：
-- TestCase 状态机已有 EDITED / RE_REVIEW_REQUIRED / CONFIRMED 状态（Step 1 冻结）
-- ReviewTriggerType.AFTER_HUMAN_EDIT 已预留（Step 7）
-- TestCaseRevision 快照已设计（reserved.py，未建表）
-- Step 8 ARCHIVED 用例保留审计，人工可“反悔”恢复（需讨论是否放开 ARCHIVED → REVIEWED）
+**已具备的基础**（Step 1~9 已落地）：
+- Step 9 TestCaseRevision 已激活，changed_fields 记录每次编辑的字段变化
+- Preference 表已设计（reserved.py 未激活，但 ddl.py 已有 preferences 表）
+- V1 `core/preferences.py` 有 EXTRACT_SYSTEM_PROMPT 可参考（但不改 V1）
+- Step 11 Prompt 分层版本管理已预留（prompt_version 字段）
 
 **开工前需与用户讨论确认的点**（沿用“先讨论→确认→实现”节奏）：
-- **编辑范围**：允许修改哪些字段（title/steps/expected/priority/module）？是否允许修改 test_point_ids（追溯链）？
-- **重评审触发**：编辑后是否自动触发 AFTER_HUMAN_EDIT 重评审（revision+1）？还是仅标记 RE_REVIEW_REQUIRED 等待批量重审？
-- **TestCaseRevision 快照**：是否激活 reserved.py 的 TestCaseRevision？每次编辑保存快照（revision+1）？
-- **ARCHIVED 恢复**：是否允许人工恢复 Step 8 归档的用例（ARCHIVED → REVIEWED）？状态机是否放开？
-- **CONFIRMED 语义**：人工确认后 TestCase → CONFIRMED，是否锁定不可再编辑？还是允许 CONFIRMED → EDITED → RE_REVIEW？
-- **前端交互**：Step 13 前端 V2 才做 UI，Step 9 是否仅提供 API/CLI？
+- **偏好数据源**：仅消费 changed_fields 统计，还是也分析 Revision snapshot 差异（语义级偏好）？
+- **偏好规则提取**：代码统计（频率/模式）vs LLM 提取（语义规则）vs 混合？
+- **偏好应用范围**：应用到 Prompt（Step 11）/ 生成策略（Step 3/4/5）/ 评审权重（Step 7）？
+- **Preference 表激活**：reserved.py 的 Preference 已设计但未接入管线，是否 Step 10 激活？
+- **与 Step 11 Prompt 分层的边界**：偏好是 Prompt 的一部分，还是独立于 Prompt 的策略层？
+- **用户级 vs 项目级偏好**：偏好是按用户隔离，还是全局共享？
 
 ## 10. 协作约定（重要）
 

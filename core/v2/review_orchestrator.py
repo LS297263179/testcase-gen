@@ -90,16 +90,16 @@ def review_test_cases(
     repo.save_run(run)
     _augment_reviewer_version(run)
 
-    # 2. 拉 VALIDATED 用例
+    # 2. 拉 VALIDATED / RE_REVIEW_REQUIRED 用例（Step 9 人工编辑后重评审）
     all_cases = repo.list_test_cases(run_id)
-    validated = [c for c in all_cases if c.status == TestCaseStatus.VALIDATED]
+    validated = [c for c in all_cases if c.status in (TestCaseStatus.VALIDATED, TestCaseStatus.RE_REVIEW_REQUIRED)]
     if not validated:
         run.status = RunStatus.DONE
         repo.save_run(run)
         return ReviewResult(
             run_id=run_id,
             reviewed_count=0,
-            issues=[f"Run {run_id} 无 status=VALIDATED 的用例可评审（共 {len(all_cases)} 条用例）"],
+            issues=[f"Run {run_id} 无 status=VALIDATED/RE_REVIEW_REQUIRED 的用例可评审（共 {len(all_cases)} 条用例）"],
         )
 
     # 3. 拉上下文

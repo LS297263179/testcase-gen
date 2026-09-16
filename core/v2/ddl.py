@@ -1,11 +1,11 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=8）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=9）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
   - FieldSpec 独立表（策略引擎跨项查询）；rules/permissions/steps/params 为 Pydantic 校验的 JSON 列
   - 多态引用 (target_type,target_id) 无 DB 外键，由 core/v2/resolver.py 的 Domain Validator 保障
   - obligation_coverage 是覆盖关系唯一事实源
-  - 🟡 只设计不实现的表（test_scenarios/test_case_revisions/llm_invocations）此处不建
+  - 🟡 只设计不实现的表（test_scenarios/llm_invocations）此处不建（test_case_revisions 已于 Step 9 激活建表）
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -309,6 +309,22 @@ CREATE TABLE IF NOT EXISTS assets (
     sort_order INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_assets_owner ON assets(owner_type, owner_id);
+
+-- Step 9: 用例多版本（人工编辑快照，Preference Learning 数据源）
+CREATE TABLE IF NOT EXISTS test_case_revisions (
+    id                  TEXT PRIMARY KEY,
+    test_case_id        TEXT NOT NULL REFERENCES test_cases(id) ON DELETE CASCADE,
+    revision_no         INTEGER NOT NULL,
+    snapshot_json       TEXT NOT NULL,
+    changed_fields_json TEXT NOT NULL DEFAULT '[]',
+    provenance          TEXT NOT NULL DEFAULT 'llm',
+    changed_by          TEXT NOT NULL DEFAULT 'system',
+    change_source       TEXT NOT NULL DEFAULT '',
+    created_at          TEXT NOT NULL,
+    schema_version      INTEGER NOT NULL DEFAULT 2,
+    UNIQUE (test_case_id, revision_no)
+);
+CREATE INDEX IF NOT EXISTS idx_revisions_case ON test_case_revisions(test_case_id);
 """
 
 
@@ -505,6 +521,31 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_items_fingerprint ON requirement_items(fingerprint)")
 
 
+def _migrate_v8_to_v9(conn: sqlite3.Connection) -> None:
+    """v8 → v9：Step 9 引入 test_case_revisions 表（人工编辑快照）。
+
+    新建库 CREATE TABLE 已含该表，无需进入本分支。
+    旧库无历史 Revision 数据，仅建表即可。
+    """
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS test_case_revisions (
+            id                  TEXT PRIMARY KEY,
+            test_case_id        TEXT NOT NULL REFERENCES test_cases(id) ON DELETE CASCADE,
+            revision_no         INTEGER NOT NULL,
+            snapshot_json       TEXT NOT NULL,
+            changed_fields_json TEXT NOT NULL DEFAULT '[]',
+            provenance          TEXT NOT NULL DEFAULT 'llm',
+            changed_by          TEXT NOT NULL DEFAULT 'system',
+            change_source       TEXT NOT NULL DEFAULT '',
+            created_at          TEXT NOT NULL,
+            schema_version      INTEGER NOT NULL DEFAULT 2,
+            UNIQUE (test_case_id, revision_no)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_revisions_case ON test_case_revisions(test_case_id)")
+    logger.info("schema v8→v9: 新增 test_case_revisions 表")
+
+
 def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
     """v7 → v8：Step 8 无 DDL 列变更（仅状态机代码层变更：REVIEWED → ARCHIVED 放开）。
 
@@ -559,6 +600,8 @@ def create_v2_schema() -> None:
             _migrate_v6_to_v7(conn)
         if 0 < existing < 8:
             _migrate_v7_to_v8(conn)
+        if 0 < existing < 9:
+            _migrate_v8_to_v9(conn)
         # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "

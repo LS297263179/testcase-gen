@@ -145,7 +145,7 @@ class TestCaseStatus(StrEnum):
 # 状态机允许转移表（代码强制；非法转移抛错）
 ALLOWED_TRANSITIONS: dict[TestCaseStatus, set[TestCaseStatus]] = {
     TestCaseStatus.GENERATED: {TestCaseStatus.VALIDATED, TestCaseStatus.VALIDATION_FAILED},
-    TestCaseStatus.VALIDATION_FAILED: {TestCaseStatus.GENERATED},  # 修复后重生成
+    TestCaseStatus.VALIDATION_FAILED: {TestCaseStatus.GENERATED, TestCaseStatus.EDITED},  # 修复后重生成 或 人工重新编辑
     TestCaseStatus.VALIDATED: {TestCaseStatus.REVIEWED},
     TestCaseStatus.REVIEWED: {TestCaseStatus.CONFIRMED, TestCaseStatus.EDITED, TestCaseStatus.ARCHIVED},
     TestCaseStatus.EDITED: {TestCaseStatus.RE_REVIEW_REQUIRED},  # 人工改过必须重审

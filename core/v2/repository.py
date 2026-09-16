@@ -25,6 +25,7 @@ from core.schemas import (
     Run,
     TargetType,
     TestCase,
+    TestCaseRevision,
     TestPoint,
     new_ulid,
 )
@@ -1142,3 +1143,117 @@ def get_preference(pref_id: str) -> Preference | None:
     data["source_diff"] = _loads(row["source_diff_json"], None)
     data.pop("source_diff_json", None)
     return Preference.model_validate(data)
+
+
+# ============================================================
+# Step 9: TestCaseRevision（人工编辑快照）
+# ============================================================
+
+
+def save_test_case_revision(rev: TestCaseRevision) -> None:
+    """保存用例修订快照（幂等：同 test_case_id + revision_no 复用旧 id）。"""
+    with v2_conn() as conn:
+        conn.execute(
+            _upsert(
+                "test_case_revisions",
+                [
+                    "id",
+                    "test_case_id",
+                    "revision_no",
+                    "snapshot_json",
+                    "changed_fields_json",
+                    "provenance",
+                    "changed_by",
+                    "change_source",
+                    "created_at",
+                    "schema_version",
+                ],
+            ),
+            (
+                rev.id,
+                rev.test_case_id,
+                rev.revision_no,
+                _j(rev.snapshot),
+                _j(rev.changed_fields),
+                _en(rev.provenance),
+                rev.changed_by,
+                rev.change_source,
+                _dt(rev.created_at),
+                rev.schema_version,
+            ),
+        )
+
+
+def _row_to_revision(row: sqlite3.Row) -> TestCaseRevision:
+    data = dict(row)
+    data["snapshot"] = _loads(row["snapshot_json"], {})
+    data.pop("snapshot_json", None)
+    data["changed_fields"] = _loads(row["changed_fields_json"], [])
+    data.pop("changed_fields_json", None)
+    return TestCaseRevision.model_validate(data)
+
+
+def get_test_case_revisions(test_case_id: str) -> list[TestCaseRevision]:
+    """获取某用例的全部修订历史（按 revision_no 升序）。"""
+    with v2_read_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM test_case_revisions WHERE test_case_id = ? ORDER BY revision_no", (test_case_id,)
+        ).fetchall()
+        return [_row_to_revision(r) for r in rows]
+
+
+def get_latest_revision_no(test_case_id: str) -> int:
+    """获取某用例的最新 revision_no（无修订返回 0）。"""
+    with v2_read_conn() as conn:
+        row = conn.execute(
+            "SELECT MAX(revision_no) as max_rev FROM test_case_revisions WHERE test_case_id = ?", (test_case_id,)
+        ).fetchone()
+        return row["max_rev"] if row and row["max_rev"] is not None else 0
+
+
+class ConcurrentModificationError(Exception):
+    """乐观锁冲突：数据已被其他用户修改。"""
+
+    pass
+
+
+def update_test_case_with_lock(tc: TestCase, expected_updated_at: str) -> None:
+    """乐观锁更新用例：WHERE id=? AND updated_at=?，冲突抛 ConcurrentModificationError。
+
+    ★ 事务完整性：冲突时整体回滚，不产生部分更新或错误 Revision。
+    expected_updated_at 为读取时的 updated_at ISO 字符串。
+    """
+    from datetime import UTC, datetime
+
+    new_updated_at = datetime.now(UTC).isoformat()
+    with v2_conn() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE test_cases SET
+                module=?, title=?, precondition=?, steps_json=?, expected=?, priority=?, type=?, remark=?,
+                provenance=?, status=?, content_hash=?, validation_errors_json=?, data_plan_json=?,
+                updated_at=?
+            WHERE id=? AND updated_at=?
+            """,
+            (
+                tc.module,
+                tc.title,
+                tc.precondition,
+                _j([s.model_dump(mode="json") for s in tc.steps]),
+                tc.expected,
+                _en(tc.priority),
+                _en(tc.type),
+                tc.remark,
+                _en(tc.provenance),
+                _en(tc.status),
+                tc.content_hash,
+                _j(tc.validation_errors),
+                _j([d.model_dump(mode="json") for d in tc.data_plan]),
+                new_updated_at,
+                tc.id,
+                expected_updated_at,
+            ),
+        )
+        if cursor.rowcount == 0:
+            raise ConcurrentModificationError("当前用例已被更新，请刷新后重新编辑")
+        tc.updated_at = datetime.fromisoformat(new_updated_at)

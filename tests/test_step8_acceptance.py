@@ -455,8 +455,8 @@ class TestGate11DuplicationScoreImproves:
 
 class TestGate12SchemaVersion:
     def test_schema_version_8(self, v2_db):
-        """schema_version=8。"""
-        assert ddl.get_schema_version() == 8
+        """schema_version>=8（Step 9 升级到 9）。"""
+        assert ddl.get_schema_version() >= 8
 
     def test_state_machine_reviewed_to_archived(self):
         """状态机允许 REVIEWED→ARCHIVED。"""

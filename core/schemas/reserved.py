@@ -27,13 +27,19 @@ class TestScenario(EntityBase):
 
 
 class TestCaseRevision(EntityBase):
-    """🟡 用例多版本（只设计）：1(LLM) → 2(Optimizer) → 3(Human) → …"""
+    """用例多版本（Step 9 激活）：1(LLM) → 2(Human) → 3(Human) → …
+
+    ★ revision_no 语义：TestCase 内容版本（区别于 ReviewReport.revision 评审版本）。
+    snapshot 保存修改前完整 TestCase，changed_fields 记录哪些字段被修改（Step 10 Preference Learning 数据源）。
+    """
 
     test_case_id: Ulid
-    revision: int = Field(ge=1)
-    snapshot: dict = Field(default_factory=dict)  # 该版本用例完整快照
-    changed_fields: list[str] = Field(default_factory=list)  # 相对上版改了哪些字段
-    provenance: Provenance = Provenance.LLM
+    revision_no: int = Field(ge=1)  # 内容版本（test_case_revision_no，非 review_revision）
+    snapshot: dict = Field(default_factory=dict)  # 修改前完整 TestCase 快照
+    changed_fields: list[str] = Field(default_factory=list)  # 哪些字段被修改
+    provenance: Provenance = Provenance.LLM  # 这一版本是谁产生/修改的
+    changed_by: str = "system"  # user / system / optimizer
+    change_source: str = ""  # human_edit / llm_generation / optimizer_archive
 
     model_config = ConfigDict(extra="forbid")
 
