@@ -147,7 +147,7 @@ ALLOWED_TRANSITIONS: dict[TestCaseStatus, set[TestCaseStatus]] = {
     TestCaseStatus.GENERATED: {TestCaseStatus.VALIDATED, TestCaseStatus.VALIDATION_FAILED},
     TestCaseStatus.VALIDATION_FAILED: {TestCaseStatus.GENERATED},  # 修复后重生成
     TestCaseStatus.VALIDATED: {TestCaseStatus.REVIEWED},
-    TestCaseStatus.REVIEWED: {TestCaseStatus.CONFIRMED, TestCaseStatus.EDITED},
+    TestCaseStatus.REVIEWED: {TestCaseStatus.CONFIRMED, TestCaseStatus.EDITED, TestCaseStatus.ARCHIVED},
     TestCaseStatus.EDITED: {TestCaseStatus.RE_REVIEW_REQUIRED},  # 人工改过必须重审
     TestCaseStatus.RE_REVIEW_REQUIRED: {TestCaseStatus.REVIEWED},
     TestCaseStatus.CONFIRMED: {TestCaseStatus.ARCHIVED, TestCaseStatus.EDITED},

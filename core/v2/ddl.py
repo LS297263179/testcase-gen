@@ -1,4 +1,4 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=7）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=8）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
@@ -17,7 +17,7 @@ from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -505,6 +505,15 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_items_fingerprint ON requirement_items(fingerprint)")
 
 
+def _migrate_v7_to_v8(conn: sqlite3.Connection) -> None:
+    """v7 → v8：Step 8 无 DDL 列变更（仅状态机代码层变更：REVIEWED → ARCHIVED 放开）。
+
+    保留此迁移分支为未来扩展预留（如 optimizer_actions 表持久化）。
+    新建库 CREATE TABLE 已含全部列，无需进入本分支。
+    """
+    logger.info("schema v7→v8: Step 8 无 DDL 变更（仅状态机代码层变更）")
+
+
 def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
     """v6 → v7：Step 7 引入 review_reports 5 列 + review_findings.detail_json（评审明细/证据/预留字段）。
 
@@ -548,6 +557,8 @@ def create_v2_schema() -> None:
             _migrate_v5_to_v6(conn)
         if 0 < existing < 7:
             _migrate_v6_to_v7(conn)
+        if 0 < existing < 8:
+            _migrate_v7_to_v8(conn)
         # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "

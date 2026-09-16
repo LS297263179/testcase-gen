@@ -13,6 +13,7 @@
 | 5️⃣ | `docs/v2/step5-testcase-synthesizer.md` | ~396 | Step 5 用例合成设计（TestDataPlanner + 双指纹身份/内容分离 + 不双写覆盖） | 要改用例合成时读 |
 | 6️⃣ | `docs/v2/step6-traceability-change-impact.md` | ~330 | Step 6 追溯链 + 变更影响分析设计（item 双 hash + 四态匹配 + 只读报告） | 要改追溯/变更影响时读 |
 | 7️⃣ | `docs/v2/step7-ai-reviewer.md` | ~340 | Step 7 AI Reviewer 设计（6 维硬/软混合分工 + executability 加权 + coverage 双指标 + 证据锤定） | 要改评审时读 |
+| 8️⃣ | `docs/v2/step8-dedup-optimizer.md` | ~271 | Step 8 Dedup Optimizer 设计（canonicalize pairs + survivor 优先级 + 双边状态检查 + 有条件重评审） | 要改去重/优化时读 |
 
 辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
@@ -23,7 +24,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~6 已完成并推送（三方同步至 `fcaa197`）；Step 7「AI Reviewer 6 维结构化评审」已实现并本地验证（752 passed / ruff 全绿 / schema_version=7，待用户确认后推送）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 8「去重体系（精确 + 语义双重去重）+ Optimizer」（未开始，需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~7 已完成并推送（三方同步至 `cb68f01`）；Step 8「去重体系（Dedup Optimizer）」已实现并本地验证（819 passed / ruff 全绿 / schema_version=8，待用户确认后推送）；项目已形成「生成→验证→评审→优化→复审」自动质量闭环；下一步 = Step 9「人工编辑/确认闭环」（未开始，需先讨论方案）。**
 
 ---
 
@@ -80,11 +81,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 已推 origin+gitee (9fb3842) |
 | 5 测试点→测试用例 | ✅ 完成+验证(18门槛全过) | `core/v2/`{tc_prompts,test_data_planner,tc_generator,tc_validator,tc_orchestrator} + Schema/DDL/Repo 升级(v4→v5：TestCase 双指纹身份/内容分离 + DataPlan) + 5 测试文件 | 已推 origin+gitee (957a42c) |
 | 6 追溯链+变更影响 | ✅ 完成+验证(13门槛全过) | `core/v2/`{traceability,change_impact} + Schema/DDL/Repo 升级(v5→v6：RequirementItem 双 hash identity/content + 3 枚举 + 2 追溯查询) + 3 测试文件 | 已推 origin+gitee (fcaa197) |
-| 7 AI Reviewer 6维评审 | ✅ 完成+验证(14门槛全过) | `core/v2/`{review_prompts,review_hard,review_soft,review_orchestrator} + Schema/DDL/Repo 升级(v6→v7：ReviewReport 5 字段 + ReviewFinding.detail + CoverageDetail/ExecutabilityDetail + DuplicateLevel) + 4 测试文件 | 本地完成，待推送 |
+| 7 AI Reviewer 6维评审 | ✅ 完成+验证(14门槛全过) | `core/v2/`{review_prompts,review_hard,review_soft,review_orchestrator} + Schema/DDL/Repo 升级(v6→v7：ReviewReport 5 字段 + ReviewFinding.detail + CoverageDetail/ExecutabilityDetail + DuplicateLevel) + 4 测试文件 | 已推 origin+gitee (cb68f01) |
+| 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 本地完成，待推送 |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 8~13 | ⬜ 未开始 | — | — |
+| 9~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 752 passed**（Step 6 后 679 + Step 7 新增 73），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 819 passed**（Step 7 后 752 + Step 8 新增 67），ruff check/format 全绿。
 
 ---
 
@@ -396,6 +398,48 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ---
 
+## 5.10 Step 8 详情（去重体系 Dedup Optimizer）✅
+
+**设计文档**：`docs/v2/step8-dedup-optimizer.md`（含 5 核心原则 + 数据流 + 14 门槛 + ADR）。
+
+**目标**：消费 Step 7 `ReviewReport` 的 `duplication` findings（`auto_fixable=True`），执行确定性去重归档，触发 `after_optimizer` 重评审，形成 **生成→验证→评审→优化→复审** 自动质量闭环。对应蓝图 `Optimizer(自动优化/去重)`。
+
+**5 条核心原则（用户冻结）**：
+1. **只消费 Step 7 已确认的 duplication finding，不重新做重复判断**（职责分离）
+2. **Duplicate pair 必须 canonicalize**（min_id, max_id → 唯一 pair，防止 A↔B 两条 finding 导致两边都被归档）
+3. **Survivor 优先级**：HUMAN > OPTIMIZER > LLM > STRATEGY > VALIDATOR > MIGRATED → P0>P1>P2>P3 → created_at 越早 → display_id 越小（不覆盖人工意图）
+4. **ARCHIVED 用例保留审计，不物理删除**（可回滚）
+5. **Step 8 只改变重复用例状态，不改变 TestCase 内容**（Dedup Optimizer，不是全能 Optimizer）
+
+**架构数据流**：`Latest ReviewReport → Filter duplication findings → Canonicalize pairs → 双边状态检查 → Determine survivor → Archive loser → OptimizerResult → 有归档？是→AFTER_OPTIMIZER 重评审(revision+1) / 否→DONE`。
+
+**★ 关键设计（用户反馈修订）**：
+- **Canonicalize pairs 是 P0 坑防护**：A↔B 两条 finding 如果不 canonicalize，会导致两边都被归档。min_id/max_id 确保唯一 pair。
+- **双边状态检查**：`if A.status != REVIEWED or B.status != REVIEWED: skip`。任一方 ARCHIVED → `already_resolved`；否则 → `source_not_reviewed`。
+- **Survivor 优先级 HUMAN 最前**：不覆盖人工意图。HUMAN 修改过的用例永远优先保留，即使 priority 更低。
+- **created_at 越早优先**：生成序早的用例更稳定（文档明确，防止实现人员误解为“最新生成的优先”）。
+- **有归档才触发重评审**：避免无意义重评审（全部 skip 时直接 DONE）。
+- **OptimizerResult 内存不持久化**：第一版 ReviewFinding + OptimizerResult + TestCase status change 已足够审计。
+
+**交付文件**（全在 `core/v2/`）：
+| 文件 | 职责 |
+|---|---|
+| `optimizer.py` | 去重逻辑：canonicalize pairs, 双边状态检查, determine survivor, archive loser, record actions |
+| `optimizer_orchestrator.py` | 编排：拉 latest report → 执行 optimizer → 有归档则触发 after_optimizer 重评审 → Run 状态机 |
+
+**Schema/DDL 升级**（`schema_version` 7 → 8）：
+- `core/schemas/common.py`：状态机放开 `REVIEWED → ARCHIVED`
+- `core/v2/ddl.py`：SCHEMA_VERSION=8 + `_migrate_v7_to_v8` 分支（无 DDL 列变更，仅状态机代码层变更）
+- 新增内存 dataclass：`OptimizerAction`（finding_id, case_a_id, case_b_id, kept_case_id, archived_case_id, reason, similarity）+ `OptimizerResult`（processed_findings, archived_cases, skipped_findings, actions[], skip_reasons）
+
+**测试**（全 mock + 集成）：`test_optimizer.py`(35) + `test_optimizer_orchestrator.py`(7) + `test_step8_acceptance.py`(25) = **67 例**。
+
+**14 条验收门槛：全部 PASSED**（1 只消费 duplication finding / 2 Canonical pair 去重 / 3 双边状态检查 / 4 already_resolved skip / 5 Survivor 优先级正确 / 6 归档不物理删除 / 7 OptimizerAction 记录完整 / 8 幂等 / 9 有归档才触发重评审 / 10 重评审 revision+1 trigger=AFTER_OPTIMIZER / 11 去重后 duplication 分数提升 / 12 schema=8+状态机生效 / 13 V1 零回归 / 14 不修改 TestCase 内容）。
+
+**诚实边界**：不建 optimizer_actions 表（内存 OptimizerResult 足够审计）；不引入两级语义阈值（第一版统一 0.85 自动归档，留 Step 12 Benchmark 调）；不做内容优化（Dedup Optimizer 只去重）；不激活 TestCaseRevision 快照（留 Step 9/10）；不做“反悔”机制（ARCHIVED → REVIEWED 恢复留 Step 9）；不处理跨 run 重复（只在同一 run 内去重）。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -408,9 +452,9 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=7）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=8）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6→v7 自动升级分支）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6→v7→v8 自动升级分支）
   repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint/TestCase 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
   fingerprint.py #   业务确定性指纹（Step3 LLM + Step4 strategy + Step5 TestCase 身份/内容 + Step6 Item identity/content）
@@ -423,7 +467,8 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
   tc_prompts.py test_data_planner.py tc_generator.py tc_validator.py tc_orchestrator.py  # Step 5
   traceability.py change_impact.py                                       # Step 6 追溯链 + 变更影响分析
   review_prompts.py review_hard.py review_soft.py review_orchestrator.py  # Step 7 AI Reviewer（硬/软混合）
-docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7 + 本文件）
+  optimizer.py optimizer_orchestrator.py                                 # Step 8 Dedup Optimizer（去重归档 + 有条件重评审）
+docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
@@ -432,34 +477,36 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
                  # test_data_planner/tc_generator/tc_validator/tc_orchestrator/step5_acceptance
                  # traceability/change_impact/step6_acceptance
                  # review_hard/review_soft/review_orchestrator/step7_acceptance
+                 # optimizer/optimizer_orchestrator/step8_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 752 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 819 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 8「去重体系（精确 + 语义）+ Optimizer」（未开始，需先讨论）
+## 9. 下一步 = Step 9「人工编辑/确认闭环」（未开始，需先讨论）
 
-**预期范围**：消费 Step 7 的 `ReviewReport`（尤其 duplication findings 与 auto_fixable 标记），实现精确去重（fingerprint/content_hash）+ 语义去重（相似度），以及 Optimizer（修复可自动修复的 finding）。对应蓝图 `Optimizer(自动优化/去重)`。
+**预期范围**：实现 TestCase 状态机 EDITED → RE_REVIEW_REQUIRED → REVIEWED 闭环，允许人工编辑已评审用例并触发重评审（trigger_type=AFTER_HUMAN_EDIT）。对应蓝图 `Human Review(人工确认/编辑)`。
 
-**已具备的基础**（Step 1~7 已落地）：
-- Step 7 duplication findings 已分两级（EXACT content_hash / SEMANTIC similarity）+ auto_fixable=true + detail.counterpart_id
-- TestCase 双指纹（fingerprint 身份 / content_hash 内容）为精确去重提供键
-- ReviewReport 多轮 revision + trigger_type（after_optimizer 已预留）
-- V1 `core/generator.py` 有 deduplicate/deduplicate_by_steps（Jaccard）可参考（但不改 V1）
+**已具备的基础**（Step 1~8 已落地）：
+- TestCase 状态机已有 EDITED / RE_REVIEW_REQUIRED / CONFIRMED 状态（Step 1 冻结）
+- ReviewTriggerType.AFTER_HUMAN_EDIT 已预留（Step 7）
+- TestCaseRevision 快照已设计（reserved.py，未建表）
+- Step 8 ARCHIVED 用例保留审计，人工可“反悔”恢复（需讨论是否放开 ARCHIVED → REVIEWED）
 
 **开工前需与用户讨论确认的点**（沿用“先讨论→确认→实现”节奏）：
-- **去重策略**：精确（content_hash）直接删 vs 语义（相似度）保留哪条（评分高的/步骤全的）
-- **Optimizer 范围**：仅去重，还是也修复其他 auto_fixable finding（格式/命名）+ 补充 missing_risk 遗漏用例
-- **去重/优化后的状态与审计**：被删用例如何处理（ARCHIVED？保留痕迹）；优化后是否触发 trigger_type=after_optimizer 的重评审（Step 7 revision+1）
-- **幂等与可回滚**：Optimizer 多次运行结果一致；是否保留优化前快照（TestCaseRevision 预留）
-- **与 Step 9 人工确认的边界**：Optimizer 自动处理 vs 交人工确认的分工
+- **编辑范围**：允许修改哪些字段（title/steps/expected/priority/module）？是否允许修改 test_point_ids（追溯链）？
+- **重评审触发**：编辑后是否自动触发 AFTER_HUMAN_EDIT 重评审（revision+1）？还是仅标记 RE_REVIEW_REQUIRED 等待批量重审？
+- **TestCaseRevision 快照**：是否激活 reserved.py 的 TestCaseRevision？每次编辑保存快照（revision+1）？
+- **ARCHIVED 恢复**：是否允许人工恢复 Step 8 归档的用例（ARCHIVED → REVIEWED）？状态机是否放开？
+- **CONFIRMED 语义**：人工确认后 TestCase → CONFIRMED，是否锁定不可再编辑？还是允许 CONFIRMED → EDITED → RE_REVIEW？
+- **前端交互**：Step 13 前端 V2 才做 UI，Step 9 是否仅提供 API/CLI？
 
 ## 10. 协作约定（重要）
 
