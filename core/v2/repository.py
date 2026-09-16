@@ -992,6 +992,11 @@ def save_review_report(report: ReviewReport) -> None:
                     "overall_score",
                     "summary",
                     "obligation_coverage",
+                    "review_target_type",
+                    "review_target_ids_json",
+                    "coverage_detail_json",
+                    "executability_detail_json",
+                    "dimension_reasons_json",
                     "created_at",
                     "updated_at",
                     "schema_version",
@@ -1006,6 +1011,11 @@ def save_review_report(report: ReviewReport) -> None:
                 report.overall_score,
                 report.summary,
                 report.obligation_coverage,
+                _en(report.review_target_type),
+                _j(list(report.review_target_ids)),
+                _j(report.coverage_detail.model_dump(mode="json")) if report.coverage_detail else None,
+                _j(report.executability_detail.model_dump(mode="json")) if report.executability_detail else None,
+                _j(report.dimension_reasons),
                 _dt(report.created_at),
                 _dt(report.updated_at),
                 report.schema_version,
@@ -1016,8 +1026,8 @@ def save_review_report(report: ReviewReport) -> None:
             conn.execute(
                 """INSERT INTO review_findings
                    (id, report_id, dimension, severity, target_type, target_id, issue,
-                    suggestion, provenance, auto_fixable)
-                   VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                    suggestion, provenance, auto_fixable, detail_json)
+                   VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
                 (
                     f.id,
                     report.id,
@@ -1029,6 +1039,7 @@ def save_review_report(report: ReviewReport) -> None:
                     f.suggestion,
                     _en(f.provenance),
                     int(f.auto_fixable),
+                    _j(f.detail) if f.detail is not None else None,
                 ),
             )
 
@@ -1044,10 +1055,20 @@ def get_review_report(report_id: str) -> ReviewReport | None:
         fdata = dict(f)
         fdata.pop("report_id", None)
         fdata["auto_fixable"] = bool(f["auto_fixable"])
+        fdata["detail"] = _loads(f["detail_json"], None)
+        fdata.pop("detail_json", None)
         findings.append(ReviewFinding.model_validate(fdata))
     data = dict(row)
     data["scores"] = _loads(row["scores_json"], {})
     data.pop("scores_json", None)
+    data["review_target_ids"] = _loads(row["review_target_ids_json"], [])
+    data.pop("review_target_ids_json", None)
+    data["coverage_detail"] = _loads(row["coverage_detail_json"], None)
+    data.pop("coverage_detail_json", None)
+    data["executability_detail"] = _loads(row["executability_detail_json"], None)
+    data.pop("executability_detail_json", None)
+    data["dimension_reasons"] = _loads(row["dimension_reasons_json"], {})
+    data.pop("dimension_reasons_json", None)
     data["findings"] = [f.model_dump(mode="json") for f in findings]
     return ReviewReport.model_validate(data)
 
@@ -1062,6 +1083,15 @@ def list_review_reports(run_id: str) -> list[ReviewReport]:
         if rep:
             reports.append(rep)
     return reports
+
+
+def get_latest_review_report(run_id: str) -> ReviewReport | None:
+    """取某 run 最新一轮评审（max revision），供 revision 递增与 Step 8 消费。"""
+    with v2_read_conn() as conn:
+        row = conn.execute(
+            "SELECT id FROM review_reports WHERE run_id = ? ORDER BY revision DESC LIMIT 1", (run_id,)
+        ).fetchone()
+    return get_review_report(row["id"]) if row else None
 
 
 # ============================================================

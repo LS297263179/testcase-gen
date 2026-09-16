@@ -296,7 +296,8 @@ def test_11_content_component_diff(v2_db):
 
 # 门槛 12：schema_version=6 + fingerprint 非 UNIQUE 普通索引
 def test_12_schema_v6_and_index_non_unique(v2_db):
-    assert get_schema_version() == 6
+    # Step 6 要求 schema 至少升级到 6；Step 7+ 会继续递增，故用 >= 保证里程碑测试对未来鲁棒
+    assert get_schema_version() >= 6
     with v2_read_conn() as conn:
         idxs = conn.execute("PRAGMA index_list(requirement_items)").fetchall()
     fp_idx = [i for i in idxs if i["name"] == "idx_items_fingerprint"]

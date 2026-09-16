@@ -12,6 +12,7 @@
 | 4️⃣ | `docs/v2/step4-strategy-engine.md` | ~321 | Step 4 策略引擎设计（三策略代码派生 + 覆盖率双指标） | 要改策略引擎时读 |
 | 5️⃣ | `docs/v2/step5-testcase-synthesizer.md` | ~396 | Step 5 用例合成设计（TestDataPlanner + 双指纹身份/内容分离 + 不双写覆盖） | 要改用例合成时读 |
 | 6️⃣ | `docs/v2/step6-traceability-change-impact.md` | ~330 | Step 6 追溯链 + 变更影响分析设计（item 双 hash + 四态匹配 + 只读报告） | 要改追溯/变更影响时读 |
+| 7️⃣ | `docs/v2/step7-ai-reviewer.md` | ~340 | Step 7 AI Reviewer 设计（6 维硬/软混合分工 + executability 加权 + coverage 双指标 + 证据锤定） | 要改评审时读 |
 
 辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
@@ -22,7 +23,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~5 已完成并推送（三方同步至 `957a42c`）；Step 6「Traceability 追溯链 + 变更影响分析」已实现并本地验证（679 passed / ruff 全绿 / schema_version=6，待用户确认后推送）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 7「AI Reviewer 6 维结构化评审」（未开始，需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~6 已完成并推送（三方同步至 `fcaa197`）；Step 7「AI Reviewer 6 维结构化评审」已实现并本地验证（752 passed / ruff 全绿 / schema_version=7，待用户确认后推送）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 8「去重体系（精确 + 语义双重去重）+ Optimizer」（未开始，需先讨论方案）。**
 
 ---
 
@@ -48,8 +49,8 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务） ✅ 完成
  ├─ Step 5：重构"测试点 → 测试用例"（LLM 合成 TestCase + steps/expected/precondition） ✅ 完成
  ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析 ✅ 完成
- ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator） ← 下一步
- ├─ Step 8：升级去重体系（精确 + 语义双重去重）
+ ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator） ✅ 完成
+ ├─ Step 8：升级去重体系（精确 + 语义双重去重） ← 下一步
  ├─ Step 9：加入人工编辑/确认闭环（TestCase 状态机 EDITED→RE_REVIEW）
  ├─ Step 10：Preference Learning（用户反馈→提示词/偏好优化）
  ├─ Step 11：Prompt 分层 + 版本管理
@@ -78,11 +79,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 已推 origin+gitee (e7ab544) |
 | 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 已推 origin+gitee (9fb3842) |
 | 5 测试点→测试用例 | ✅ 完成+验证(18门槛全过) | `core/v2/`{tc_prompts,test_data_planner,tc_generator,tc_validator,tc_orchestrator} + Schema/DDL/Repo 升级(v4→v5：TestCase 双指纹身份/内容分离 + DataPlan) + 5 测试文件 | 已推 origin+gitee (957a42c) |
-| 6 追溯链+变更影响 | ✅ 完成+验证(13门槛全过) | `core/v2/`{traceability,change_impact} + Schema/DDL/Repo 升级(v5→v6：RequirementItem 双 hash identity/content + 3 枚举 + 2 追溯查询) + 3 测试文件 | 本地完成，待推送 |
+| 6 追溯链+变更影响 | ✅ 完成+验证(13门槛全过) | `core/v2/`{traceability,change_impact} + Schema/DDL/Repo 升级(v5→v6：RequirementItem 双 hash identity/content + 3 枚举 + 2 追溯查询) + 3 测试文件 | 已推 origin+gitee (fcaa197) |
+| 7 AI Reviewer 6维评审 | ✅ 完成+验证(14门槛全过) | `core/v2/`{review_prompts,review_hard,review_soft,review_orchestrator} + Schema/DDL/Repo 升级(v6→v7：ReviewReport 5 字段 + ReviewFinding.detail + CoverageDetail/ExecutabilityDetail + DuplicateLevel) + 4 测试文件 | 本地完成，待推送 |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 7~13 | ⬜ 未开始 | — | — |
+| 8~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 679 passed**（Step 5 后 632 + Step 6 新增 47），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 752 passed**（Step 6 后 679 + Step 7 新增 73），ruff check/format 全绿。
 
 ---
 
@@ -353,6 +355,47 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ---
 
+## 5.9 Step 7 详情（AI Reviewer 6 维结构化评审）✅
+
+**设计文档**：`docs/v2/step7-ai-reviewer.md`（含 9 核心原则 + 硬/软分工 + 14 门槛 + ADR）。
+
+**目标**：消费 Step 5 的 TestCase[]（status=VALIDATED），产出结构化多轮 `ReviewReport`（6 维 `ReviewScores` + `ReviewFinding`）。硬指标由 Validator 产 `provenance=validator` 的 finding；语义/遗漏由 LLM 产 `provenance=llm` 的 finding。对应蓝图 `AI Reviewer(6维)`。
+
+**9 条核心原则（用户冻结）**：
+1. 混合分工：确定性维度代码硬算，语义维度 LLM 软判
+2. **executability 双子指标加权**：`structural(Code)×0.4 + semantic(LLM)×0.6`（非简单平均；steps 非空只证形式，不证可执行）
+3. **coverage 双指标不合成**：Report 保留 strategy_obligation_coverage + requirement_item_coverage + uncovered_item_ids
+4. **duplication 分两级**：EXACT（content_hash 精确）/ SEMANTIC（相似度+similarity）；只报告+auto_fixable，绝不 merge/delete（Step 8）
+5. **REVIEWED ≠ 质量合格**：仅代表“评审完成”，低分+多 findings 照样转 REVIEWED；不新增 TestCase 状态
+6. **评分可解释**：LLM soft score 必带 score+reason+findings
+7. **LLM Review 引用证据**：finding.target 指向真实 TestCase/RequirementItem（ReferentialValidator 校验），missing_risk 引用 item/rule（接 source_ref）
+8. **只发现不修复**：发现问题→记 finding→标 auto_fixable→停止（Optimizer 是 Step 8，绝不偷塞）
+9. V1 运行时（core/reviewer.py 自由文本评审）零修改
+
+**架构数据流**：`TestCase[] → Validator → {Hard Review Engine（coverage/duplication/consistency/executability结构）+ LLM Soft Review Engine（accuracy/missing_risk/executability语义）} → ReviewScores(6维)+明细+findings → ReviewReport → TestCase VALIDATED→REVIEWED → auto_fixable 仅标记 → Step 8`。
+
+**交付文件**（`core/v2/`）：
+| 文件 | 职责 |
+|---|---|
+| `review_prompts.py` | 结构化评审 Prompt（`test-case-reviewer-v1`）：只评 3 软维度 + 强制 reason + 证据锤点 |
+| `review_hard.py` | Hard Review Engine：coverage 双指标 + duplication 两级 + consistency + executability 结构层 → 分数 + validator findings（纯代码确定性） |
+| `review_soft.py` | LLM Soft Review Engine：软维度 score+reason+findings 解析 + 证据锤定（target_ref 支持 ULID/display_id）+ ReferentialValidator 校验 + 非法兜底 |
+| `review_orchestrator.py` | `review_test_cases`：Hard+Soft 合成 ReviewScores（executability 加权）+ ReviewReport 持久化 + TestCase→REVIEWED + Run 状态机 |
+
+**Schema/DDL/Repository 升级**（`schema_version` 6 → 7）：
+- `core/schemas/common.py`：新增 `DuplicateLevel(StrEnum)` = EXACT / SEMANTIC
+- `core/schemas/review.py`：新增 `CoverageDetail`（双指标+uncovered）/ `ExecutabilityDetail`（structural/semantic+权重）；ReviewFinding 加 `detail`；ReviewReport 加 review_target_type/review_target_ids/coverage_detail/executability_detail/dimension_reasons（ReviewScores 6 维不变）
+- `core/v2/ddl.py`：review_reports 加 5 列 + review_findings 加 detail_json + v6→v7 升级分支
+- `core/v2/repository.py`：save/get/list_review_report 序列化新字段 + finding.detail + 新增 `get_latest_review_report`
+
+**测试**（全 mock）：`test_review_hard.py`(17) + `test_review_soft.py`(19) + `test_review_orchestrator.py`(19) + `test_step7_acceptance.py`(15) = **70 例**（+ Step1 层回归补 3 例）。
+
+**14 条验收门槛：全部 PASSED**（1 报告持久化+6维 / 2 coverage 双指标 / 3 executability 加权 / 4 duplication 两级+不删 / 5 provenance 可区分 / 6 soft score 带 reason / 7 missing_risk 证据引用 / 8 非法 target 丢弃 / 9 REVIEWED≠合格低分也转 / 10 review_target 填充 / 11 只标记不修复 / 12 多次Review硬指标稳定软分波动 / 13 schema=7+新列 / 14 V1 零回归）。
+
+**诚实边界**：LLM 软分波动（mock 只验证硬指标确定性稳定 + LLM 输出被正确解析/校验/证据锤定，不验证真实打分质量）；executability 0.4/0.6 与 overall 均值权重为经验值，留 Step 12 Benchmark 调；review_target 预留字段当前仅 TESTCASE；review_result（PASS/NEEDS_OPTIMIZATION/CRITICAL）不实现（用户明确现在不加状态）；消费 ChangeImpactReport 的“变更后加权复审”首版不做（留接口）。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -365,9 +408,9 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=6）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=7）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6 自动升级分支）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6→v7 自动升级分支）
   repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint/TestCase 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
   fingerprint.py #   业务确定性指纹（Step3 LLM + Step4 strategy + Step5 TestCase 身份/内容 + Step6 Item identity/content）
@@ -379,7 +422,8 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
     engine.py deriver.py orchestrator.py                                  #   汇总/派生/编排
   tc_prompts.py test_data_planner.py tc_generator.py tc_validator.py tc_orchestrator.py  # Step 5
   traceability.py change_impact.py                                       # Step 6 追溯链 + 变更影响分析
-docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6 + 本文件）
+  review_prompts.py review_hard.py review_soft.py review_orchestrator.py  # Step 7 AI Reviewer（硬/软混合）
+docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
@@ -387,36 +431,35 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
                  # tp_strategy_deriver/strategy_orchestrator/step4_acceptance
                  # test_data_planner/tc_generator/tc_validator/tc_orchestrator/step5_acceptance
                  # traceability/change_impact/step6_acceptance
+                 # review_hard/review_soft/review_orchestrator/step7_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 679 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 752 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 7「AI Reviewer 6 维结构化评审」（未开始，需先讨论）
+## 9. 下一步 = Step 8「去重体系（精确 + 语义）+ Optimizer」（未开始，需先讨论）
 
-**预期范围**：消费 Step 5 的 TestCase[] + Step 6 的追溯/影响信息，产出结构化多轮评审 `ReviewReport`（6 维 `ReviewScores` + `ReviewFinding`）。硬指标（覆盖率/重复/Schema 违规/必填缺失）由 Validator 产 `provenance=validator` 的 finding；语义/遗漏由 LLM 产 `provenance=llm` 的 finding。对应蓝图 `AI Reviewer(6维)`。
+**预期范围**：消费 Step 7 的 `ReviewReport`（尤其 duplication findings 与 auto_fixable 标记），实现精确去重（fingerprint/content_hash）+ 语义去重（相似度），以及 Optimizer（修复可自动修复的 finding）。对应蓝图 `Optimizer(自动优化/去重)`。
 
-**已具备的基础**（Step 1 已建表 + 上游产物）：
-- `ReviewReport`（revision + trigger_type，UNIQUE(run_id,revision)）、`ReviewScores`（6 维固定字段）、`ReviewFinding`（多态 target + severity + provenance + auto_fixable）均已建表
-- `resolver.ReferentialValidator`（finding.target 多态引用写入前校验）
-- `obligation_coverage`（覆盖率硬指标数据源）+ Step 6 `ChangeImpactReport`（变更后的复审依据）
-- TestCase 双指纹（fingerprint/content_hash）+ Step 5 validation_errors
+**已具备的基础**（Step 1~7 已落地）：
+- Step 7 duplication findings 已分两级（EXACT content_hash / SEMANTIC similarity）+ auto_fixable=true + detail.counterpart_id
+- TestCase 双指纹（fingerprint 身份 / content_hash 内容）为精确去重提供键
+- ReviewReport 多轮 revision + trigger_type（after_optimizer 已预留）
+- V1 `core/generator.py` 有 deduplicate/deduplicate_by_steps（Jaccard）可参考（但不改 V1）
 
 **开工前需与用户讨论确认的点**（沿用“先讨论→确认→实现”节奏）：
-- **6 维硬/软分工**：哪些维度代码算（coverage/duplication 硬指标）、哪些交 LLM（accuracy/missing_risk 软判断）
-- **ReviewScores 评分机制**：6 维分值如何计算/归一（硬指标直接算 vs LLM 打分），overall_score 如何加权
-- **多轮评审 revision + trigger_type**：initial / after_optimizer / after_human_edit 的触发时机（与 Step 8/9 衔接）
-- **finding.target 多态**：指向 TestCase / TestPoint / Obligation / RequirementItem 的写入校验（复用 ReferentialValidator）
-- **auto_fixable finding 与 Step 8 Optimizer 的边界**：Step 7 只标记还是尝试修复
-- **变更后复审**：如何消费 Step 6 ChangeImpactReport 对受影响资产优先复审
-- **TestCase 状态机**：VALIDATED → REVIEWED 的转移触发（Step 5 已留 VALIDATED 态）
+- **去重策略**：精确（content_hash）直接删 vs 语义（相似度）保留哪条（评分高的/步骤全的）
+- **Optimizer 范围**：仅去重，还是也修复其他 auto_fixable finding（格式/命名）+ 补充 missing_risk 遗漏用例
+- **去重/优化后的状态与审计**：被删用例如何处理（ARCHIVED？保留痕迹）；优化后是否触发 trigger_type=after_optimizer 的重评审（Step 7 revision+1）
+- **幂等与可回滚**：Optimizer 多次运行结果一致；是否保留优化前快照（TestCaseRevision 预留）
+- **与 Step 9 人工确认的边界**：Optimizer 自动处理 vs 交人工确认的分工
 
 ## 10. 协作约定（重要）
 

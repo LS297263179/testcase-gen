@@ -1,4 +1,4 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=6）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=7）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
@@ -17,7 +17,7 @@ from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -221,6 +221,11 @@ CREATE TABLE IF NOT EXISTS review_reports (
     overall_score       REAL NOT NULL,
     summary             TEXT NOT NULL DEFAULT '',
     obligation_coverage REAL NOT NULL DEFAULT 0.0,
+    review_target_type  TEXT NOT NULL DEFAULT 'testcase',
+    review_target_ids_json TEXT NOT NULL DEFAULT '[]',
+    coverage_detail_json TEXT,
+    executability_detail_json TEXT,
+    dimension_reasons_json TEXT NOT NULL DEFAULT '{}',
     created_at          TEXT NOT NULL,
     updated_at          TEXT NOT NULL,
     schema_version      INTEGER NOT NULL DEFAULT 2,
@@ -237,7 +242,8 @@ CREATE TABLE IF NOT EXISTS review_findings (
     issue         TEXT NOT NULL,
     suggestion    TEXT,
     provenance    TEXT NOT NULL,
-    auto_fixable  INTEGER NOT NULL DEFAULT 0
+    auto_fixable  INTEGER NOT NULL DEFAULT 0,
+    detail_json   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_findings_target ON review_findings(target_type, target_id);
 
@@ -499,6 +505,26 @@ def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
     conn.execute("CREATE INDEX IF NOT EXISTS idx_items_fingerprint ON requirement_items(fingerprint)")
 
 
+def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
+    """v6 → v7：Step 7 引入 review_reports 5 列 + review_findings.detail_json（评审明细/证据/预留字段）。
+
+    新建库 CREATE TABLE 已含该等列，无需进入本分支。
+    新列均可空或有默认，旧评审行无需回填业务值（旧报告的明细字段留 NULL/默认）。
+    """
+    rr_cols = {row["name"] for row in conn.execute("PRAGMA table_info(review_reports)").fetchall()}
+    if "review_target_type" not in rr_cols:
+        conn.execute("ALTER TABLE review_reports ADD COLUMN review_target_type TEXT NOT NULL DEFAULT 'testcase'")
+        conn.execute("ALTER TABLE review_reports ADD COLUMN review_target_ids_json TEXT NOT NULL DEFAULT '[]'")
+        conn.execute("ALTER TABLE review_reports ADD COLUMN coverage_detail_json TEXT")
+        conn.execute("ALTER TABLE review_reports ADD COLUMN executability_detail_json TEXT")
+        conn.execute("ALTER TABLE review_reports ADD COLUMN dimension_reasons_json TEXT NOT NULL DEFAULT '{}'")
+        logger.info("schema v6→v7: review_reports 新增 5 列")
+    rf_cols = {row["name"] for row in conn.execute("PRAGMA table_info(review_findings)").fetchall()}
+    if "detail_json" not in rf_cols:
+        conn.execute("ALTER TABLE review_findings ADD COLUMN detail_json TEXT")
+        logger.info("schema v6→v7: review_findings 新增列 detail_json")
+
+
 def create_v2_schema() -> None:
     """在 V2 数据库中创建全部表（幂等）并写入 schema_version；检测到旧版本自动升级"""
     with v2_conn() as conn:
@@ -520,6 +546,8 @@ def create_v2_schema() -> None:
             _migrate_v4_to_v5(conn)
         if 0 < existing < 6:
             _migrate_v5_to_v6(conn)
+        if 0 < existing < 7:
+            _migrate_v6_to_v7(conn)
         # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "

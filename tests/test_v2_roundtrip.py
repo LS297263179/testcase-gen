@@ -11,9 +11,11 @@ import pytest
 from core.schemas import (
     BusinessRule,
     ConfidenceLevel,
+    CoverageDetail,
     CoverageObligation,
     DataType,
     EntityStatus,
+    ExecutabilityDetail,
     ExpressionType,
     FieldSpec,
     GenerationConfig,
@@ -340,6 +342,7 @@ def test_review_report_all_fields(chain):
         suggestion="补充并发用例",
         provenance=Provenance.LLM,
         auto_fixable=True,
+        detail={"rule_name": "并发限制", "evidence": "RI-001"},
     )
     report = ReviewReport(
         run_id=chain.run,
@@ -350,6 +353,13 @@ def test_review_report_all_fields(chain):
         summary="总体尚可",
         obligation_coverage=0.75,
         findings=[finding],
+        review_target_type=TargetType.TESTCASE,
+        review_target_ids=[chain.item],
+        coverage_detail=CoverageDetail(
+            strategy_obligation_coverage=1.0, requirement_item_coverage=0.75, uncovered_item_ids=[chain.item]
+        ),
+        executability_detail=ExecutabilityDetail(structural_score=100.0, semantic_score=55.0),
+        dimension_reasons={"accuracy": "理由A", "coverage": "理由C"},
     )
     repo.save_review_report(report)
     got = repo.get_review_report(report.id)
@@ -362,6 +372,17 @@ def test_review_report_all_fields(chain):
     assert f.target_type == TargetType.REQUIREMENT_ITEM and f.target_id == chain.item
     assert f.issue == "遗漏并发场景" and f.suggestion == "补充并发用例"
     assert f.provenance == Provenance.LLM and f.auto_fixable is True
+    # Step 7 新字段往返保真
+    assert f.detail == {"rule_name": "并发限制", "evidence": "RI-001"}
+    assert got.review_target_type == TargetType.TESTCASE
+    assert got.review_target_ids == [chain.item]
+    assert got.coverage_detail.strategy_obligation_coverage == 1.0
+    assert got.coverage_detail.requirement_item_coverage == 0.75
+    assert got.coverage_detail.uncovered_item_ids == [chain.item]
+    assert got.executability_detail.structural_score == 100.0
+    assert got.executability_detail.semantic_score == 55.0
+    assert got.executability_detail.structural_weight == 0.4 and got.executability_detail.semantic_weight == 0.6
+    assert got.dimension_reasons == {"accuracy": "理由A", "coverage": "理由C"}
 
 
 def test_preference_all_fields(chain):

@@ -10,8 +10,11 @@ from core.schemas import (
     AffectedReason,
     BusinessRule,
     ChangeType,
+    CoverageDetail,
     CoverageObligation,
     DataType,
+    DuplicateLevel,
+    ExecutabilityDetail,
     ExpressionType,
     FieldSpec,
     GenerationConfig,
@@ -395,3 +398,21 @@ class TestStep6Enums:
             version_id=new_ulid(), seq=1, type=RequirementItemType.FUNCTION, module="m", statement="s"
         )
         assert item.fingerprint is None and item.content_hash is None
+
+
+# ============================================================
+# Step 7：评审新枚举 + 子模型
+# ============================================================
+
+
+class TestStep7Enums:
+    def test_duplicate_level_values(self):
+        assert {d.value for d in DuplicateLevel} == {"exact", "semantic"}
+
+    def test_coverage_detail_dual_metrics(self):
+        cd = CoverageDetail(strategy_obligation_coverage=1.0, requirement_item_coverage=0.5, uncovered_item_ids=[])
+        assert cd.strategy_obligation_coverage == 1.0 and cd.requirement_item_coverage == 0.5
+
+    def test_executability_detail_default_weights(self):
+        ed = ExecutabilityDetail(structural_score=100.0, semantic_score=80.0)
+        assert ed.structural_weight == 0.4 and ed.semantic_weight == 0.6

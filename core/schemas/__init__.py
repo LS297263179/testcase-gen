@@ -11,6 +11,7 @@ from core.schemas.common import (
     ChangeType,
     ConfidenceLevel,
     DataType,
+    DuplicateLevel,
     EntityBase,
     EntityStatus,
     ExpressionType,
@@ -47,7 +48,7 @@ from core.schemas.requirement import (
     SourceRef,
 )
 from core.schemas.reserved import LLMInvocation, TestCaseRevision, TestScenario
-from core.schemas.review import ReviewFinding, ReviewReport, ReviewScores
+from core.schemas.review import CoverageDetail, ExecutabilityDetail, ReviewFinding, ReviewReport, ReviewScores
 from core.schemas.run import GenerationConfig, Run, RunCounts
 from core.schemas.strategy import CoverageObligation
 from core.schemas.testcase import DataPlanItem, TestCase, TestStep
@@ -61,6 +62,7 @@ __all__ = [
     "ChangeType",
     "ConfidenceLevel",
     "DataType",
+    "DuplicateLevel",
     "EntityBase",
     "EntityStatus",
     "ExpressionType",
@@ -103,6 +105,8 @@ __all__ = [
     "ReviewScores",
     "ReviewFinding",
     "ReviewReport",
+    "CoverageDetail",
+    "ExecutabilityDetail",
     # run
     "GenerationConfig",
     "RunCounts",

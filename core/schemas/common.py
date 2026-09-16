@@ -361,6 +361,18 @@ class ImpactLevel(StrEnum):
     LOW = "low"
 
 
+class DuplicateLevel(StrEnum):
+    """Step 7 评审：重复用例的级别（供 Step 8 Optimizer 区分处理）。
+
+    - EXACT: fingerprint 精确重复（可直接删）
+    - SEMANTIC: 语义相似（带 similarity，需人工/Step 8 判断）
+    Step 7 只检测报告（finding.auto_fixable=true），绝不 merge/delete（那是 Step 8）。
+    """
+
+    EXACT = "exact"
+    SEMANTIC = "semantic"
+
+
 class RequirementItemType(StrEnum):
     """原子需求项类型"""
 
