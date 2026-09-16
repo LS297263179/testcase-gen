@@ -1,7 +1,17 @@
 # V2 蓝图与进度（交接文档）
 
-> **新会话请先读本文件**，再按需读 `docs/v2/step1-data-model.md`（Step 1 数据模型详细设计）。
 > 本文件是 V2 重构的"单一进度真相源"。每完成一步请回来更新"进度总览"与对应 Step 段落。
+
+## 新会话必读文档清单（按阅读顺序）
+
+| 顺序 | 文档 | 行数 | 作用 | 何时读 |
+|---|---|---|---|---|
+| 1️⃣ | **`docs/v2/PROGRESS.md`**（本文件） | ~320 | 蓝图总览 + 进度总览 + 各 Step 详情 + 协作约定 | **每次新会话首先读** |
+| 2️⃣ | `docs/v2/step1-data-model.md` | ~740 | Step 1 数据模型详细设计（Schema/DDL/实体关系/迁移铁律） | 要改 Schema/数据模型时读 |
+| 3️⃣ | `docs/v2/step3-testpoint-generator.md` | ~283 | Step 3 测试点生成引擎设计（两阶段 LLM 派生 + fingerprint） | 要改测试点生成时读 |
+| 4️⃣ | `docs/v2/step4-strategy-engine.md` | ~321 | Step 4 策略引擎设计（三策略代码派生 + 覆盖率双指标） | 要改策略引擎时读 |
+
+辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
 ---
 
@@ -10,7 +20,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度：Step 1~3 已完成并推送；Step 4 已完成、通过 15 项验收门槛（12 主 + 3 附加）、待用户确认后推送；Step 5 未开始（需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~4 已全部完成并推送（origin + gitee 三方同步至 `8cc469c`）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 5「测试点 → 测试用例」（未开始，需先讨论方案）。**
 
 ---
 
@@ -34,12 +44,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 2：建立 Requirement IR             ✅ 完成
  ├─ Step 3：重构"需求 → 测试点"             ✅ 完成
  ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务） ✅ 完成
- ├─ Step 5：重构"测试点 → 测试用例"
+ ├─ Step 5：重构"测试点 → 测试用例"（LLM 合成 TestCase + steps/expected/precondition） ← 下一步
  ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析
  ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator）
- ├─ Step 8：升级去重体系
- ├─ Step 9：加入人工编辑/确认闭环
- ├─ Step 10：Preference Learning
+ ├─ Step 8：升级去重体系（精确 + 语义双重去重）
+ ├─ Step 9：加入人工编辑/确认闭环（TestCase 状态机 EDITED→RE_REVIEW）
+ ├─ Step 10：Preference Learning（用户反馈→提示词/偏好优化）
  ├─ Step 11：Prompt 分层 + 版本管理
  ├─ Step 12：Benchmark / 自动评测
  └─ Step 13：前端 V2 + Excel/MD/JSON 输出
@@ -64,7 +74,8 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 1 冻结数据模型 | ✅ 完成+验证 | 设计文档 + `core/schemas/`(10) + `core/v2/`持久层 + 迁移 + 测试(209) | 已推 origin+gitee |
 | 2 Requirement IR | ✅ 完成+验证(14门槛全过) | `core/v2/`{prompts,ingestion,parser,validator,ir} + 4 测试文件 + 修复 Step1 upsert bug | 已推 origin+gitee |
 | 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 已推 origin+gitee (e7ab544) |
-| 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 待用户确认后推 |
+| 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 已推 origin+gitee (9fb3842) |
+| — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
 | 5~13 | ⬜ 未开始 | — | — |
 
 **测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 497 passed**（Step 3 后 362 + Step 4 新增 135），ruff check/format 全绿。
