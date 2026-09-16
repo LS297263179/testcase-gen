@@ -7,6 +7,8 @@ Step 1 冻结全部核心实体；🟡 标记的 reserved 实体只定义形状�
 from core.schemas.common import (
     ALLOWED_TRANSITIONS,
     SOURCE_CONFIDENCE,
+    AffectedReason,
+    ChangeType,
     ConfidenceLevel,
     DataType,
     EntityBase,
@@ -14,6 +16,7 @@ from core.schemas.common import (
     ExpressionType,
     GenerationMode,
     GenerationScope,
+    ImpactLevel,
     ObligationStatus,
     Priority,
     Provenance,
@@ -54,6 +57,8 @@ __all__ = [
     # common
     "ALLOWED_TRANSITIONS",
     "SOURCE_CONFIDENCE",
+    "AffectedReason",
+    "ChangeType",
     "ConfidenceLevel",
     "DataType",
     "EntityBase",
@@ -61,6 +66,7 @@ __all__ = [
     "ExpressionType",
     "GenerationMode",
     "GenerationScope",
+    "ImpactLevel",
     "ObligationStatus",
     "Priority",
     "Provenance",

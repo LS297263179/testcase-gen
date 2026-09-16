@@ -1,4 +1,4 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=5）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=6）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
@@ -17,7 +17,7 @@ from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -82,11 +82,14 @@ CREATE TABLE IF NOT EXISTS requirement_items (
     confidence_level TEXT NOT NULL DEFAULT 'high',
     provenance       TEXT NOT NULL DEFAULT 'llm',
     status           TEXT NOT NULL DEFAULT 'draft',
+    fingerprint      TEXT,
+    content_hash     TEXT,
     created_at       TEXT NOT NULL,
     updated_at       TEXT NOT NULL,
     schema_version   INTEGER NOT NULL DEFAULT 2
 );
 CREATE INDEX IF NOT EXISTS idx_items_version ON requirement_items(version_id);
+CREATE INDEX IF NOT EXISTS idx_items_fingerprint ON requirement_items(fingerprint);
 
 CREATE TABLE IF NOT EXISTS field_specs (
     id              TEXT PRIMARY KEY,
@@ -458,6 +461,44 @@ def _render_steps_text_from_json(steps_json: str | None) -> str:
     return "\n".join(lines)
 
 
+def _migrate_v5_to_v6(conn: sqlite3.Connection) -> None:
+    """v5 → v6：Step 6 引入 requirement_items.fingerprint + content_hash（变更影响分析双 hash）。
+
+    新建库 CREATE TABLE 已含两列，无需进入本分支。
+    回填：fingerprint 从 module/type/statement 算；content_hash 需 fields（从 field_specs 重建
+    FieldSpec，复用 repository._load_fields 保证与 save_item 计算一致）+ rules/permissions/acceptance（从 JSON 列解析）。
+    ★ fingerprint 非 UNIQUE（同 doc 跨版本的同一 item fingerprint 相同），仅建普通索引加速匹配查询。
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(requirement_items)").fetchall()}
+    if "fingerprint" not in cols:
+        conn.execute("ALTER TABLE requirement_items ADD COLUMN fingerprint TEXT")
+        logger.info("schema v5→v6: requirement_items 新增列 fingerprint")
+    if "content_hash" not in cols:
+        conn.execute("ALTER TABLE requirement_items ADD COLUMN content_hash TEXT")
+        logger.info("schema v5→v6: requirement_items 新增列 content_hash")
+
+    import json as _json
+
+    from core.v2.fingerprint import compute_item_content_hash, compute_item_identity_fingerprint
+    from core.v2.repository import _load_fields
+
+    rows = conn.execute(
+        "SELECT id, type, module, statement, rules_json, permissions_json, acceptance_json FROM requirement_items"
+    ).fetchall()
+    for row in rows:
+        fp = compute_item_identity_fingerprint(module=row["module"], type=row["type"], statement=row["statement"])
+        fields = _load_fields(conn, row["id"])
+        rules = _json.loads(row["rules_json"]) if row["rules_json"] else []
+        perms = _json.loads(row["permissions_json"]) if row["permissions_json"] else []
+        acc = _json.loads(row["acceptance_json"]) if row["acceptance_json"] else []
+        ch = compute_item_content_hash(
+            statement=row["statement"], fields=fields, rules=rules, permissions=perms, acceptance_criteria=acc
+        )
+        conn.execute("UPDATE requirement_items SET fingerprint = ?, content_hash = ? WHERE id = ?", (fp, ch, row["id"]))
+    logger.info("schema v5→v6: 已为 %d 行 requirement_items 补算 fingerprint/content_hash", len(rows))
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_items_fingerprint ON requirement_items(fingerprint)")
+
+
 def create_v2_schema() -> None:
     """在 V2 数据库中创建全部表（幂等）并写入 schema_version；检测到旧版本自动升级"""
     with v2_conn() as conn:
@@ -477,6 +518,8 @@ def create_v2_schema() -> None:
             _migrate_v3_to_v4(conn)
         if 0 < existing < 5:
             _migrate_v4_to_v5(conn)
+        if 0 < existing < 6:
+            _migrate_v5_to_v6(conn)
         # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "

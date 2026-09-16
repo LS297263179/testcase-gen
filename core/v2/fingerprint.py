@@ -180,3 +180,65 @@ def compute_testcase_content_hash(
     )
     digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
     return f"tch_{digest}"
+
+
+def _canonical_list(items: object) -> str:
+    """将列表（Pydantic 模型或普通值）规范化为确定性字符串（用于 content_hash）。
+
+    - Pydantic 模型先 model_dump(mode="json")，避免 default=str 产生不稳定的 repr
+    - sort_keys 保证字典序一致，不受插入顺序影响；紧凑格式减少长度
+    """
+    dumped = [it.model_dump(mode="json") if hasattr(it, "model_dump") else it for it in (items or [])]
+    return json.dumps(dumped, sort_keys=True, ensure_ascii=False, separators=(",", ":"), default=str)
+
+
+def compute_item_identity_fingerprint(*, module: str, type: str, statement: str) -> str:
+    """计算 RequirementItem 的身份指纹（32 位十六进制，前缀 ri_）。
+
+    ★ Step 6 核心（用户修订）：identity 不含 doc_id，也不含 version_id。
+    公式 = sha256(normalize(module) | type | normalize(statement))。
+    目的是跨 RequirementVersion 识别“同一个逻辑需求项”：同一 Doc 的 v1/v2/v3
+    中 module+type+statement 相同的 item 得到相同 fingerprint（变更影响分析的匹配键）。
+
+    为何不含 doc_id：doc_id 是文档实体身份，非 item 逻辑身份本体；需区分不同文档的
+    同名需求时，在数据库查询范围里限定 doc_id（匹配只在同 doc 的两个 version 间进行）。
+    前提：同一 RequirementDoc 的多个 Version 共用同一 doc_id（不出现“不同版本新建 doc_id”）。
+
+    返回格式：ri_<sha256 前 32 位十六进制>，共 35 字符。
+    """
+    payload = "|".join([normalize_text(module), type or "", normalize_text(statement)])
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    return f"ri_{digest}"
+
+
+def compute_item_content_hash(
+    *,
+    statement: str,
+    fields: object,
+    rules: object,
+    permissions: object,
+    acceptance_criteria: object,
+) -> str:
+    """计算 RequirementItem 的内容哈希（32 位十六进制，前缀 rich_）。
+
+    与 identity fingerprint 分离：content_hash 追踪“需求内容是否变化”。
+    公式 = sha256(normalize(statement) | canonical(fields) | canonical(rules)
+                    | canonical(permissions) | canonical(acceptance_criteria))。
+
+    ★ 解决核心难点：statement 未改但 FieldSpec 改了（如年龄 18~60 → 18~65）时，
+    identity fingerprint 不变但 content_hash 变 → 判定为 MODIFIED。
+    statement 用 normalize_text 避免仅大小写/空白差异被误判为内容变化。
+
+    返回格式：rich_<sha256 前 32 位十六进制>，共 37 字符。
+    """
+    payload = "|".join(
+        [
+            normalize_text(statement),
+            _canonical_list(fields),
+            _canonical_list(rules),
+            _canonical_list(permissions),
+            _canonical_list(acceptance_criteria),
+        ]
+    )
+    digest = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:32]
+    return f"rich_{digest}"

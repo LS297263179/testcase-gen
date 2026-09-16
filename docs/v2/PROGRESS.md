@@ -11,6 +11,7 @@
 | 3️⃣ | `docs/v2/step3-testpoint-generator.md` | ~283 | Step 3 测试点生成引擎设计（两阶段 LLM 派生 + fingerprint） | 要改测试点生成时读 |
 | 4️⃣ | `docs/v2/step4-strategy-engine.md` | ~321 | Step 4 策略引擎设计（三策略代码派生 + 覆盖率双指标） | 要改策略引擎时读 |
 | 5️⃣ | `docs/v2/step5-testcase-synthesizer.md` | ~396 | Step 5 用例合成设计（TestDataPlanner + 双指纹身份/内容分离 + 不双写覆盖） | 要改用例合成时读 |
+| 6️⃣ | `docs/v2/step6-traceability-change-impact.md` | ~330 | Step 6 追溯链 + 变更影响分析设计（item 双 hash + 四态匹配 + 只读报告） | 要改追溯/变更影响时读 |
 
 辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
@@ -21,7 +22,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~5 已全部完成（Step 5 「测试点→测试用例」已实现并本地验证，632 passed / ruff 全绿 / schema_version=5，待用户确认后推送）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 6「Traceability 追溯链 + 变更影响分析」（未开始，需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~5 已完成并推送（三方同步至 `957a42c`）；Step 6「Traceability 追溯链 + 变更影响分析」已实现并本地验证（679 passed / ruff 全绿 / schema_version=6，待用户确认后推送）；项目名已全局改为「AI 测试工程平台 / AI Test Engineering Platform」；下一步 = Step 7「AI Reviewer 6 维结构化评审」（未开始，需先讨论方案）。**
 
 ---
 
@@ -46,8 +47,8 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 3：重构"需求 → 测试点"             ✅ 完成
  ├─ Step 4：加入测试策略引擎（代码算边界/等价类/权限矩阵/覆盖义务） ✅ 完成
  ├─ Step 5：重构"测试点 → 测试用例"（LLM 合成 TestCase + steps/expected/precondition） ✅ 完成
- ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析 ← 下一步
- ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator）
+ ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析 ✅ 完成
+ ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator） ← 下一步
  ├─ Step 8：升级去重体系（精确 + 语义双重去重）
  ├─ Step 9：加入人工编辑/确认闭环（TestCase 状态机 EDITED→RE_REVIEW）
  ├─ Step 10：Preference Learning（用户反馈→提示词/偏好优化）
@@ -76,11 +77,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 2 Requirement IR | ✅ 完成+验证(14门槛全过) | `core/v2/`{prompts,ingestion,parser,validator,ir} + 4 测试文件 + 修复 Step1 upsert bug | 已推 origin+gitee |
 | 3 测试点生成引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/`{tp_prompts,tp_generator,tp_validator,tp_orchestrator,fingerprint} + Schema/DDL/Repo 升级(v2→v3) + 4 测试文件 | 已推 origin+gitee (e7ab544) |
 | 4 测试策略引擎 | ✅ 完成+验证(12+3门槛全过) | `core/v2/strategy/`{boundary,equivalence,permission,engine,deriver,orchestrator} + Schema/DDL/Repo 升级(v3→v4) + 6 测试文件 | 已推 origin+gitee (9fb3842) |
-| 5 测试点→测试用例 | ✅ 完成+验证(18门槛全过) | `core/v2/`{tc_prompts,test_data_planner,tc_generator,tc_validator,tc_orchestrator} + Schema/DDL/Repo 升级(v4→v5：TestCase 双指纹身份/内容分离 + DataPlan) + 5 测试文件 | 本地完成，待推送 |
+| 5 测试点→测试用例 | ✅ 完成+验证(18门槛全过) | `core/v2/`{tc_prompts,test_data_planner,tc_generator,tc_validator,tc_orchestrator} + Schema/DDL/Repo 升级(v4→v5：TestCase 双指纹身份/内容分离 + DataPlan) + 5 测试文件 | 已推 origin+gitee (957a42c) |
+| 6 追溯链+变更影响 | ✅ 完成+验证(13门槛全过) | `core/v2/`{traceability,change_impact} + Schema/DDL/Repo 升级(v5→v6：RequirementItem 双 hash identity/content + 3 枚举 + 2 追溯查询) + 3 测试文件 | 本地完成，待推送 |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 6~13 | ⬜ 未开始 | — | — |
+| 7~13 | ⬜ 未开始 | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 632 passed**（Step 4 后 497 + Step 5 新增 135），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 679 passed**（Step 5 后 632 + Step 6 新增 47），ruff check/format 全绿。
 
 ---
 
@@ -312,6 +314,45 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ---
 
+## 5.8 Step 6 详情（Traceability 追溯链 + 变更影响分析）✅
+
+**设计文档**：`docs/v2/step6-traceability-change-impact.md`（含 6 核心原则 + 匹配算法 + 13 门槛 + ADR）。
+
+**目标**：基于 Step 1~5 已落地的追溯链，建立正/反向追溯查询 + 需求变更影响分析（diff 两个 RequirementVersion → 定位受影响 TP/TC）。对应蓝图 `Traceability`。
+
+**6 条核心原则（用户冻结）**：
+1. **纯只读**：只产出 `ChangeImpactReport`（内存 dataclass，不持久化），绝不改实体状态/重生成资产
+2. **RequirementItem 双 hash**（对齐 Step 5 TestCase）：`fingerprint`（identity = sha256(module|type|normalize(statement))，**不含 doc_id**）+ `content_hash`（= statement+fields+rules+permissions+acceptance）
+3. **匹配逻辑**：identity 同→比 content_hash（同=UNCHANGED/异=MODIFIED）；identity 异→相似度兜底（ratio≥阈值=MODIFIED，否则 ADDED/DELETED）
+4. **职责边界**：Step 6 发现影响 / Step 7 AI Review / Step 9 人工确认，不碰状态机/不重生成
+5. **影响清单可解释**：每条变更带 affected_reason + impact_level + recommended_actions
+6. **V1 运行时零修改**
+
+**★ 核心难点解决（用户反馈）**：statement 未改但 FieldSpec 改了（年龄 18~60→18~65）——identity fingerprint 不变但 content_hash 变 → 判 MODIFIED。content_hash 分量比对定位 affected_reason（FIELD_CONSTRAINT_CHANGED / BUSINESS_RULE_CHANGED / PERMISSION_CHANGED / ACCEPTANCE_CHANGED）。
+
+**为何 identity 不含 doc_id**：doc_id 是文档实体身份，非 item 逻辑身份本体；同 doc 多 Version 共用 doc_id（匹配只在同 doc 两版本间），需区分不同文档时在查询范围限定 doc_id。
+
+**交付文件**（`core/v2/`）：
+| 文件 | 职责 |
+|---|---|
+| `traceability.py` | 正向 `trace_forward_from_item`（item→TP→TC→obligation）+ 反向 `trace_backward_from_case`（TC→TP→item→version→doc→source_ref）；复用 resolver.TargetResolver |
+| `change_impact.py` | `ItemMatcher`（identity+content+相似度）+ `ImpactResolver`（追溯+reason+level）+ `analyze_change_impact(v_old, v_new) → ChangeImpactReport` |
+
+**Schema/DDL/Repository 升级**（`schema_version` 5 → 6）：
+- `core/schemas/common.py`：新增 `ChangeType` / `AffectedReason` / `ImpactLevel` 三枚举
+- `core/schemas/requirement.py`：RequirementItem 新增 `fingerprint`（identity）+ `content_hash`（内容）
+- `core/v2/fingerprint.py`：新增 `compute_item_identity_fingerprint` + `compute_item_content_hash` + `_canonical_list`
+- `core/v2/ddl.py`：`requirement_items` 加 2 列 + **普通索引** `idx_items_fingerprint`（★ 非 UNIQUE，同 doc 跨版本 item fingerprint 相同）+ v5→v6 升级分支
+- `core/v2/repository.py`：`save_item` 兜底计算两 hash + `_row_to_item` 反序列化 + 新增 `list_test_points_by_item` / `list_test_cases_by_test_point`
+
+**测试**（全代码，不调 LLM）：`test_traceability.py`(11) + `test_change_impact.py`(19) + `test_step6_acceptance.py`(13) = **43 例**（+ Step1 层回归补断言 4 例）。
+
+**13 条验收门槛：全部 PASSED**（1 旧版本不被修改 / 2 四态识别 / 3 FieldSpec 隐性变更可发现 / 4 追溯影响不漏 / 5 只读无状态变 / 6 identity 不含 doc_id / 7 跨 doc 不可比 / 8 相似度兜底 / 9 affected_reason 细分 / 10 impact_level 代码化 / 11 content 分量比对 / 12 schema=6+索引非UNIQUE / 13 V1 零回归）。
+
+**诚实边界**：相似度阈值（0.6）为启发式，边界 case 可能误判（可配）；impact_level 首批代码规则，更细语义判断留 Step 7 AI；ChangeImpactReport 不持久化（返回值），历史留存/前端可视化留 Step 13；ADDED item 仅建议“需新增覆盖”，不自动触发 Step 3/4/5。
+
+---
+
 ## 6. 期间修复的重要 bug（Step 1 潜伏）
 
 **`INSERT OR REPLACE` + `ON DELETE CASCADE` 陷阱**：`INSERT OR REPLACE` = 先 DELETE 再 INSERT，DELETE 会级联删子表。Step 2 的 `build_requirement_ir` 重存 doc 更新 `latest_version_id` 时，会**级联删光该 doc 的所有 version→item**（若 Step 3 重存 run 更新状态，会删光其所有用例）。
@@ -324,12 +365,12 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=5）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=6）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5 自动升级分支）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6 自动升级分支）
   repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint/TestCase 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
-  fingerprint.py #   TestPoint/TestCase 业务确定性指纹（Step3 LLM + Step4 strategy + Step5 身份/内容双指纹）
+  fingerprint.py #   业务确定性指纹（Step3 LLM + Step4 strategy + Step5 TestCase 身份/内容 + Step6 Item identity/content）
   migrate_v1_to_v2.py
   prompts.py ingestion.py parser.py validator.py ir.py                    # Step 2
   tp_prompts.py tp_generator.py tp_validator.py tp_orchestrator.py        # Step 3
@@ -337,42 +378,45 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
     boundary.py equivalence.py permission.py                              #   三策略
     engine.py deriver.py orchestrator.py                                  #   汇总/派生/编排
   tc_prompts.py test_data_planner.py tc_generator.py tc_validator.py tc_orchestrator.py  # Step 5
-docs/v2/         # 设计文档（step1-data-model.md + step3-testpoint-generator.md + step4-strategy-engine.md + step5-testcase-synthesizer.md + 本文件）
+  traceability.py change_impact.py                                       # Step 6 追溯链 + 变更影响分析
+docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
                  # strategy_boundary/strategy_equivalence/strategy_permission
                  # tp_strategy_deriver/strategy_orchestrator/step4_acceptance
                  # test_data_planner/tc_generator/tc_validator/tc_orchestrator/step5_acceptance
+                 # traceability/change_impact/step6_acceptance
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 632 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 679 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 6「Traceability 追溯链 + 变更影响分析」（未开始，需先讨论）
+## 9. 下一步 = Step 7「AI Reviewer 6 维结构化评审」（未开始，需先讨论）
 
-**预期范围**：基于 Step 1~5 已落地的追溯链（`RequirementDoc → Version → Item → TestPoint → TestCase`，以及 `CoverageObligation → TestPoint`），建立**正/反向追溯查询能力** + **需求变更影响分析**（diff 两个 RequirementVersion 的 items → 沿追溯链定位受影响、需重生/复审的 TestPoint 与 TestCase）。对应蓝图 `Traceability`。
+**预期范围**：消费 Step 5 的 TestCase[] + Step 6 的追溯/影响信息，产出结构化多轮评审 `ReviewReport`（6 维 `ReviewScores` + `ReviewFinding`）。硬指标（覆盖率/重复/Schema 违规/必填缺失）由 Validator 产 `provenance=validator` 的 finding；语义/遗漏由 LLM 产 `provenance=llm` 的 finding。对应蓝图 `AI Reviewer(6维)`。
 
-**已具备的基础**（Step 1~5 已落地的关联表与字段）：
-- `test_point_items`（TestPoint ↔ RequirementItem M:N）、`test_case_points`（TestCase ↔ TestPoint M:N）
-- `obligation_coverage`（覆盖唯一事实源）、`CoverageObligation.item_id`、`TestPoint.obligation_id`
-- `RequirementVersion`（需求版本快照）+ `Run.requirement_version_id`（基于哪个版本生成）
-- TestCase 双指纹（fingerprint 身份 / content_hash 内容）为变更影响判定提供基础
+**已具备的基础**（Step 1 已建表 + 上游产物）：
+- `ReviewReport`（revision + trigger_type，UNIQUE(run_id,revision)）、`ReviewScores`（6 维固定字段）、`ReviewFinding`（多态 target + severity + provenance + auto_fixable）均已建表
+- `resolver.ReferentialValidator`（finding.target 多态引用写入前校验）
+- `obligation_coverage`（覆盖率硬指标数据源）+ Step 6 `ChangeImpactReport`（变更后的复审依据）
+- TestCase 双指纹（fingerprint/content_hash）+ Step 5 validation_errors
 
 **开工前需与用户讨论确认的点**（沿用“先讨论→确认→实现”节奏）：
-- **追溯链查询 API 形态**：正向（item→TP→TC）/ 反向（TC→TP→item→version）的返回结构与粒度
-- **变更影响分析的 diff 策略**：RequirementItem 的“变更”如何判定（按 fingerprint / seq / statement 语义相似 / 字段级 diff）
-- **受影响资产的处置**：标记“需复审” vs 自动重生成 vs 仅报告（与 Step 9 人工确认闭环的边界）
-- **是否建 SQL View**：如 `obligation_test_cases` 等派生查询视图（Step 5 留的口子，非事实源）
-- **跨版本追溯**：旧版本 TestCase 在新版本下的状态标记（“基于旧版，需复审”而非删除）
-- **Run 与多版本**：同一 Doc 多个 Version 的追溯链如何隔离与展示
+- **6 维硬/软分工**：哪些维度代码算（coverage/duplication 硬指标）、哪些交 LLM（accuracy/missing_risk 软判断）
+- **ReviewScores 评分机制**：6 维分值如何计算/归一（硬指标直接算 vs LLM 打分），overall_score 如何加权
+- **多轮评审 revision + trigger_type**：initial / after_optimizer / after_human_edit 的触发时机（与 Step 8/9 衔接）
+- **finding.target 多态**：指向 TestCase / TestPoint / Obligation / RequirementItem 的写入校验（复用 ReferentialValidator）
+- **auto_fixable finding 与 Step 8 Optimizer 的边界**：Step 7 只标记还是尝试修复
+- **变更后复审**：如何消费 Step 6 ChangeImpactReport 对受影响资产优先复审
+- **TestCase 状态机**：VALIDATED → REVIEWED 的转移触发（Step 5 已留 VALIDATED 态）
 
 ## 10. 协作约定（重要）
 

@@ -7,13 +7,16 @@ import pytest
 from pydantic import ValidationError
 
 from core.schemas import (
+    AffectedReason,
     BusinessRule,
+    ChangeType,
     CoverageObligation,
     DataType,
     ExpressionType,
     FieldSpec,
     GenerationConfig,
     GenerationScope,
+    ImpactLevel,
     ObligationStatus,
     PermissionRule,
     Priority,
@@ -367,3 +370,28 @@ class TestRoundTrip:
         restored = RequirementItem.model_validate(item.model_dump(mode="json"))
         assert restored.fields[0].data_type == DataType.PHONE
         assert restored.rules[0].expression_type == ExpressionType.COMPARISON
+
+
+# ============================================================
+# Step 6：变更影响分析枚举 + RequirementItem 双 hash 字段
+# ============================================================
+
+
+class TestStep6Enums:
+    def test_change_type_values(self):
+        assert {c.value for c in ChangeType} == {"unchanged", "modified", "added", "deleted"}
+
+    def test_affected_reason_values(self):
+        assert AffectedReason.FIELD_CONSTRAINT_CHANGED.value == "field_constraint_changed"
+        assert AffectedReason.PERMISSION_CHANGED.value == "permission_changed"
+        assert AffectedReason.REQUIREMENT_ADDED.value == "requirement_added"
+
+    def test_impact_level_values(self):
+        assert {lv.value for lv in ImpactLevel} == {"high", "medium", "low"}
+
+    def test_requirement_item_hash_fields_optional(self):
+        """fingerprint/content_hash 默认 None（Repository 入库时兜底计算）"""
+        item = RequirementItem(
+            version_id=new_ulid(), seq=1, type=RequirementItemType.FUNCTION, module="m", statement="s"
+        )
+        assert item.fingerprint is None and item.content_hash is None

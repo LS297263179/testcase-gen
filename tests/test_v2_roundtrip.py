@@ -188,6 +188,10 @@ def test_requirement_item_all_fields(chain):
     assert got.priority_hint == Priority.P2
     assert got.confidence == 0.9 and got.confidence_level == ConfidenceLevel.HIGH
     assert got.provenance == Provenance.STRATEGY and got.status == EntityStatus.CONFIRMED
+    # Step 6：双 hash 入库时兜底计算 + 往返保真
+    assert got.fingerprint and got.fingerprint.startswith("ri_")
+    assert got.content_hash and got.content_hash.startswith("rich_")
+    assert got.fingerprint == item.fingerprint and got.content_hash == item.content_hash
 
 
 def test_testpoint_all_fields(chain):

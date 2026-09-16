@@ -325,6 +325,42 @@ class ReviewTriggerType(StrEnum):
     MANUAL = "manual"
 
 
+class ChangeType(StrEnum):
+    """Step 6 变更影响分析：RequirementItem 跨版本的变化类型。
+
+    由 ItemMatcher 据 identity fingerprint + content_hash + 相似度判定：
+      - identity 同 + content 同 → UNCHANGED
+      - identity 同 + content 异 → MODIFIED
+      - identity 异 + 相似度≥阈值 → MODIFIED（identity 漂移但语义相近）
+      - 仅新版本有 → ADDED；仅旧版本有 → DELETED
+    """
+
+    UNCHANGED = "unchanged"
+    MODIFIED = "modified"
+    ADDED = "added"
+    DELETED = "deleted"
+
+
+class AffectedReason(StrEnum):
+    """Step 6 影响原因：受影响测试资产为何受影响（可解释性）。"""
+
+    REQUIREMENT_MODIFIED = "requirement_modified"
+    REQUIREMENT_DELETED = "requirement_deleted"
+    REQUIREMENT_ADDED = "requirement_added"
+    FIELD_CONSTRAINT_CHANGED = "field_constraint_changed"
+    BUSINESS_RULE_CHANGED = "business_rule_changed"
+    PERMISSION_CHANGED = "permission_changed"
+    ACCEPTANCE_CHANGED = "acceptance_changed"
+
+
+class ImpactLevel(StrEnum):
+    """Step 6 影响等级（首批代码规则判定；更细语义判断留给 Step 7 AI）。"""
+
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
 class RequirementItemType(StrEnum):
     """原子需求项类型"""
 

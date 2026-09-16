@@ -344,7 +344,8 @@ def test_11_v1_untouched_and_schema_v5(v2_db):
     from core.generator import ANALYSIS_PROMPT, MODULE_PROMPT, SYSTEM_PROMPT
 
     assert ANALYSIS_PROMPT and MODULE_PROMPT and SYSTEM_PROMPT
-    assert get_schema_version() == 5
+    # Step 5 要求 schema 至少升级到 5；Step 6+ 会继续递增，故用 >= 保证里程碑测试对未来鲁棒
+    assert get_schema_version() >= 5
 
 
 # ============================================================

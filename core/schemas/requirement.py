@@ -148,6 +148,13 @@ class RequirementItem(EntityBase):
     confidence_level: ConfidenceLevel = ConfidenceLevel.HIGH
     provenance: Provenance = Provenance.LLM
     status: EntityStatus = EntityStatus.DRAFT
+    # Step 6 新增：双 hash（身份/内容分离，对齐 TestCase 思路）
+    # fingerprint（identity）：判“是不是同一项” = sha256(module|type|normalize(statement))，不含 doc_id
+    #   → 同 doc 跨版本的同一 item fingerprint 相同（变更影响分析的匹配键）；Repository 入库前兜底计算
+    fingerprint: str | None = None
+    # content_hash（内容）：判“内容变没变” = sha256(normalize(statement)|fields|rules|permissions|acceptance)
+    #   → identity 同但 content_hash 异 = MODIFIED（解决“statement 未改但 FieldSpec 18~60→18~65”的难点）
+    content_hash: str | None = None
 
     model_config = ConfigDict(extra="forbid")
 

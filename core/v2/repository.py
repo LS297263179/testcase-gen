@@ -30,6 +30,8 @@ from core.schemas import (
 )
 from core.v2.db import v2_conn, v2_read_conn
 from core.v2.fingerprint import (
+    compute_item_content_hash,
+    compute_item_identity_fingerprint,
     compute_strategy_testpoint_fingerprint,
     compute_testcase_content_hash,
     compute_testcase_fingerprint,
@@ -217,7 +219,23 @@ def list_versions(doc_id: str) -> list[RequirementVersion]:
 
 
 def save_item(item: RequirementItem) -> None:
-    """保存需求项及其 FieldSpec 子表（先删后插，子表 id 为 DB 代理键）"""
+    """保存需求项及其 FieldSpec 子表（先删后插，子表 id 为 DB 代理键）。
+
+    Step 6：入库前兜底计算 fingerprint（identity）与 content_hash（内容），
+    为变更影响分析提供跨版本匹配键与内容变化判定依据。
+    """
+    if not item.fingerprint:
+        item.fingerprint = compute_item_identity_fingerprint(
+            module=item.module, type=_en(item.type) or "", statement=item.statement
+        )
+    if not item.content_hash:
+        item.content_hash = compute_item_content_hash(
+            statement=item.statement,
+            fields=item.fields,
+            rules=item.rules,
+            permissions=item.permissions,
+            acceptance_criteria=item.acceptance_criteria,
+        )
     with v2_conn() as conn:
         conn.execute(
             _upsert(
@@ -238,6 +256,8 @@ def save_item(item: RequirementItem) -> None:
                     "confidence_level",
                     "provenance",
                     "status",
+                    "fingerprint",
+                    "content_hash",
                     "created_at",
                     "updated_at",
                     "schema_version",
@@ -259,6 +279,8 @@ def save_item(item: RequirementItem) -> None:
                 _en(item.confidence_level),
                 _en(item.provenance),
                 _en(item.status),
+                item.fingerprint,
+                item.content_hash,
                 _dt(item.created_at),
                 _dt(item.updated_at),
                 item.schema_version,
@@ -314,6 +336,8 @@ def _row_to_item(row: sqlite3.Row, fields: list[FieldSpec]) -> RequirementItem:
             "confidence_level": row["confidence_level"],
             "provenance": row["provenance"],
             "status": row["status"],
+            "fingerprint": row["fingerprint"],
+            "content_hash": row["content_hash"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
             "schema_version": row["schema_version"],
@@ -610,6 +634,26 @@ def list_test_points_by_run(run_id: str) -> list[TestPoint]:
         return result
 
 
+def list_test_points_by_item(item_id: str) -> list[TestPoint]:
+    """按 RequirementItem 反查关联的 TestPoint（Step 6 追溯：item→TP，经 test_point_items）。"""
+    with v2_read_conn() as conn:
+        tp_ids = [
+            r["test_point_id"]
+            for r in conn.execute(
+                "SELECT test_point_id FROM test_point_items WHERE requirement_item_id = ?", (item_id,)
+            ).fetchall()
+        ]
+        result = []
+        for tp_id in tp_ids:
+            row = conn.execute("SELECT * FROM test_points WHERE id = ?", (tp_id,)).fetchone()
+            if row:
+                links = conn.execute(
+                    "SELECT requirement_item_id FROM test_point_items WHERE test_point_id = ?", (tp_id,)
+                ).fetchall()
+                result.append(_row_to_test_point(row, [r["requirement_item_id"] for r in links]))
+        return result
+
+
 # ============================================================
 # 测试用例（+ 测试点链接）
 # ============================================================
@@ -780,6 +824,26 @@ def list_test_cases_by_version(version_id: str) -> list[TestCase]:
                 "SELECT test_point_id FROM test_case_points WHERE test_case_id = ?", (row["id"],)
             ).fetchall()
             result.append(_row_to_test_case(row, [r["test_point_id"] for r in links]))
+        return result
+
+
+def list_test_cases_by_test_point(tp_id: str) -> list[TestCase]:
+    """按 TestPoint 反查关联的 TestCase（Step 6 追溯：TP→TC，经 test_case_points）。"""
+    with v2_read_conn() as conn:
+        tc_ids = [
+            r["test_case_id"]
+            for r in conn.execute(
+                "SELECT test_case_id FROM test_case_points WHERE test_point_id = ?", (tp_id,)
+            ).fetchall()
+        ]
+        result = []
+        for tc_id in tc_ids:
+            row = conn.execute("SELECT * FROM test_cases WHERE id = ?", (tc_id,)).fetchone()
+            if row:
+                links = conn.execute(
+                    "SELECT test_point_id FROM test_case_points WHERE test_case_id = ?", (tc_id,)
+                ).fetchall()
+                result.append(_row_to_test_case(row, [r["test_point_id"] for r in links]))
         return result
 
 
