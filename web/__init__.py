@@ -6,6 +6,7 @@ from pathlib import Path
 from flask import Flask, jsonify, render_template, request, session
 
 from core import config, db
+from core.v2.bootstrap import ensure_v2_ready
 from web.utils import get_real_ip
 
 # 统一日志配置
@@ -28,6 +29,32 @@ app.secret_key = config.get_secret_key()
 # 初始化数据库
 db.init_db()
 app.config["MAX_CONTENT_LENGTH"] = 32 * 1024 * 1024  # 32MB（支持多张图片）
+
+
+# ============================================================
+# V2 初始化（失败隔离，保护 V1；仅留状态，API 行为全部留 10.3）
+# ============================================================
+
+
+def _bootstrap_v2(flask_app) -> bool:
+    """初始化 V2 并隔离故障（V1 不受影响）。
+
+    bootstrap 负责正确初始化、失败即 raise；本函数负责 try/except 隔离，保护 V1。
+    返回 v2_ready 状态并写入 flask_app.config["V2_READY"]，供 10.3 决定 /api/v2/* 行为。
+    ★ 10.1 只留状态：不注册 V2 blueprint、不加任何 /api/v2/* 路由或 503 handler（全部留 10.3）。
+    """
+    try:
+        ensure_v2_ready()
+        flask_app.config["V2_READY"] = True
+        logger.info("V2 初始化成功，V2 功能已启用")
+        return True
+    except Exception:
+        flask_app.config["V2_READY"] = False
+        logger.exception("V2 初始化失败，V2 功能已隔离，V1 不受影响（/api/v2/* 将在 10.3 统一返回 503）")
+        return False
+
+
+V2_READY = _bootstrap_v2(app)
 
 
 # ============================================================
