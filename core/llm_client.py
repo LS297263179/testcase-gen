@@ -140,8 +140,9 @@ class LLMClient:
             ],
             "stream": True,
         }
-        if self.enable_thinking:
-            kwargs["extra_body"] = {"enable_thinking": True}
+        # 显式下发 enable_thinking（True/False 都发）：部分网关/模型默认开启思考，
+        # 若关闭时不发该参数，模型会把全部 token 用于 reasoning_content 而正文为空。
+        kwargs["extra_body"] = {"enable_thinking": bool(self.enable_thinking)}
 
         for chunk in self.client.chat.completions.create(**kwargs):
             if chunk.choices and chunk.choices[0].delta.content:
@@ -246,8 +247,9 @@ class LLMClient:
                 {"role": "user", "content": content},
             ],
         }
-        if self.enable_thinking:
-            kwargs["extra_body"] = {"enable_thinking": True}
+        # 显式下发 enable_thinking（True/False 都发）：部分网关/模型默认开启思考，
+        # 若关闭时不发该参数，模型会把全部 token 用于 reasoning_content 而正文为空。
+        kwargs["extra_body"] = {"enable_thinking": bool(self.enable_thinking)}
 
         response = self.client.chat.completions.create(**kwargs)
         msg = response.choices[0].message
