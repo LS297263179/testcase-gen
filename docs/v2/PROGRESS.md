@@ -102,11 +102,11 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | ├ 10.3 V2 Web API | ✅ 完成+推送 | `web/v2_service.py` + `web/v2_routes.py`（12 个 /api/v2/* 端点，复用 V1 session 鉴权 + V2_READY gating + CSRF） | `2ff8c9d` |
 | ├ 10.3.1 补 GET /api/v2/runs | ✅ 完成+推送 | `repo.list_runs_by_user` + `service.list_runs` + `GET /api/v2/runs`（端点 12→13，MVP：仅本人 Run、created_at DESC、默认 50；title 取自 Doc） | `cf15866` |
 | ├ 10.4 V2 前端接线 | ✅ 完成+推送 | `web/__init__.py` 加 /v2 路由 + `templates/v2.html` + `static/v2_app.js` + `static/v2_style.css`（独立页面，复用 V1 认证，不改 V1 三件套）；修复乐观锁时间戳 409 缺陷 + 3 回归 | `cf15866` |
-| ├ 10.5 真实 LLM Run | ⬜ 未开始 | `scripts/v2_real_run.py` CLI + 真实 LLM 全链路（不 mock） | — |
+| ├ 10.5 真实 LLM Run | ✅ 完成（待推送） | `scripts/v2_real_run.py` CLI（483 行）+ `examples/v2_sample_requirement.md`（订单退款场景）+ `tests/test_v2_real_run_script.py`（20 smoke）；真实跑通 Step 2→8（run_id=`01M2QBWABYW3VTNYK5BBX2WDN4`，9m26s，157 LLM calls，28 items / 174 TPs / 174 TCs / 25 obligations，review overall=85.9，optimizer archived=24）；output JSON 无 api_key；修复 Windows GBK emoji 编码 bug | — |
 | └ 10.6~10.7 E2E 验证 + 运行数据 | ⬜ 未开始 | `test_step10_acceptance` + `docs/v2/step10-real-run-record.md` + output JSON | — |
 | 11~13 | ⬜ 未开始（顺序待 Step 10 完成后路线评审） | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 942 passed**（Step 10.3 后 931 + 10.3.1/10.4 新增 11：Run 列表 6 + /v2 页面路由 2 + 乐观锁时间戳回归 3），schema_version=10，ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 962 passed**（Step 10.4 后 942 + 10.5 新增 20：CLI smoke），schema_version=10，ruff check/format 全绿。
 
 ---
 

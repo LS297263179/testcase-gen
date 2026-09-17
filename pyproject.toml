@@ -56,7 +56,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["core", "web"]
+known-first-party = ["core", "web", "scripts"]
 
 [tool.ruff.lint.per-file-ignores]
 # Blueprint 导入必须在 app 创建之后注册（Flask 标准写法），非无意放置
