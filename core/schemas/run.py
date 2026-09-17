@@ -50,5 +50,7 @@ class Run(EntityBase):
     status: RunStatus = RunStatus.INGESTING
     counts: RunCounts = Field(default_factory=RunCounts)
     legacy_session_id: int | None = None  # 迁移自 V1 时记录原 session.id
+    failed_step: str | None = None  # Step 10.2 Runtime 失败定位：ir/testpoints/strategy/testcases/review/optimizer
+    error_message: str | None = None  # Step 10.2 Runtime 失败原因（异常摘要）
 
     model_config = ConfigDict(extra="forbid")

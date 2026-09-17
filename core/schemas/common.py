@@ -312,6 +312,7 @@ class RunStatus(StrEnum):
     STRATEGIZING = "strategizing"
     GENERATING = "generating"
     REVIEWING = "reviewing"
+    OPTIMIZING = "optimizing"  # Step 10.2 Runtime：Step 8 去重优化阶段
     DONE = "done"
     FAILED = "failed"
 

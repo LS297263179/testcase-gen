@@ -115,6 +115,7 @@ def synthesize_test_cases(
     *,
     run_id: str,
     version_id: str | None = None,
+    skip_run_status_update: bool = False,
 ) -> SynthesisResult:
     """消费合流后的 TestPoint[]，1:1 合成 TestCase 并持久化（复用 Step 3/4 的 Run）。
 
@@ -142,15 +143,17 @@ def synthesize_test_cases(
         )
         version_id = run.requirement_version_id
 
-    run.status = RunStatus.GENERATING
-    repo.save_run(run)
+    if not skip_run_status_update:
+        run.status = RunStatus.GENERATING
+        repo.save_run(run)
     _augment_generation_config(run)
 
     # 2. 拉合流 TestPoint[]
     points = repo.list_test_points_by_run(run_id)
     if not points:
-        run.status = RunStatus.DONE
-        repo.save_run(run)
+        if not skip_run_status_update:
+            run.status = RunStatus.DONE
+            repo.save_run(run)
         return SynthesisResult(
             run_id=run_id, version_id=version_id, issues=[f"Run {run_id} 无 TestPoint，无法合成用例（请先跑 Step 3/4）"]
         )
@@ -209,15 +212,16 @@ def synthesize_test_cases(
     for tc in cases:
         repo.save_test_case(tc)
 
-    # 6. Run 终态 + counts.cases
-    run.status = RunStatus.DONE
-    run.counts = RunCounts(
-        items=run.counts.items or len(items),
-        points=run.counts.points or len(points),
-        obligations=run.counts.obligations or len(obligations),
-        cases=len(cases),
-    )
-    repo.save_run(run)
+    # 6. Run 终态 + counts.cases（skip 时由 Runtime 独家写 —— P0-2）
+    if not skip_run_status_update:
+        run.status = RunStatus.DONE
+        run.counts = RunCounts(
+            items=run.counts.items or len(items),
+            points=run.counts.points or len(points),
+            obligations=run.counts.obligations or len(obligations),
+            cases=len(cases),
+        )
+        repo.save_run(run)
 
     # 7. 统计
     validated = sum(1 for c in cases if c.status == TestCaseStatus.VALIDATED)
@@ -268,6 +272,8 @@ def generate_test_cases_full(
     user_id: str | None = None,
     generation_config: GenerationConfig | None = None,
     phase_b_batch_threshold: int | None = None,
+    run_id: str | None = None,
+    skip_run_status_update: bool = False,
 ) -> FullSynthesisResult:
     """Step 3（LLM 测试点）+ Step 4（策略引擎）+ Step 5（用例合成）一站式入口。
 
@@ -283,12 +289,16 @@ def generate_test_cases_full(
         user_id=user_id,
         generation_config=generation_config,
         phase_b_batch_threshold=phase_b_batch_threshold,
+        run_id=run_id,
+        skip_run_status_update=skip_run_status_update,
     )
     if not step34.run_id:
         return FullSynthesisResult(run_id="", version_id=version_id, issues=step34.issues)
 
     # Step 5（复用同一 Run）
-    step5 = synthesize_test_cases(client, run_id=step34.run_id, version_id=version_id)
+    step5 = synthesize_test_cases(
+        client, run_id=step34.run_id, version_id=version_id, skip_run_status_update=skip_run_status_update
+    )
 
     logger.info(
         "Step 3+4+5 一站式完成: run=%s points=%d obligations=%d cases=%d obligation_coverage=%.2f",

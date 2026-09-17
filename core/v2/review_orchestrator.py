@@ -67,6 +67,7 @@ def review_test_cases(
     run_id: str,
     revision: int | None = None,
     trigger_type: ReviewTriggerType = ReviewTriggerType.INITIAL,
+    skip_run_status_update: bool = False,
 ) -> ReviewResult:
     """评审某 run 的 VALIDATED 用例 → 结构化 ReviewReport（多轮 revision）+ TestCase 转 REVIEWED。
 
@@ -86,16 +87,18 @@ def review_test_cases(
     run = repo.get_run(run_id)
     if run is None:
         return ReviewResult(run_id=run_id, issues=[f"Run 不存在: {run_id}"])
-    run.status = RunStatus.REVIEWING
-    repo.save_run(run)
+    if not skip_run_status_update:
+        run.status = RunStatus.REVIEWING
+        repo.save_run(run)
     _augment_reviewer_version(run)
 
     # 2. 拉 VALIDATED / RE_REVIEW_REQUIRED 用例（Step 9 人工编辑后重评审）
     all_cases = repo.list_test_cases(run_id)
     validated = [c for c in all_cases if c.status in (TestCaseStatus.VALIDATED, TestCaseStatus.RE_REVIEW_REQUIRED)]
     if not validated:
-        run.status = RunStatus.DONE
-        repo.save_run(run)
+        if not skip_run_status_update:
+            run.status = RunStatus.DONE
+            repo.save_run(run)
         return ReviewResult(
             run_id=run_id,
             reviewed_count=0,
@@ -172,9 +175,10 @@ def review_test_cases(
         c.transition_to(TestCaseStatus.REVIEWED)
         repo.update_test_case_status(c.id, c.status.value)
 
-    # 9. Run 终态
-    run.status = RunStatus.DONE
-    repo.save_run(run)
+    # 9. Run 终态（skip 时由 Runtime 独家控制 —— P0-2）
+    if not skip_run_status_update:
+        run.status = RunStatus.DONE
+        repo.save_run(run)
 
     logger.info(
         "Step 7 评审完成: run=%s rev=%d cases=%d overall=%.1f findings=%d(validator=%d llm=%d)",

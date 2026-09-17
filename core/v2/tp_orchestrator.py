@@ -106,6 +106,8 @@ def generate_test_points(
     user_id: str | None = None,
     generation_config: GenerationConfig | None = None,
     phase_b_batch_threshold: int | None = None,
+    run_id: str | None = None,
+    skip_run_status_update: bool = False,
 ) -> GenerationResult:
     """Step 3 顶层入口：给定 RequirementVersion，两阶段生成 TestPoint 并持久化。
 
@@ -149,21 +151,27 @@ def generate_test_points(
             )
         user_id = doc.user_id
 
-    # 3. 建 GenerationConfig + Run
-    cfg = generation_config or _build_generation_config()
-    repo.save_generation_config(cfg)
-    run = Run(
-        user_id=user_id,
-        doc_id=version.doc_id,
-        requirement_version_id=version_id,
-        generation_config_id=cfg.id,
-        status=RunStatus.PARSING,
-    )
-    repo.save_run(run)
+    # 3. 建 GenerationConfig + Run（run_id 给定则复用 Runtime 创建的唯一 Run —— P0-1）
+    if run_id is not None:
+        run = repo.get_run(run_id)
+        if run is None:
+            return GenerationResult(run_id=run_id, version_id=version_id, issues=[f"Run 不存在: {run_id}"])
+    else:
+        cfg = generation_config or _build_generation_config()
+        repo.save_generation_config(cfg)
+        run = Run(
+            user_id=user_id,
+            doc_id=version.doc_id,
+            requirement_version_id=version_id,
+            generation_config_id=cfg.id,
+            status=RunStatus.PARSING,
+        )
+        repo.save_run(run)
 
-    # 4. Phase A：逐 item 生成
-    run.status = RunStatus.GENERATING
-    repo.save_run(run)
+    # 4. Phase A：逐 item 生成（skip=True 时状态由 Runtime 独家控制 —— P0-2）
+    if not skip_run_status_update:
+        run.status = RunStatus.GENERATING
+        repo.save_run(run)
 
     phase_a_points: list[TestPoint] = []
     phase_a_stats = PhaseStats()
@@ -210,11 +218,12 @@ def generate_test_points(
         # run_id 不参与 fingerprint 计算（同 version 下不同 run 应视为同一业务身份，幂等复用）
         repo.save_test_point(tp)
 
-    # 8. 覆盖率报告 + Run 终态
+    # 8. 覆盖率报告 + Run 终态（skip 时 status/counts 由 Runtime 独家写 —— P0-2）
     coverage = build_coverage_report(deduped, items)
-    run.status = RunStatus.DONE
-    run.counts = RunCounts(items=len(items), points=len(deduped))
-    repo.save_run(run)
+    if not skip_run_status_update:
+        run.status = RunStatus.DONE
+        run.counts = RunCounts(items=len(items), points=len(deduped))
+        repo.save_run(run)
 
     logger.info(
         "Step 3 测试点生成完成: version=%s run=%s items=%d points=%d (A=%d B=%d 去重=%d) 覆盖率=%.2f",

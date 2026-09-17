@@ -298,15 +298,18 @@ def test_run_all_fields(chain):
         requirement_version_id=chain.ver,
         generation_config_id=chain.cfg,
         strategy_profile="full-coverage",
-        status=RunStatus.DONE,
+        status=RunStatus.FAILED,
         counts=RunCounts(items=3, points=12, cases=40, obligations=8),
         legacy_session_id=99,
+        failed_step="testcases",
+        error_message="RuntimeError: boom",
     )
     repo.save_run(run)
     got = repo.get_run(run.id)
-    assert got.strategy_profile == "full-coverage" and got.status == RunStatus.DONE
+    assert got.strategy_profile == "full-coverage" and got.status == RunStatus.FAILED
     assert (got.counts.items, got.counts.points, got.counts.cases, got.counts.obligations) == (3, 12, 40, 8)
     assert got.legacy_session_id == 99
+    assert got.failed_step == "testcases" and got.error_message == "RuntimeError: boom"
     assert got.requirement_version_id == chain.ver and got.generation_config_id == chain.cfg
 
 

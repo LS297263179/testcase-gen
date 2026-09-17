@@ -1,4 +1,4 @@
-"""V2 数据库 DDL - 规范化表结构（schema_version=9）。
+"""V2 数据库 DDL - 规范化表结构（schema_version=10）。
 
 对应 docs/v2/step1-data-model.md §8。要点：
   - 独立 data_v2.db，ULID(TEXT) 主键，users 自带 ULID + legacy_int_id 映射
@@ -17,7 +17,7 @@ from core.v2.db import v2_conn
 
 logger = logging.getLogger("v2.ddl")
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # V2 全量表结构（幂等：IF NOT EXISTS）
 V2_SCHEMA_SQL = """
@@ -138,6 +138,8 @@ CREATE TABLE IF NOT EXISTS runs (
     status                 TEXT NOT NULL DEFAULT 'ingesting',
     counts_json            TEXT NOT NULL DEFAULT '{}',
     legacy_session_id      INTEGER,
+    failed_step            TEXT,
+    error_message          TEXT,
     created_at             TEXT NOT NULL,
     updated_at             TEXT NOT NULL,
     schema_version         INTEGER NOT NULL DEFAULT 2
@@ -575,6 +577,21 @@ def _migrate_v6_to_v7(conn: sqlite3.Connection) -> None:
         logger.info("schema v6→v7: review_findings 新增列 detail_json")
 
 
+def _migrate_v9_to_v10(conn: sqlite3.Connection) -> None:
+    """v9 → v10：Step 10.2 引入 runs.failed_step + runs.error_message（Runtime 失败定位）。
+
+    新建库 CREATE TABLE 已含两列，无需进入本分支。
+    旧库无历史失败数据，两列可空，仅补列即可（无需回填）。
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(runs)").fetchall()}
+    if "failed_step" not in cols:
+        conn.execute("ALTER TABLE runs ADD COLUMN failed_step TEXT")
+        logger.info("schema v9→v10: runs 新增列 failed_step")
+    if "error_message" not in cols:
+        conn.execute("ALTER TABLE runs ADD COLUMN error_message TEXT")
+        logger.info("schema v9→v10: runs 新增列 error_message")
+
+
 def create_v2_schema() -> None:
     """在 V2 数据库中创建全部表（幂等）并写入 schema_version；检测到旧版本自动升级"""
     with v2_conn() as conn:
@@ -602,6 +619,8 @@ def create_v2_schema() -> None:
             _migrate_v7_to_v8(conn)
         if 0 < existing < 9:
             _migrate_v8_to_v9(conn)
+        if 0 < existing < 10:
+            _migrate_v9_to_v10(conn)
         # 3. 写入当前 schema_version
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?) "

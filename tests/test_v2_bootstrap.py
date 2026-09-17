@@ -164,9 +164,9 @@ def _business_snapshot() -> dict:
 
 
 def test_01_fresh_init(v2_tmp_db):
-    """全新库：ensure_v2_ready() 不抛，schema_version=9，关键表/索引齐，foreign_keys=ON。"""
+    """全新库：ensure_v2_ready() 不抛，schema_version=10，关键表/索引齐，foreign_keys=ON。"""
     ensure_v2_ready()
-    assert SCHEMA_VERSION == 9
+    assert SCHEMA_VERSION == 10
     assert get_schema_version() == SCHEMA_VERSION
     assert verify_v2_schema() == []
     assert _read_master("table") >= CRITICAL_TABLES

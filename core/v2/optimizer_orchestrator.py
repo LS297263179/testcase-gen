@@ -45,7 +45,7 @@ class OptimizeResult:
     issues: list[str] = field(default_factory=list)
 
 
-def optimize_duplicates(client, *, run_id: str) -> OptimizeResult:
+def optimize_duplicates(client, *, run_id: str, skip_run_status_update: bool = False) -> OptimizeResult:
     """Step 8 顶层入口：去重归档 + 有条件触发 after_optimizer 重评审。
 
     流程（用户冻结版）：
@@ -85,6 +85,7 @@ def optimize_duplicates(client, *, run_id: str) -> OptimizeResult:
             client,
             run_id=run_id,
             trigger_type=ReviewTriggerType.AFTER_OPTIMIZER,
+            skip_run_status_update=skip_run_status_update,
         )
         # review_orchestrator 内部自动 revision+1（get_latest_review_report+1）
     else:
@@ -95,11 +96,12 @@ def optimize_duplicates(client, *, run_id: str) -> OptimizeResult:
             optimizer_result.skipped_findings,
         )
 
-    # 4. Run 终态
-    run = repo.get_run(run_id)
-    if run is not None:
-        run.status = RunStatus.DONE
-        repo.save_run(run)
+    # 4. Run 终态（skip 时由 Runtime 独家控制 —— P0-2）
+    if not skip_run_status_update:
+        run = repo.get_run(run_id)
+        if run is not None:
+            run.status = RunStatus.DONE
+            repo.save_run(run)
 
     logger.info(
         "Step 8 优化完成: run=%s archived=%d skipped=%d review_triggered=%s",

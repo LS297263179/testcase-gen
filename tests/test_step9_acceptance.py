@@ -371,9 +371,9 @@ class TestGate18BatchInterface:
 
 
 class TestGate19SchemaAndV1:
-    def test_schema_version_9(self, v2_db):
-        """门槛19a: schema_version=9（test_case_revisions 表生效）。"""
-        assert ddl.get_schema_version() == 9
+    def test_schema_version_10(self, v2_db):
+        """门槛19a: schema_version=10（Step 10.2 升到 10；test_case_revisions 表生效）。"""
+        assert ddl.get_schema_version() == 10
 
     def test_revisions_table_exists(self, v2_db):
         """门槛19b: test_case_revisions 表存在。"""

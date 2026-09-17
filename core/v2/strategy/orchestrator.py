@@ -75,7 +75,7 @@ class FullGenerationResult:
 # ============================================================
 
 
-def apply_strategy_engine(run_id: str, version_id: str) -> StrategyResult:
+def apply_strategy_engine(run_id: str, version_id: str, skip_run_status_update: bool = False) -> StrategyResult:
     """对已有 Run 应用策略引擎：派生 obligations + strategy TestPoints + add_coverage 登记。
 
     流程：
@@ -103,15 +103,17 @@ def apply_strategy_engine(run_id: str, version_id: str) -> StrategyResult:
         )
         version_id = run.requirement_version_id
 
-    # 改 status=STRATEGIZING
-    run.status = RunStatus.STRATEGIZING
-    repo.save_run(run)
+    # 改 status=STRATEGIZING（skip 时由 Runtime 独家控制 —— P0-2）
+    if not skip_run_status_update:
+        run.status = RunStatus.STRATEGIZING
+        repo.save_run(run)
 
     # 2. 拉 items
     items: list[RequirementItem] = repo.list_items(version_id)
     if not items:
-        run.status = RunStatus.DONE
-        repo.save_run(run)
+        if not skip_run_status_update:
+            run.status = RunStatus.DONE
+            repo.save_run(run)
         return StrategyResult(
             run_id=run_id,
             version_id=version_id,
@@ -155,16 +157,17 @@ def apply_strategy_engine(run_id: str, version_id: str) -> StrategyResult:
     # 9. RequirementItem Coverage（软指标，仅 strategy 覆盖部分）
     item_coverage = build_coverage_report(derive_result.points, items)
 
-    # 10. 更新 Run.status=DONE + counts 累加
-    run.status = RunStatus.DONE
-    # counts 累加：原有 points 数 + 新增 strategy points 数；obligations 数
-    existing_points = len(repo.list_test_points_by_run(run_id))
-    run.counts = RunCounts(
-        items=len(items),
-        points=existing_points,  # 已含 Step 3 LLM + Step 4 strategy（因为 list_by_run 查的是 DB 现状）
-        obligations=len(obligations),
-    )
-    repo.save_run(run)
+    # 10. 更新 Run.status=DONE + counts 累加（skip 时由 Runtime 独家写 —— P0-2）
+    if not skip_run_status_update:
+        run.status = RunStatus.DONE
+        # counts 累加：原有 points 数 + 新增 strategy points 数；obligations 数
+        existing_points = len(repo.list_test_points_by_run(run_id))
+        run.counts = RunCounts(
+            items=len(items),
+            points=existing_points,  # 已含 Step 3 LLM + Step 4 strategy（因为 list_by_run 查的是 DB 现状）
+            obligations=len(obligations),
+        )
+        repo.save_run(run)
 
     logger.info(
         "Step 4 策略引擎完成: run=%s version=%s items=%d obligations=%d strategy_points=%d "
@@ -201,6 +204,8 @@ def generate_test_points_full(
     user_id: str | None = None,
     generation_config=None,
     phase_b_batch_threshold: int | None = None,
+    run_id: str | None = None,
+    skip_run_status_update: bool = False,
 ) -> FullGenerationResult:
     """Step 3（LLM 派生）+ Step 4（策略引擎）一站式入口。
 
@@ -220,6 +225,8 @@ def generate_test_points_full(
         user_id=user_id,
         generation_config=generation_config,
         phase_b_batch_threshold=phase_b_batch_threshold,
+        run_id=run_id,
+        skip_run_status_update=skip_run_status_update,
     )
     if not step3_result.run_id:
         # Step 3 失败（version 不存在 / 无 items），直接返回
@@ -230,7 +237,7 @@ def generate_test_points_full(
         )
 
     # Step 4：策略引擎（复用 Step 3 的 Run）
-    step4_result = apply_strategy_engine(step3_result.run_id, version_id)
+    step4_result = apply_strategy_engine(step3_result.run_id, version_id, skip_run_status_update=skip_run_status_update)
 
     # 合流 all_points（从 DB 查，保证含 Step 3 + Step 4 全部）
     all_points = repo.list_test_points_by_run(step3_result.run_id)
