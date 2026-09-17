@@ -25,7 +25,9 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~8 已完成并推送（三方同步至 `909d6dd`）；Step 9「人工编辑/确认闭环」已实现并本地验证（875 passed / ruff 全绿 / schema_version=9，待用户确认后推送）；项目已形成「AI + 代码 + 人」三者协同的完整测试设计流程（生成→验证→评审→优化→人工修改→再验证→再评审）；下一步 = Step 10「Preference Learning」（未开始，需先讨论方案）。**
+**当前进度（截至 2026-09）：Step 1~9 已全部完成并推送（三方同步 origin=gitee=`d9edbbb`）；全量 875 passed，ruff 全绿，schema_version=9，独立 data_v2.db；项目已形成「AI + 代码 + 人」三者协同的完整测试设计流程（生成→验证→评审→优化→人工修改→再验证→再评审）。下一步 = Step 10「V2 Runtime + Productization」（蓝图已调整：原 Step 10 Preference Learning 顺延为 Step 13；计划已批准，含用户冻结的 4 点修正 + 1 安全护栏，待实现）。**
+
+**★ Step 9 后真实项目状态审计结论（Step 10 的由来）**：V2 后端代码完整但**完全未产品化**——`data/data_v2.db` 是空库（Tables: []，从未运行 create_v2_schema）、`web/` 目录 0 处引用 `core.v2`（前端纯 V1）、无 CLI 入口、无顶层 Runtime 串联 Step 2→8、V2 LLM 从未真实调用（875 tests 全 mock/临时 DB）。因此 Step 10 不新增 AI 功能，专注把已有能力变成用户可真实运行的产品链路。
 
 ---
 
@@ -43,6 +45,8 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 
 ## 2. V2 完整蓝图（13 步 + 远期）
 
+> ★ **2026-09 蓝图调整**：Step 9 完成后的真实项目状态审计发现 V2 完全未产品化（空库/无 Web/无 CLI/无 Runtime/LLM 从未真实调用），因此原 Step 10~13 重新排序：**优先做 Runtime + Productization**，Preference Learning 顺延至 Step 13。Step 11~13 的最终顺序以 Step 10 完成后的真实运行数据路线评审为准（不冻结）。
+
 ```
 现有 V1
  ├─ Step 1：冻结数据模型 / Schema          ✅ 完成
@@ -52,12 +56,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 5：重构"测试点 → 测试用例"（LLM 合成 TestCase + steps/expected/precondition） ✅ 完成
  ├─ Step 6：建立 Traceability 追溯链（需求→测试点→用例）+ 变更影响分析 ✅ 完成
  ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator） ✅ 完成
- ├─ Step 8：升级去重体系（精确 + 语义双重去重） ← 下一步
- ├─ Step 9：加入人工编辑/确认闭环（TestCase 状态机 EDITED→RE_REVIEW）
- ├─ Step 10：Preference Learning（用户反馈→提示词/偏好优化）
- ├─ Step 11：Prompt 分层 + 版本管理
- ├─ Step 12：Benchmark / 自动评测
- └─ Step 13：前端 V2 + Excel/MD/JSON 输出
+ ├─ Step 8：升级去重体系（精确 + 语义双重去重）+ Optimizer ✅ 完成
+ ├─ Step 9：加入人工编辑/确认闭环（Revision 快照 + 乐观锁 + Validator + Re-review） ✅ 完成
+ ├─ Step 10：V2 Runtime + Productization（DB 真初始化/顶层 Runtime/Web API/前端接线/真实 LLM Run/E2E 验证/运行数据） ← 当前（计划已批准，待实现）
+ ├─ Step 11：真实 LLM Quality Evaluation（待路线评审）
+ ├─ Step 12：Benchmark / 自动评测（待路线评审）
+ └─ Step 13：Preference Learning（用户反馈→提示词/偏好优化；数据源 = Step 9 changed_fields）（待路线评审）
 
 远期（V2 稳定后）：AI 自动执行 → Playwright/API → 失败分析 → 自动修复 → AI Testing Agent
 ```
@@ -68,6 +72,12 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
   → Requirement IR → { Test Point Generator + Strategy Engine } → Test Case Generator
   → AI Reviewer(6维) → Optimizer(自动优化/去重) → Human Review(人工确认/编辑)
   → Traceability → Preference Learning → Excel/Markdown/JSON
+```
+
+**Step 10 完成后的真实用户流程（阶段分离，用户冻结）**：
+```
+阶段 A（Runtime 自动，一次触发）：输入需求 → Step 2 IR → Step 3+4 TestPoints → Step 5 TestCases → Step 7 Review → Step 8 Optimizer → DONE
+阶段 B（用户后续主动操作）：查看结果 → 人工编辑 TestCase（Step 9）→ 主动触发 Re-review
 ```
 
 ---
@@ -84,9 +94,10 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 6 追溯链+变更影响 | ✅ 完成+验证(13门槛全过) | `core/v2/`{traceability,change_impact} + Schema/DDL/Repo 升级(v5→v6：RequirementItem 双 hash identity/content + 3 枚举 + 2 追溯查询) + 3 测试文件 | 已推 origin+gitee (fcaa197) |
 | 7 AI Reviewer 6维评审 | ✅ 完成+验证(14门槛全过) | `core/v2/`{review_prompts,review_hard,review_soft,review_orchestrator} + Schema/DDL/Repo 升级(v6→v7：ReviewReport 5 字段 + ReviewFinding.detail + CoverageDetail/ExecutabilityDetail + DuplicateLevel) + 4 测试文件 | 已推 origin+gitee (cb68f01) |
 | 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 已推 origin+gitee (909d6dd) |
-| 9 人工编辑/确认闭环 | ✅ 完成+验证(19门槛全过) | `core/v2/`{human_editor,human_editor_orchestrator} + Schema/DDL/Repo 升级(v8→v9：TestCaseRevision 激活 + 乐观锁 + 状态机放开 VALIDATION_FAILED→EDITED) + 3 测试文件 | 本地完成，待推送 |
+| 9 人工编辑/确认闭环 | ✅ 完成+验证(19门槛全过) | `core/v2/`{human_editor,human_editor_orchestrator} + Schema/DDL/Repo 升级(v8→v9：TestCaseRevision 激活 + 乐观锁 + 状态机放开 VALIDATION_FAILED→EDITED) + 3 测试文件 | 已推 origin+gitee (d9edbbb) |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 10~13 | ⬜ 未开始 | — | — |
+| 10 V2 Runtime+Productization | 🟡 计划已批准，待实现 | 7 子步骤（DB真初始化/顶层Runtime/WebAPI/前端接线/真实LLM Run/E2E验证/运行数据记录）+ schema 9→10 + 详见 §9 | — |
+| 11~13 | ⬜ 未开始（顺序待 Step 10 完成后路线评审） | — | — |
 
 **测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 875 passed**（Step 8 后 819 + Step 9 新增 56），ruff check/format 全绿。
 
@@ -463,7 +474,7 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 **★ 关键设计（用户反馈修订）**：
 - **Revision 保存修改前快照**：snapshot 是“修改前完整 TestCase”，不是修改后。这样才能恢复历史。
-- **changed_fields 记录**：为 Step 10 Preference Learning 提供数据源（用户最常改什么字段）。
+- **changed_fields 记录**：为 Preference Learning（蓝图调整后为 Step 13）提供数据源（用户最常改什么字段）。
 - **乐观锁 + 事务回滚**：updated_at 冲突→整体回滚，无错误 Revision，无半截 TestCase。
 - **VALIDATION_FAILED 可恢复**：状态机放开 VALIDATION_FAILED→EDITED，用户重新编辑修复。
 - **fingerprint 不变 / content_hash 重算**：Step 5 双指纹设计的实际消费场景。
@@ -542,23 +553,58 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 10「Preference Learning」（未开始，需先讨论）
+## 9. 下一步 = Step 10「V2 Runtime + Productization」（计划已批准，待实现）
 
-**预期范围**：消费 Step 9 的 `TestCaseRevision.changed_fields` 数据源（用户最常改什么字段），提取偏好规则，应用到 Prompt/生成策略。对应蓝图 `Preference Learning`。
+> 需求来源：用户提供的《V2 Step10开发基线》文档（桌面，968 行）。
+> 详细实施计划：《Step 10 实施计划与代码差距分析》（用户已保存，含 10.1~10.7 每个子步骤的差距/实施/验收）。
+> 本节是两份文档的精简索引，新会话读完本节即可与用户确认开工。
 
-**已具备的基础**（Step 1~9 已落地）：
-- Step 9 TestCaseRevision 已激活，changed_fields 记录每次编辑的字段变化
-- Preference 表已设计（reserved.py 未激活，但 ddl.py 已有 preferences 表）
-- V1 `core/preferences.py` 有 EXTRACT_SYSTEM_PROMPT 可参考（但不改 V1）
-- Step 11 Prompt 分层版本管理已预留（prompt_version 字段）
+### 9.1 核心目标（一句话）
 
-**开工前需与用户讨论确认的点**（沿用“先讨论→确认→实现”节奏）：
-- **偏好数据源**：仅消费 changed_fields 统计，还是也分析 Revision snapshot 差异（语义级偏好）？
-- **偏好规则提取**：代码统计（频率/模式）vs LLM 提取（语义规则）vs 混合？
-- **偏好应用范围**：应用到 Prompt（Step 11）/ 生成策略（Step 3/4/5）/ 评审权重（Step 7）？
-- **Preference 表激活**：reserved.py 的 Preference 已设计但未接入管线，是否 Step 10 激活？
-- **与 Step 11 Prompt 分层的边界**：偏好是 Prompt 的一部分，还是独立于 Prompt 的策略层？
-- **用户级 vs 项目级偏好**：偏好是按用户隔离，还是全局共享？
+**把 Step 1~9 从"代码已经存在"变成"用户真的可以使用"**：真实数据库 + 真实 LLM + 真实 Runtime + 真实 Web + 真实用户流程 + 真实运行数据。不新增 AI 功能。
+
+### 9.2 7 个子步骤（执行顺序，每个子步骤：实现→测试→验收→用户确认→再下一步）
+
+```
+10.1 V2 DB 真初始化（新增 core/v2/bootstrap.py:ensure_v2_ready，接入 web/__init__.py 启动路径）
+ ↓
+10.2 顶层 Runtime（新增 core/v2/runtime.py:run_v2_pipeline + client_factory.py；schema 9→10：
+      runs 加 failed_step/error_message + RunStatus 加 OPTIMIZING；底层 5 个 orchestrator 加 skip_run_status_update 参数）
+ ↓
+10.3 V2 Web API（新增 web/v2_service.py + web/v2_routes.py，12 个 /api/v2/* 端点，复用 V1 session 鉴权）
+ ↓
+10.4 V2 前端接线（新增 templates/v2.html + static/v2_app.js + v2_style.css，独立 /v2 页面，不改 V1）
+ ↓
+10.5 真实 LLM Run（新增 scripts/v2_real_run.py CLI + examples/v2_sample_requirement.md，不 mock）
+ ↓
+10.6 完整端到端验证（新增 test_v2_runtime/test_v2_web_api/test_step10_acceptance，22 条门槛）
+ ↓
+10.7 记录真实运行数据（docs/v2/step10-real-run-record.md + output/v2_real_run_*.json + 更新本文件）
+```
+
+### 9.3 用户冻结的 4 点修正 + 1 安全护栏（必须遵守）
+
+1. **schema_version 统一**：开发前=9，10.2 迁移后=10，所有最终验收（含 /api/v2/health）统一写 **10**。
+2. **Runtime 是 Run 状态唯一编排者**：底层 Step 3~8 orchestrator 新增 `skip_run_status_update: bool = False` 参数（默认 False 向后兼容）；Runtime 调用时传 True，底层只返回产物不改跨阶段状态，避免"两个控制器"冲突。
+3. **Web 同步 timeout = MVP 已知限制**：第一版 POST /api/v2/runs 同步执行（不引入 Celery/RQ）；**CLI（10.5）是权威真实运行验证路径**，Web 超时不阻塞验收。
+4. **阶段分离**：Runtime 自动完成 Step 2~8；Human Edit / Re-review 是用户后续主动操作，**不在** run_v2_pipeline 内（对齐 Step 9"不自动重评审"）。
+5. **API Key 安全护栏**：真实运行脚本/日志/output JSON 绝不得出现 api_key / Authorization header；可记录 provider/model/temperature/prompt_version；验收时 grep 检查。
+
+### 9.4 Step 10 严格禁止（不得提前塞入）
+
+Preference Learning、新 Strategy（Decision Table/State Transition）、Playwright/API 自动执行、Agent、RAG、向量数据库、异步任务队列、auto_review_on_edit 配置项、Re-link TestCase（改 test_point_ids）。
+
+### 9.5 验收门槛（22 条，详见实施计划）
+
+DB 真初始化(tables>=15) / schema_version=10 / 统一 Runtime 存在 / 单一调用完成 Step 2→8 / Web API 创建查询 Run / Web 触发生成 / 真实 LLM 调用成功 / 真实数据入库 / Step 2→3→4→5→7→8 真实跑通 / Human Edit 可用 / Re-review 可用 / Revision 可查 / Traceability 可查 / Coverage 可展示 / Review 可展示 / Optimizer 可展示 / Run 状态正确且 Runtime 唯一控制 / 异常定位 failed_step / V1 零回归 / 全量 pytest 绿 / ruff check / ruff format + API Key 安全检查。
+
+### 9.6 Step 10 完成后（重要）
+
+**不机械进入 Step 11**，必须先基于 10.7 真实运行数据做「V2 中后期路线评审」，回答：A. AI/Prompt 质量是否主要瓶颈？B. 前端体验是否仍是瓶颈？C. 是否先做 Benchmark？D. 是否已有足够编辑数据做 Preference Learning？E. 是否提前自动化执行？F. 哪个能力对产品价值提升最大？Step 11~13 顺序以评审结论为准。
+
+### 9.7 新会话开工确认话术
+
+> "我已阅读 PROGRESS.md + Step 10 实施计划。当前：Step 1~9 已推送（d9edbbb），875 passed，schema_version=9，Step 10 计划已批准（含 4 修正 + 1 护栏）。是否从 10.1 V2 DB 真初始化开始？"
 
 ## 10. 协作约定（重要）
 
