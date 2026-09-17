@@ -483,6 +483,25 @@ def get_run(run_id: str) -> Run | None:
     return Run.model_validate(data)
 
 
+def list_runs_by_user(user_id: str, limit: int = 50) -> list[Run]:
+    """按用户列出其 Run（created_at 倒序，最近 limit 条）。
+
+    Step 10.3.1：GET /api/v2/runs 的持久层。反序列化复用 get_run 同款
+    （dict(row) + counts_json→counts + Run.model_validate）。
+    """
+    with v2_read_conn() as conn:
+        rows = conn.execute(
+            "SELECT * FROM runs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit)
+        ).fetchall()
+    result: list[Run] = []
+    for row in rows:
+        data = dict(row)
+        data["counts"] = _loads(row["counts_json"], {})
+        data.pop("counts_json", None)
+        result.append(Run.model_validate(data))
+    return result
+
+
 # ============================================================
 # 测试点（+ 需求项链接）
 # ============================================================

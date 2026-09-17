@@ -25,7 +25,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~9 已全部完成并推送（三方同步 origin=gitee=`d9edbbb`）；全量 875 passed，ruff 全绿，schema_version=9，独立 data_v2.db；项目已形成「AI + 代码 + 人」三者协同的完整测试设计流程（生成→验证→评审→优化→人工修改→再验证→再评审）。下一步 = Step 10「V2 Runtime + Productization」（蓝图已调整：原 Step 10 Preference Learning 顺延为 Step 13；计划已批准，含用户冻结的 4 点修正 + 1 安全护栏，待实现）。**
+**当前进度（截至 2026-09）：Step 1~9 已全部完成并推送；Step 10「V2 Runtime + Productization」进行中——10.1 DB 真初始化（`e660ead`）/ 10.2 顶层 Runtime（`5626084`）/ 10.3 V2 Web API（`2ff8c9d`）已完成并三方同步（origin=gitee=`2ff8c9d`）；10.3.1（补 `GET /api/v2/runs`，端点 12→13）+ 10.4（V2 前端接线：`/v2` 独立页面 + `templates/v2.html`/`static/v2_app.js`/`static/v2_style.css`，复用 V1 认证、V1 三件套零改动）已在本地完成并全量验证（942 passed，ruff 双绿，schema_version=10），待提交推送；10.4 期间发现并修复一个乐观锁时间戳格式缺陷（API `...Z` vs DB `...+00:00` 致人工编辑必现 409），已加 3 条回归锁定；真实 LLM 生成/重评审按冻结方案有意留到 10.5。下一步 = 10.5「真实 LLM Run」（待用户明确指令后再 commit/push）。**
 
 **★ Step 9 后真实项目状态审计结论（Step 10 的由来）**：V2 后端代码完整但**完全未产品化**——`data/data_v2.db` 是空库（Tables: []，从未运行 create_v2_schema）、`web/` 目录 0 处引用 `core.v2`（前端纯 V1）、无 CLI 入口、无顶层 Runtime 串联 Step 2→8、V2 LLM 从未真实调用（875 tests 全 mock/临时 DB）。因此 Step 10 不新增 AI 功能，专注把已有能力变成用户可真实运行的产品链路。
 
@@ -96,10 +96,17 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 已推 origin+gitee (909d6dd) |
 | 9 人工编辑/确认闭环 | ✅ 完成+验证(19门槛全过) | `core/v2/`{human_editor,human_editor_orchestrator} + Schema/DDL/Repo 升级(v8→v9：TestCaseRevision 激活 + 乐观锁 + 状态机放开 VALIDATION_FAILED→EDITED) + 3 测试文件 | 已推 origin+gitee (d9edbbb) |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 10 V2 Runtime+Productization | 🟡 计划已批准，待实现 | 7 子步骤（DB真初始化/顶层Runtime/WebAPI/前端接线/真实LLM Run/E2E验证/运行数据记录）+ schema 9→10 + 详见 §9 | — |
+| 10 V2 Runtime+Productization | 🟡 进行中（10.1~10.3 已推送；10.3.1+10.4 本地完成待推送） | 7 子步骤，拆分见下 + 详见 §9 | — |
+| ├ 10.1 V2 DB 真初始化 | ✅ 完成+推送 | `core/v2/bootstrap.py`(ensure_v2_ready) + `web/__init__.py` 启动接线 + V2_READY 状态 + 14 测试 | `e660ead` |
+| ├ 10.2 顶层 Runtime | ✅ 完成+推送 | `core/v2/runtime.py`(run_v2_pipeline) + `client_factory.py` + schema 9→10（runs 加 failed_step/error_message + RunStatus.OPTIMIZING + 5 orchestrator 加 skip_run_status_update） | `5626084` |
+| ├ 10.3 V2 Web API | ✅ 完成+推送 | `web/v2_service.py` + `web/v2_routes.py`（12 个 /api/v2/* 端点，复用 V1 session 鉴权 + V2_READY gating + CSRF） | `2ff8c9d` |
+| ├ 10.3.1 补 GET /api/v2/runs | ✅ 完成（本地待推送） | `repo.list_runs_by_user` + `service.list_runs` + `GET /api/v2/runs`（端点 12→13，MVP：仅本人 Run、created_at DESC、默认 50；title 取自 Doc） | 待提交 |
+| ├ 10.4 V2 前端接线 | ✅ 完成（本地待推送） | `web/__init__.py` 加 /v2 路由 + `templates/v2.html` + `static/v2_app.js` + `static/v2_style.css`（独立页面，复用 V1 认证，不改 V1 三件套）；修复乐观锁时间戳 409 缺陷 + 3 回归 | 待提交 |
+| ├ 10.5 真实 LLM Run | ⬜ 未开始 | `scripts/v2_real_run.py` CLI + 真实 LLM 全链路（不 mock） | — |
+| └ 10.6~10.7 E2E 验证 + 运行数据 | ⬜ 未开始 | `test_step10_acceptance` + `docs/v2/step10-real-run-record.md` + output JSON | — |
 | 11~13 | ⬜ 未开始（顺序待 Step 10 完成后路线评审） | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 875 passed**（Step 8 后 819 + Step 9 新增 56），ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 942 passed**（Step 10.3 后 931 + 10.3.1/10.4 新增 11：Run 列表 6 + /v2 页面路由 2 + 乐观锁时间戳回归 3），schema_version=10，ruff check/format 全绿。
 
 ---
 
@@ -553,11 +560,17 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
 ```
 
-## 9. 下一步 = Step 10「V2 Runtime + Productization」（计划已批准，待实现）
+## 9. Step 10「V2 Runtime + Productization」（进行中：10.1~10.3 已推送；10.3.1+10.4 本地完成待推送）
 
 > 需求来源：用户提供的《V2 Step10开发基线》文档（桌面，968 行）。
 > 详细实施计划：《Step 10 实施计划与代码差距分析》（用户已保存，含 10.1~10.7 每个子步骤的差距/实施/验收）。
-> 本节是两份文档的精简索引，新会话读完本节即可与用户确认开工。
+> **当前状态（2026-09）**：10.1（`e660ead`）/ 10.2（`5626084`）/ 10.3（`2ff8c9d`）已推送并三方同步；**10.3.1（补 `GET /api/v2/runs`，端点 12→13）+ 10.4（V2 前端接线）已在本地完成并全量验证（942 passed，ruff 双绿，schema_version=10），待提交推送**；真实 LLM 全链路留 10.5。
+>
+> **10.4 完成情况（本地已验证，待用户明确指令后 commit/push）**：
+> - ✅ 10.4 completed：`/v2` 独立页面（`templates/v2.html` + `static/v2_app.js` + `static/v2_style.css`）；决策2 未登录 302 跳回 V1；V1 三件套（index.html/app.js/style.css）零改动，`style.css` 只读复用为基础样式。
+> - ✅ 10.3.1 Run List included：`GET /api/v2/runs`（第 13 端点），仅本人 Run、`created_at DESC`、默认 50，`title` 取自 Doc；无 V2 user → `[]`（GET 不自动开通）。
+> - ✅ 409 timestamp normalization bug fixed and regression locked：`web/v2_service._normalize_lock_ts` 归一 API 的 `...Z` 与 DB 的 `...+00:00`，修复人工编辑必现 409；回归 `test_36/37/38`。
+> - ✅ Real LLM generation/re-review intentionally deferred to 10.5：`[生成]`/`[重新评审]` 会触发真实 LLM，按冻结方案留 10.5；本次仅用 repository 播种真实 schema 数据（`data_v2.db`，gitignore）做前端验证。
 
 ### 9.1 核心目标（一句话）
 
@@ -566,20 +579,20 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
 ### 9.2 7 个子步骤（执行顺序，每个子步骤：实现→测试→验收→用户确认→再下一步）
 
 ```
-10.1 V2 DB 真初始化（新增 core/v2/bootstrap.py:ensure_v2_ready，接入 web/__init__.py 启动路径）
+10.1 V2 DB 真初始化 ✅（core/v2/bootstrap.py:ensure_v2_ready + web/__init__.py 启动接线，commit e660ead）
  ↓
-10.2 顶层 Runtime（新增 core/v2/runtime.py:run_v2_pipeline + client_factory.py；schema 9→10：
-      runs 加 failed_step/error_message + RunStatus 加 OPTIMIZING；底层 5 个 orchestrator 加 skip_run_status_update 参数）
+10.2 顶层 Runtime ✅（core/v2/runtime.py:run_v2_pipeline + client_factory.py；schema 9→10：
+      runs 加 failed_step/error_message + RunStatus 加 OPTIMIZING；底层 5 个 orchestrator 加 skip_run_status_update 参数，commit 5626084）
  ↓
-10.3 V2 Web API（新增 web/v2_service.py + web/v2_routes.py，12 个 /api/v2/* 端点，复用 V1 session 鉴权）
+10.3 V2 Web API ✅（web/v2_service.py + web/v2_routes.py，12 个 /api/v2/* 端点，复用 V1 session 鉴权，commit 2ff8c9d）
  ↓
-10.4 V2 前端接线（新增 templates/v2.html + static/v2_app.js + v2_style.css，独立 /v2 页面，不改 V1）
+10.4 V2 前端接线 ✅ 完成（本地待推送）（含 10.3.1 补 GET /api/v2/runs 端点 12→13；templates/v2.html + static/v2_app.js + v2_style.css，独立 /v2 页面，不改 V1；修复乐观锁时间戳 409 + 3 回归）
  ↓
-10.5 真实 LLM Run（新增 scripts/v2_real_run.py CLI + examples/v2_sample_requirement.md，不 mock）
+10.5 真实 LLM Run ⬜（scripts/v2_real_run.py CLI + examples/v2_sample_requirement.md，不 mock）
  ↓
-10.6 完整端到端验证（新增 test_v2_runtime/test_v2_web_api/test_step10_acceptance，22 条门槛）
+10.6 完整端到端验证 ⬜（test_v2_runtime/test_v2_web_api/test_step10_acceptance，22 条门槛）
  ↓
-10.7 记录真实运行数据（docs/v2/step10-real-run-record.md + output/v2_real_run_*.json + 更新本文件）
+10.7 记录真实运行数据 ⬜（docs/v2/step10-real-run-record.md + output/v2_real_run_*.json + 更新本文件）
 ```
 
 ### 9.3 用户冻结的 4 点修正 + 1 安全护栏（必须遵守）
@@ -604,7 +617,7 @@ DB 真初始化(tables>=15) / schema_version=10 / 统一 Runtime 存在 / 单一
 
 ### 9.7 新会话开工确认话术
 
-> "我已阅读 PROGRESS.md + Step 10 实施计划。当前：Step 1~9 已推送（d9edbbb），875 passed，schema_version=9，Step 10 计划已批准（含 4 修正 + 1 护栏）。是否从 10.1 V2 DB 真初始化开始？"
+> "我已阅读 PROGRESS.md + Step 10 实施计划。当前：10.1~10.3 已推送（`2ff8c9d`）；10.3.1（`GET /api/v2/runs`，13 端点）+ 10.4（`/v2` 前端）本地完成，942 passed，schema_version=10，待提交推送。下一步 10.5 真实 LLM Run。是否开始？"
 
 ## 10. 协作约定（重要）
 

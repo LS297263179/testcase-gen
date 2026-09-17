@@ -5,6 +5,7 @@
 
 ★ MVP 限制（P0-4）：同步执行，不实现 Celery / Redis / 消息队列 / 后台 Job。
 ★ 范围（P0-5）：只把已有 core/v2 能力接到 Web，不扩 Runtime、不新增 AI 能力。
+★ 端点（Step 10.3.1）：共 13 个 /api/v2/* 端点（1 健康检查 + 1 POST /runs + 7 Run/资产查询 + 4 TestCase 人工/追溯）。
 """
 
 from __future__ import annotations
@@ -55,6 +56,21 @@ def _jsonable(obj):
 
 def _iso(dt) -> str:
     return dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
+
+
+def _normalize_lock_ts(ts: str | None) -> str | None:
+    """归一乐观锁时间戳为 DB 存储格式（datetime.isoformat() → ...+00:00）。
+
+    ★ 坑：API 序列化用 Pydantic model_dump(mode="json")，UTC datetime 输出为 "...Z"；
+      而 DB 列与 _iso() 用 "...+00:00"。前端把 API 返回的 updated_at 原样回传时，
+      两种写法字符串直接比对必然不等 → 每次人工编辑都误报 409。故比对/入库前先归一。
+    """
+    if not ts:
+        return ts
+    try:
+        return datetime.fromisoformat(str(ts).replace("Z", "+00:00")).isoformat()
+    except ValueError:
+        return ts
 
 
 # ============================================================
@@ -141,6 +157,33 @@ def get_run_detail(run_id: str) -> dict | None:
     return _jsonable(run) if run is not None else None
 
 
+def list_runs(session_user_id: int, limit: int = 50) -> list[dict]:
+    """列出当前登录用户自己的 Run（Step 10.3.1，MVP：最近 limit 条，默认 50）。
+
+    ★ GET 不自动开通 V2 user（避免读操作产生写副作用）：无 V2 user → 返回 []。
+    ★ Run 无 title 字段，title 从其 doc（repo.get_doc(run.doc_id).title）取，缺失兜底 "(无标题)"。
+    ★ 严格 MVP：不做高级筛选/多条件搜索/分页体系/排序配置/项目维度/团队维度。
+    """
+    row = repo.get_user_by_legacy_id(session_user_id)
+    if row is None:
+        return []
+    runs = repo.list_runs_by_user(row["id"], limit)
+    items: list[dict] = []
+    for run in runs:
+        doc = repo.get_doc(run.doc_id)
+        title = doc.title if (doc is not None and doc.title) else "(无标题)"
+        items.append(
+            {
+                "run_id": run.id,
+                "title": title,
+                "status": _jsonable(run.status),
+                "created_at": _jsonable(run.created_at),
+                "failed_step": run.failed_step,
+            }
+        )
+    return items
+
+
 def list_test_points(run_id: str, provenance: str | None = None) -> list[dict]:
     points = repo.list_test_points_by_run(run_id)
     if provenance:
@@ -194,10 +237,12 @@ def edit_test_case(tc_id: str, updates: dict, expected_updated_at: str | None = 
     tc = repo.get_test_case(tc_id)
     if tc is None:
         return None
+    # 归一前端回传的时间戳（可能是 API 序列化的 ...Z），与 DB 存储格式（...+00:00）对齐后再比对/入库
+    expected = _normalize_lock_ts(expected_updated_at)
     # 乐观锁预检：expected_updated_at 与当前不符 → 冲突（edit_test_case 内部会吞成 success=False，此处显式抛给上层 409）
-    if expected_updated_at is not None and _iso(tc.updated_at) != expected_updated_at:
+    if expected is not None and _iso(tc.updated_at) != expected:
         raise repo.ConcurrentModificationError(f"用例已被更新（当前 updated_at={_iso(tc.updated_at)}），请刷新后重试")
-    return _jsonable(_edit_test_case(tc_id, updates, expected_updated_at=expected_updated_at))
+    return _jsonable(_edit_test_case(tc_id, updates, expected_updated_at=expected))
 
 
 def re_review(run_id: str, tc_ids: list[str] | None = None) -> dict:

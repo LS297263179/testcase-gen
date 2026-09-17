@@ -444,3 +444,191 @@ def test_26_re_review(v2_client, monkeypatch):
 def test_27_v1_unaffected(v2_client):
     rv = v2_client.get("/api/me")
     assert rv.status_code == 200 and rv.get_json()["logged_in"] is True
+
+
+# ============================================================
+# GET /api/v2/runs 列表（Step 10.3.1，第 13 端点）
+# ============================================================
+
+
+def _session_v2_uid(client) -> str:
+    """返回当前 V1 session 用户映射的 V2 user id（无则创建带 legacy_int_id 的映射）。"""
+    from core.schemas import new_ulid
+
+    v1_uid = client.get("/api/me").get_json()["user"]["id"]
+    row = repo.get_user_by_legacy_id(v1_uid)
+    if row is not None:
+        return row["id"]
+    uid = new_ulid()
+    repo.save_user(uid, "v2sess", "", legacy_int_id=v1_uid)
+    return uid
+
+
+def _mk_run(uid, title, *, status=RunStatus.DONE, failed_step=None, created_at=None):
+    """在指定 V2 user 下播种一条完整合法 Run（doc/version/cfg/run 均真实入库），返回 run_id。
+
+    created_at 可显式传入（tz-aware datetime），用于确定性验证 created_at DESC 排序。
+    """
+    doc = RequirementDoc(user_id=uid, title=title, source_type=SourceType.TEXT)
+    repo.save_doc(doc)
+    ver = RequirementVersion(doc_id=doc.id, version_no=1, raw_text="需求", provenance=Provenance.LLM)
+    repo.save_version(ver)
+    cfg = GenerationConfig(
+        model_provider="t", model_name="m", temperature=0.3, prompt_version="p", generator_version="g"
+    )
+    repo.save_generation_config(cfg)
+    run = Run(
+        user_id=uid,
+        doc_id=doc.id,
+        requirement_version_id=ver.id,
+        generation_config_id=cfg.id,
+        status=status,
+        failed_step=failed_step,
+    )
+    if created_at is not None:
+        run.created_at = created_at
+    repo.save_run(run)
+    return run.id
+
+
+def test_28_list_runs_empty_for_new_user(v2_client):
+    """新登录用户无 V2 user / 无 Run → items:[]（GET 不自动开通，无写副作用）。"""
+    rv = v2_client.get("/api/v2/runs")
+    assert rv.status_code == 200
+    assert rv.get_json() == {"success": True, "items": []}
+    # GET 不应自动开通 V2 user
+    v1_uid = v2_client.get("/api/me").get_json()["user"]["id"]
+    assert repo.get_user_by_legacy_id(v1_uid) is None
+
+
+def test_29_list_runs_returns_own_with_fields(v2_client):
+    from datetime import UTC, datetime
+
+    uid = _session_v2_uid(v2_client)
+    rid = _mk_run(uid, "登录流程需求", status=RunStatus.DONE, created_at=datetime(2026, 5, 1, tzinfo=UTC))
+    rv = v2_client.get("/api/v2/runs")
+    body = rv.get_json()
+    assert rv.status_code == 200 and body["success"] is True
+    items = body["items"]
+    assert len(items) == 1
+    it = items[0]
+    assert set(it.keys()) == {"run_id", "title", "status", "created_at", "failed_step"}
+    assert it["run_id"] == rid
+    assert it["title"] == "登录流程需求"  # title 来自 Doc
+    assert it["status"] == "done"
+    assert it["created_at"]  # 非空
+    assert it["failed_step"] is None
+
+
+def test_30_list_runs_only_own_not_others(v2_client):
+    from core.schemas import new_ulid
+
+    uid = _session_v2_uid(v2_client)
+    own = _mk_run(uid, "我的需求")
+    other_uid = new_ulid()
+    repo.save_user(other_uid, "other", "", legacy_int_id=987654)
+    other = _mk_run(other_uid, "别人的需求")
+    rv = v2_client.get("/api/v2/runs")
+    run_ids = [i["run_id"] for i in rv.get_json()["items"]]
+    assert own in run_ids
+    assert other not in run_ids  # 只返回本人 Run
+
+
+def test_31_list_runs_desc_order_and_failed_step(v2_client):
+    from datetime import UTC, datetime
+
+    uid = _session_v2_uid(v2_client)
+    _mk_run(uid, "旧需求", status=RunStatus.DONE, created_at=datetime(2026, 1, 1, tzinfo=UTC))
+    failed = _mk_run(
+        uid,
+        "失败需求",
+        status=RunStatus.FAILED,
+        failed_step="testcases",
+        created_at=datetime(2026, 6, 1, tzinfo=UTC),
+    )
+    items = v2_client.get("/api/v2/runs").get_json()["items"]
+    assert items[0]["run_id"] == failed  # created_at DESC：最近的排第一
+    assert items[0]["status"] == "failed" and items[0]["failed_step"] == "testcases"
+    assert len(items) == 2
+
+
+def test_32_list_runs_title_fallback(v2_client):
+    uid = _session_v2_uid(v2_client)
+    rid = _mk_run(uid, "")  # 空标题 → 兜底 "(无标题)"
+    items = v2_client.get("/api/v2/runs").get_json()["items"]
+    it = next(i for i in items if i["run_id"] == rid)
+    assert it["title"] == "(无标题)"
+
+
+def test_33_list_runs_requires_login(v2_anon):
+    assert v2_anon.get("/api/v2/runs").status_code == 401
+
+
+# ============================================================
+# GET /v2 页面路由（Step 10.4，决策2：不重造登录，未登录跳回 V1）
+# ============================================================
+
+
+def test_34_v2_page_renders_when_logged_in(v2_client):
+    rv = v2_client.get("/v2")
+    assert rv.status_code == 200
+    html = rv.get_data(as_text=True)
+    assert "v2_app.js" in html  # v2.html 标志
+    assert "v2_style.css" in html
+
+
+def test_35_v2_page_redirects_when_anonymous(v2_anon):
+    rv = v2_anon.get("/v2")
+    assert rv.status_code == 302  # 未登录 → 302
+    loc = rv.headers["Location"]
+    assert loc == "/" or loc.endswith("/")  # 跳回 V1 登录页
+    assert "v2" not in loc
+
+
+# ============================================================
+# 乐观锁时间戳格式回归（前端回传 API 序列化的 ...Z 不得误报 409）
+# ============================================================
+
+
+def test_36_edit_roundtrips_api_updated_at(v2_client):
+    """回归：前端把 API 返回的 updated_at（Pydantic JSON 模式 = ...Z）原样回传，必须能保存成功。
+
+    修复前：服务端用 _iso()（...+00:00）与回传的 ...Z 字符串直比 → 必不等 → 每次编辑误报 409。
+    """
+    seed = _seed_v2()
+    cases = v2_client.get(f"/api/v2/runs/{seed.run_id}/test-cases").get_json()["test_cases"]
+    api_updated_at = next(c for c in cases if c["id"] == seed.tc_id)["updated_at"]
+    token = _csrf(v2_client)
+    rv = v2_client.post(
+        f"/api/v2/test-cases/{seed.tc_id}/edit",
+        json={"updates": {"title": "回传 API 时间戳保存"}, "expected_updated_at": api_updated_at},
+        headers={"X-CSRF-Token": token},
+    )
+    assert rv.status_code == 200, rv.get_json()
+    assert rv.get_json()["success"] is True
+
+
+def test_37_edit_accepts_zulu_format(v2_client):
+    """回归：显式用 ...Z 格式（API 输出格式）作为乐观锁基准 → 归一后应保存成功。"""
+    seed = _seed_v2()
+    tc = repo.get_test_case(seed.tc_id)
+    zulu = tc.updated_at.isoformat().replace("+00:00", "Z")  # 模拟前端拿到的 Z 格式
+    token = _csrf(v2_client)
+    rv = v2_client.post(
+        f"/api/v2/test-cases/{seed.tc_id}/edit",
+        json={"updates": {"title": "Z 格式保存"}, "expected_updated_at": zulu},
+        headers={"X-CSRF-Token": token},
+    )
+    assert rv.status_code == 200, rv.get_json()
+
+
+def test_38_edit_stale_zulu_still_409(v2_client):
+    """回归：归一不得削弱乐观锁——真正过期的 Z 格式时间戳仍应 409。"""
+    seed = _seed_v2()
+    token = _csrf(v2_client)
+    rv = v2_client.post(
+        f"/api/v2/test-cases/{seed.tc_id}/edit",
+        json={"updates": {"title": "x"}, "expected_updated_at": "2000-01-01T00:00:00Z"},
+        headers={"X-CSRF-Token": token},
+    )
+    assert rv.status_code == 409

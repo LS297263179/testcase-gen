@@ -3,7 +3,7 @@
 import logging
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request, session
+from flask import Flask, jsonify, redirect, render_template, request, session
 
 from core import config, db
 from core.v2.bootstrap import ensure_v2_ready
@@ -121,6 +121,18 @@ def too_large(e):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+
+@app.route("/v2")
+def v2_index():
+    """V2 独立页面（Step 10.4）。决策2：不重造登录——未登录跳回 V1 `/` 登录。
+
+    认证层=V1（session），业务数据=V2；衔接 10.3 的 V1 session→V2 user 自动映射。
+    V1 index.html/app.js/style.css 一律不改。
+    """
+    if "user_id" not in session:
+        return redirect("/")
+    return render_template("v2.html")
 
 
 @app.route("/api/health")

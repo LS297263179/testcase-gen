@@ -4,6 +4,9 @@
         业务流程全下沉到 core/v2/runtime.py（Runtime 是 Run 状态唯一控制者）。
 ★ P0-4：POST /runs 同步执行 = MVP 已知限制；10.3 不实现 Celery / Redis / 消息队列 / 后台 Job，异步化留未来。
 ★ P0-5：只接已有 core/v2 能力，不扩 Runtime、不新增 AI 能力、不做文件上传（POST /runs 仅 JSON）。
+★ 端点（Step 10.3.1）：共 13 个 /api/v2/* 端点 = health + POST /runs + GET /runs（列表）
+        + GET /runs/<id>{,/test-points,/test-cases,/review,/optimizer,/coverage}
+        + POST /test-cases/<id>{/edit,/re-review} + GET /test-cases/<id>{/revisions,/trace}。
 """
 
 from __future__ import annotations
@@ -82,6 +85,17 @@ def v2_create_run():
 # ============================================================
 # Run 查询接口
 # ============================================================
+
+
+@bp.route("/api/v2/runs", methods=["GET"])
+@login_required
+def v2_list_runs():
+    """列出当前登录用户自己的 Run（Step 10.3.1，MVP：最近 N 条，默认 50）。
+
+    与 POST /api/v2/runs 同路径不同方法（Flask 允许）：POST 触发生成，GET 查询列表。
+    无 V2 user → items:[]（GET 不自动开通，避免读操作产生写副作用）。
+    """
+    return jsonify({"success": True, "items": v2_service.list_runs(session["user_id"])})
 
 
 @bp.route("/api/v2/runs/<run_id>", methods=["GET"])
