@@ -65,11 +65,13 @@ from web.auth import bp as auth_bp
 from web.config_routes import bp as config_bp
 from web.data import bp as data_bp
 from web.generate import bp as generate_bp
+from web.v2_routes import bp as v2_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(config_bp)
 app.register_blueprint(data_bp)
 app.register_blueprint(generate_bp)
+app.register_blueprint(v2_bp)  # Step 10.3：V2 REST API（/api/v2/*，V2_READY gating 见 v2_routes.before_request）
 
 
 # ============================================================
