@@ -520,9 +520,9 @@ DB 层加 `UNIQUE(fingerprint)` 索引；Repository.save_test_point 按 fingerpr
 
 ```
 core/schemas/    # Pydantic 唯一真源：common/requirement/testpoint/testcase/strategy/review/run/preference/reserved/__init__
-core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=9）
+core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_version=10）
   db.py          #   连接管理（WAL/foreign_keys/写锁）
-  ddl.py         #   建表 SQL + schema_version（含 v2→v3→v4→v5→v6→v7→v8→v9 自动升级分支）
+  ddl.py         #   建表 SQL + schema_version（含 v2→v3→…→v9→v10 自动升级分支）
   repository.py  #   Pydantic↔SQLite 映射（全部 upsert；TestPoint/TestCase 按 fingerprint upsert；obligation 按 natural key 对齐）
   resolver.py    #   TargetResolver + ReferentialValidator（多态目标）
   fingerprint.py #   业务确定性指纹（Step3 LLM + Step4 strategy + Step5 TestCase 身份/内容 + Step6 Item identity/content）
@@ -537,6 +537,10 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
   review_prompts.py review_hard.py review_soft.py review_orchestrator.py  # Step 7 AI Reviewer（硬/软混合）
   optimizer.py optimizer_orchestrator.py                                 # Step 8 Dedup Optimizer（去重归档 + 有条件重评审）
   human_editor.py human_editor_orchestrator.py                           # Step 9 Human Editor（人工编辑 + Revision 快照 + 乐观锁 + Validator）
+  bootstrap.py   # Step 10.1 V2 DB 真初始化（ensure_v2_ready，web 启动路径调用）
+  runtime.py client_factory.py                                           # Step 10.2 顶层 Runtime（run_v2_pipeline）+ LLMClient 构建工厂
+web/             # Web 层：__init__.py（V1 蓝图 + /v2 页面路由 Step 10.4）+ v2_service.py（HTTP↔core/v2 适配 Step 10.3）+ v2_routes.py（13 个 /api/v2/* 端点）
+templates/v2.html static/v2_app.js static/v2_style.css   # Step 10.4 V2 前端（复用 V1 认证与基础样式；V1 三件套零改动）
 docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8/step9 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
@@ -548,16 +552,17 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
                  # review_hard/review_soft/review_orchestrator/step7_acceptance
                  # optimizer/optimizer_orchestrator/step8_acceptance
                  # human_editor/human_editor_orchestrator/step9_acceptance
+                 # test_v2_bootstrap/test_v2_runtime/test_v2_web_api（Step 10.1~10.4）
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 875 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 942 passed
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
-.\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动 V1（V2 尚未接入前端）
+.\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动服务（V1 在 /，V2 在 /v2；改代码/提示词需重启，DB model_config 实时生效）
 ```
 
 ## 9. Step 10「V2 Runtime + Productization」（进行中：10.1~10.4 已推送，下一步 10.5）
@@ -618,6 +623,23 @@ DB 真初始化(tables>=15) / schema_version=10 / 统一 Runtime 存在 / 单一
 ### 9.7 新会话开工确认话术
 
 > "我已阅读 PROGRESS.md + Step 10 实施计划。当前：10.1~10.4 已推送（origin=gitee=`1733052`；其中 10.3.1+10.4 = `cf15866`，V1 运行时修复 = `1733052`），942 passed，schema_version=10。下一步 10.5 真实 LLM Run。是否开始？"
+
+### 9.8 10.5「真实 LLM Run」新会话须知（交接）
+
+**目标**：新增 `scripts/v2_real_run.py` CLI + `examples/v2_sample_requirement.md`，用真实 LLM 跑通 Step 2→8 全链路（不 mock）。**CLI 是权威真实运行验证路径**（Web 同步 timeout 为 MVP 已知限制）。
+
+**可复用入口**：
+- `core/v2/runtime.run_v2_pipeline(*, user_id, title, text=None, paths=None, source_type=SourceType.TEXT, client=None, stop_after=None) -> PipelineResult`（`stop_after` ∈ ir/testpoints/strategy/testcases/review/optimizer）
+- `core/v2/client_factory.build_llm_client(purpose)`（purpose="generate"/"review"）
+
+**环境 / 配置（实测可用）**：
+- **LLM 实际生效源 = DB `model_config`**（`config.get_model_config()` 每次实时读，`config.yaml` 仅兜底）；改模型/Key 优先改 DB（网页「模型配置」或 `db.save_model_config`）
+- 当前接入：阿里云百炼 OpenAI 兼容网关，模型 `deepseek-v4-flash-0731`，`enable_thinking=False`（已修复：关闭时显式下发，避免网关默认开思考导致正文为空）
+- **安全护栏**：真实运行脚本/日志/output JSON 不得出现 api_key；可记录 provider/model/temperature/prompt_version
+
+**注意事项**：
+- 真实 LLM 运行耗时且有费用；测试点提示词已改为按需求规模自适应（不再固定 60-120 条），避免超长截断
+- 10.5 前置已就绪：schema_version=10、`data_v2.db` 已初始化、Runtime/Web API/前端均已验收（942 passed）
 
 ## 10. 协作约定（重要）
 
