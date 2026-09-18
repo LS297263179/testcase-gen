@@ -25,7 +25,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~9 已全部完成并推送；Step 10「V2 Runtime + Productization」进行中——10.1（`e660ead`）/ 10.2（`5626084`）/ 10.3（`2ff8c9d`）/ 10.3.1 + 10.4（`cf15866`）/ 10.5（`c7955c8`）已完成并推送；10.6「完整端到端验证」已完成（待推送）——交付 `tests/test_step10_acceptance.py`（17 条门槛 mock）+ `tests/test_step10_real_llm.py`（门槛 7-9 real_llm marker，本地验收用、非永久 CI 资产）+ `scripts/v2_step10_verify.py`（一键跑 + 22 条门槛报告表）；全量 980 passed + 3 skipped，ruff 双绿，schema_version=10。下一步 = 10.7「记录真实运行数据」（脱敏证据正式沉淀）。**
+**当前进度（截至 2026-09）：Step 1~9 已全部完成并推送；Step 10「V2 Runtime + Productization」✅ 全部完成——10.1（`e660ead`）/ 10.2（`5626084`）/ 10.3（`2ff8c9d`）/ 10.3.1 + 10.4（`cf15866`）/ 10.5（`c7955c8`）/ 10.6（`ff799ab`）已推送；10.7「记录真实运行数据」已完成（待推送）——交付 `docs/v2/step10-real-run-record.md`（脱敏永久记录：核心指标/关键字段提炼为表格，不嵌 JSON 全文；ULID 保留，需求正文/token/API Key/Authorization/base_url/user_id 脱敏）+ 更新本文件标记 Step 10 收尾。全量 980 passed + 3 skipped，ruff 双绿，schema_version=10。**Step 10 正式收尾，不提前进入 Step 11**；下一步 = §9.6「V2 中后期路线评审」（A-F 问题，待用户另开）。**
 
 **★ Step 9 后真实项目状态审计结论（Step 10 的由来）**：V2 后端代码完整但**完全未产品化**——`data/data_v2.db` 是空库（Tables: []，从未运行 create_v2_schema）、`web/` 目录 0 处引用 `core.v2`（前端纯 V1）、无 CLI 入口、无顶层 Runtime 串联 Step 2→8、V2 LLM 从未真实调用（875 tests 全 mock/临时 DB）。因此 Step 10 不新增 AI 功能，专注把已有能力变成用户可真实运行的产品链路。
 
@@ -58,7 +58,7 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 7：升级 AI Reviewer（6 维结构化评审 + Validator） ✅ 完成
  ├─ Step 8：升级去重体系（精确 + 语义双重去重）+ Optimizer ✅ 完成
  ├─ Step 9：加入人工编辑/确认闭环（Revision 快照 + 乐观锁 + Validator + Re-review） ✅ 完成
- ├─ Step 10：V2 Runtime + Productization（DB 真初始化/顶层 Runtime/Web API/前端接线/真实 LLM Run/E2E 验证/运行数据） ← 当前（计划已批准，待实现）
+ ├─ Step 10：V2 Runtime + Productization（DB 真初始化/顶层 Runtime/Web API/前端接线/真实 LLM Run/E2E 验证/运行数据） ✅ 完成
  ├─ Step 11：真实 LLM Quality Evaluation（待路线评审）
  ├─ Step 12：Benchmark / 自动评测（待路线评审）
  └─ Step 13：Preference Learning（用户反馈→提示词/偏好优化；数据源 = Step 9 changed_fields）（待路线评审）
@@ -96,15 +96,15 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 已推 origin+gitee (909d6dd) |
 | 9 人工编辑/确认闭环 | ✅ 完成+验证(19门槛全过) | `core/v2/`{human_editor,human_editor_orchestrator} + Schema/DDL/Repo 升级(v8→v9：TestCaseRevision 激活 + 乐观锁 + 状态机放开 VALIDATION_FAILED→EDITED) + 3 测试文件 | 已推 origin+gitee (d9edbbb) |
 | — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
-| 10 V2 Runtime+Productization | 🟡 进行中（10.1~10.6 已完成，下一步 10.7） | 7 子步骤，拆分见下 + 详见 §9 | — |
+| 10 V2 Runtime+Productization | ✅ 完成（10.1~10.7 全部完成；10.1~10.6 已推送，10.7 待推送） | 7 子步骤，拆分见下 + 详见 §9 | — |
 | ├ 10.1 V2 DB 真初始化 | ✅ 完成+推送 | `core/v2/bootstrap.py`(ensure_v2_ready) + `web/__init__.py` 启动接线 + V2_READY 状态 + 14 测试 | `e660ead` |
 | ├ 10.2 顶层 Runtime | ✅ 完成+推送 | `core/v2/runtime.py`(run_v2_pipeline) + `client_factory.py` + schema 9→10（runs 加 failed_step/error_message + RunStatus.OPTIMIZING + 5 orchestrator 加 skip_run_status_update） | `5626084` |
 | ├ 10.3 V2 Web API | ✅ 完成+推送 | `web/v2_service.py` + `web/v2_routes.py`（12 个 /api/v2/* 端点，复用 V1 session 鉴权 + V2_READY gating + CSRF） | `2ff8c9d` |
 | ├ 10.3.1 补 GET /api/v2/runs | ✅ 完成+推送 | `repo.list_runs_by_user` + `service.list_runs` + `GET /api/v2/runs`（端点 12→13，MVP：仅本人 Run、created_at DESC、默认 50；title 取自 Doc） | `cf15866` |
 | ├ 10.4 V2 前端接线 | ✅ 完成+推送 | `web/__init__.py` 加 /v2 路由 + `templates/v2.html` + `static/v2_app.js` + `static/v2_style.css`（独立页面，复用 V1 认证，不改 V1 三件套）；修复乐观锁时间戳 409 缺陷 + 3 回归 | `cf15866` |
 | ├ 10.5 真实 LLM Run | ✅ 完成+推送 | `scripts/v2_real_run.py` CLI（483 行）+ `examples/v2_sample_requirement.md`（订单退款场景）+ `tests/test_v2_real_run_script.py`（20 smoke）；真实跑通 Step 2→8（run_id=`01M2QBWABYW3VTNYK5BBX2WDN4`，9m26s，157 LLM calls，28 items / 174 TPs / 174 TCs / 25 obligations，review overall=85.9，optimizer archived=24）；output JSON 无 api_key；修复 Windows GBK emoji 编码 bug | `c7955c8` |
-| ├ 10.6 完整端到端验证 | ✅ 完成（待推送） | `tests/test_step10_acceptance.py`（17 门槛 mock）+ `tests/test_step10_real_llm.py`（门槛 7-9 real_llm marker，本地验收用）+ `scripts/v2_step10_verify.py`（一键跑 + 22 条门槛报告表）+ pyproject 注册 real_llm marker | — |
-| └ 10.7 记录运行数据 | ⬜ 未开始 | `docs/v2/step10-real-run-record.md`（脱敏证据正式沉淀）+ 更新本文件 | — |
+| ├ 10.6 完整端到端验证 | ✅ 完成+推送 | `tests/test_step10_acceptance.py`（17 门槛 mock）+ `tests/test_step10_real_llm.py`（门槛 7-9 real_llm marker，本地验收用）+ `scripts/v2_step10_verify.py`（一键跑 + 22 条门槛报告表）+ pyproject 注册 real_llm marker | `ff799ab` |
+| └ 10.7 记录运行数据 | ✅ 完成（待推送） | `docs/v2/step10-real-run-record.md`（脱敏永久记录：9 节表格/列表，不嵌 JSON 全文）+ 更新本文件（Step 10 收尾）| — |
 | 11~13 | ⬜ 未开始（顺序待 Step 10 完成后路线评审） | — | — |
 
 **测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 980 passed + 3 skipped**（Step 10.5 后 962 + 10.6 新增 18 acceptance + 3 real_llm marker 默认 skip），schema_version=10，ruff check/format 全绿。启用 real_llm（`V2_RUN_REAL_LLM=1`）后为 983 passed。
@@ -543,7 +543,7 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
 web/             # Web 层：__init__.py（V1 蓝图 + /v2 页面路由 Step 10.4）+ v2_service.py（HTTP↔core/v2 适配 Step 10.3）+ v2_routes.py（13 个 /api/v2/* 端点）
 scripts/         # CLI：v2_real_run.py（Step 10.5 真实 LLM 全链路，权威验证路径）+ v2_step10_verify.py（Step 10.6 一键验收 + 22 条门槛报告表）
 templates/v2.html static/v2_app.js static/v2_style.css   # Step 10.4 V2 前端（复用 V1 认证与基础样式；V1 三件套零改动）
-docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8/step9 + 本文件）
+docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8/step9 + step10-real-run-record.md 真实运行脱敏记录 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance
                  # tp_generator/tp_validator/tp_orchestrator/step3_acceptance
@@ -599,9 +599,11 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
  ↓
 10.5 真实 LLM Run ✅（scripts/v2_real_run.py CLI + examples/v2_sample_requirement.md，不 mock；commit c7955c8）
  ↓
-10.6 完整端到端验证 ✅ 完成（待推送）（tests/test_step10_acceptance.py 17 门槛 mock + tests/test_step10_real_llm.py 门槛 7-9 real_llm marker + scripts/v2_step10_verify.py 一键跑 22 条报告表）
+10.6 完整端到端验证 ✅ 完成+推送（commit ff799ab）（tests/test_step10_acceptance.py 17 门槛 mock + tests/test_step10_real_llm.py 门槛 7-9 real_llm marker + scripts/v2_step10_verify.py 一键跑 22 条报告表）
  ↓
-10.7 记录真实运行数据 ⬜（docs/v2/step10-real-run-record.md 脱敏证据正式沉淀 + 更新本文件）
+10.7 记录真实运行数据 ✅ 完成（待推送）（docs/v2/step10-real-run-record.md 脱敏永久记录 + 更新本文件）
+ ↓
+【Step 10 全部完成 ✅ 正式收尾；不机械进入 Step 11，须先做 §9.6 中后期路线评审（用户另开）】
 ```
 
 ### 9.3 用户冻结的 4 点修正 + 1 安全护栏（必须遵守）
@@ -649,9 +651,11 @@ Preference Learning、新 Strategy（Decision Table/State Transition）、Playwr
 
 **不机械进入 Step 11**，必须先基于 10.7 真实运行数据做「V2 中后期路线评审」，回答：A. AI/Prompt 质量是否主要瓶颈？B. 前端体验是否仍是瓶颈？C. 是否先做 Benchmark？D. 是否已有足够编辑数据做 Preference Learning？E. 是否提前自动化执行？F. 哪个能力对产品价值提升最大？Step 11~13 顺序以评审结论为准。
 
+> **状态（10.7 完成后）**：Step 10 已全部完成并正式收尾，真实运行数据已沉淀于 `docs/v2/step10-real-run-record.md`（含 6 维评分：accuracy=78 / missing_risk=72 偏低，可作为路线评审 A/C 的输入）。本路线评审（A-F）**待用户另开一轮讨论**，不在 10.7 内触发。
+
 ### 9.7 新会话开工确认话术
 
-> "我已阅读 PROGRESS.md + Step 10 实施计划。当前：10.1~10.5 已推送（最新 `c7955c8`），10.6「完整端到端验证」已完成（待推送；22 条门槛全 PASS，980 passed + 3 skipped，schema_version=10）。下一步 10.7「记录真实运行数据」（脱敏证据正式沉淀）。是否开始？"
+> "我已阅读 PROGRESS.md + Step 10 实施计划。当前：Step 10 全部完成——10.1~10.6 已推送（最新 `ff799ab`），10.7「记录真实运行数据」已完成（待推送；`docs/v2/step10-real-run-record.md` 脱敏永久记录）。全量 980 passed + 3 skipped，ruff 双绿，schema_version=10。Step 10 正式收尾，不提前进入 Step 11；下一步 = §9.6 V2 中后期路线评审（A-F 问题）。是否开始？"
 
 ### 9.8 10.5「真实 LLM Run」新会话须知（交接）
 
@@ -670,7 +674,7 @@ Preference Learning、新 Strategy（Decision Table/State Transition）、Playwr
 - 真实 LLM 运行耗时且有费用；测试点提示词已改为按需求规模自适应（不再固定 60-120 条），避免超长截断
 - 10.5 前置已就绪：schema_version=10、`data_v2.db` 已初始化、Runtime/Web API/前端均已验收（942 passed）
 
-### 9.9 10.6「完整端到端验证」（已完成，待推送）
+### 9.9 10.6「完整端到端验证」（已完成+推送 ff799ab）
 
 **目标**：把 §9.5 的 22 条门槛变成可 CI 化、可一键重跑的硬证据链；不新增 AI 功能、不动 V1、不改 Runtime/orchestrator/repository。
 
@@ -700,6 +704,26 @@ python scripts/v2_step10_verify.py --with-real-llm # 期望 22 PASS / 0 FAIL / 0
 3. 门槛 19 V1 零回归只断言「V1 文件存在 + V1 端点 200」，深度回归由已有 126 例 V1 测试覆盖。
 4. 门槛 22 api_key 静态扫描是启发式正则（极端编码可能漏报）；10.5 的 `assert_no_sensitive` 运行时双保险已覆盖 output JSON 路径。
 5. verify 脚本门槛 20 会跑一次全量 pytest（~983 例）；`--skip-pytest` 可只跑 ruff+扫描快速检查（此时门槛 1-20 标 SKIP）。
+
+### 9.10 10.7「记录真实运行数据」（已完成，待推送）
+
+**定位（用户冻结）**：10.7 = 真实运行证据永久化 + 脱敏 + Step 10 正式收尾，**不提前进入 Step 11**。
+
+**交付物**：
+- `docs/v2/step10-real-run-record.md`（9 节完整快照，纯表格/列表）：运行元信息 / 环境配置（白名单脱敏）/ 全链路总览 / 六阶段明细 / Review 6 维质量指标 / Optimizer 结果 / 10.6 验收结论 / 脱敏与安全声明 / 观察与已知限制。数据源 = 10.5 的 `output/v2_real_run_*.json` + `_step10_5_archive.md`（只读消费，不重跑 LLM）。
+- 更新本文件（§0/§2/§3/§7/§9.2/§9.6/新增本节）标记 Step 10 收尾。
+
+**脱敏边界（用户 P0）**：
+- **保留**：run_id / doc_id / version_id（ULID，随机标识、审计必需、无隐私）。
+- **脱敏/不记录**：需求正文与字段明细（仅引用 `examples/v2_sample_requirement.md` 路径 + 场景概述）、token、API Key、Authorization、base_url、用户敏感信息（user_id ULID）。
+- **不嵌 JSON 全文**：完整快照 = 提炼核心指标/关键字段为表格/列表，绝不把 output JSON 全文粘贴进 Markdown（避免文档过长）。
+- 真实 `output/v2_real_run_*.json` + `data/data_v2.db` 留在 gitignore 路径，不提交仓库（本地验收用，呼应 §9.9 P0）。
+
+**诚实边界**：
+1. 数据来自 10.5 单次真实运行（样本量=1），不具统计代表性；仅作 Step 10 完成证据，质量结论留 Step 11/12。
+2. accuracy=78 / missing_risk=72 等 LLM 软分偏低且有波动，文档如实记录实测值、不下质量结论、不代表稳定基线。
+3. 10.7 纯文档，不改任何代码、不新增测试（测试基线仍 980 passed + 3 skipped）。
+4. Step 10 完成后**不机械进入 Step 11**——须先按 §9.6 做中后期路线评审（用户另开）。
 
 ## 10. 协作约定（重要）
 
