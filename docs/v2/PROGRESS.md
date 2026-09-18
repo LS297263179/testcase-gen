@@ -563,17 +563,17 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 942 passed
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 980 passed + 3 skipped（real_llm marker 默认 skip；启用 V2_RUN_REAL_LLM=1 后 983）
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动服务（V1 在 /，V2 在 /v2；改代码/提示词需重启，DB model_config 实时生效）
 ```
 
-## 9. Step 10「V2 Runtime + Productization」（进行中：10.1~10.4 已推送，下一步 10.5）
+## 9. Step 10「V2 Runtime + Productization」（✅ 全部完成：10.1~10.7 已推送）
 
 > 需求来源：用户提供的《V2 Step10开发基线》文档（桌面，968 行）。
 > 详细实施计划：《Step 10 实施计划与代码差距分析》（用户已保存，含 10.1~10.7 每个子步骤的差距/实施/验收）。
-> **当前状态（2026-09）**：10.1（`e660ead`）/ 10.2（`5626084`）/ 10.3（`2ff8c9d`）/ **10.3.1 + 10.4（`cf15866`）** 已推送并三方同步（origin=gitee=`1733052`）；全量 942 passed，ruff 双绿，schema_version=10；同批 V1 运行时修复单独提交 `1733052`。真实 LLM 全链路留 10.5。
+> **当前状态（2026-09）**：Step 10 **全部完成**——10.1（`e660ead`）/10.2（`5626084`）/10.3（`2ff8c9d`）/10.3.1+10.4（`cf15866`）/10.5（`c7955c8`）/10.6（`ff799ab`）/10.7（`430a319`）已推送，origin=gitee=`430a319` 三方同步；全量 980 passed + 3 skipped，ruff 双绿，schema_version=10。真实运行数据已脱敏沉淀于 `docs/v2/step10-real-run-record.md`（详见 §9.8~§9.10）。下一步 = §9.6 中后期路线评审（待用户另开）。
 >
 > **10.4 完成情况（已推送 origin+gitee：`cf15866`；V1 运行时修复：`1733052`）**：
 > - ✅ 10.4 completed：`/v2` 独立页面（`templates/v2.html` + `static/v2_app.js` + `static/v2_style.css`）；决策2 未登录 302 跳回 V1；V1 三件套（index.html/app.js/style.css）零改动，`style.css` 只读复用为基础样式。
