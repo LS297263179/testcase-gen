@@ -4,159 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI 测试工程平台 · V2</title>
-    <!-- 复用 V1 基础观感（只读），V2 组件样式另见 v2_style.css -->
-    <link rel="stylesheet" href="/static/style.css">
-    <link rel="stylesheet" href="/static/v2_style.css">
+    <!-- Step 11 产品重构：V2 前端为 React + TypeScript + Vite 单页应用。
+         构建产物在 static/v2/（frontend-v2/ 源码，vite build 输出固定文件名）。
+         未登录由服务端 /v2 路由 302 跳回 V1（决策2 不变）；前端 /api/me 兜底。 -->
+    <link rel="stylesheet" href="/static/v2/v2_react.css">
 </head>
 <body>
-
-<!-- ==================== 顶栏 ==================== -->
-<div class="header">
-    <div class="header-left">
-        <h1>AI 测试工程平台 · V2</h1>
-        <span class="badge">V2 Runtime</span>
+<div id="root"></div>
+<noscript>
+    <div style="padding: 40px; font-family: sans-serif;">
+        <h2>AI 测试工程平台 · V2</h2>
+        <p>本页面需要 JavaScript。请启用浏览器脚本支持。</p>
+        <p>若资源 /static/v2/v2_react.js 缺失，请先在 frontend-v2/ 目录执行 <code>npm install && npm run build</code>
+            生成构建产物（服务端部署仅需提交入库的产物，无需 Node 环境）。</p>
     </div>
-    <div class="header-right">
-        <a class="header-btn" href="/">返回 V1</a>
-        <span class="username" id="v2Username"></span>
-        <button class="header-btn" id="btnLogout">退出</button>
-    </div>
-</div>
-
-<div class="v2-container">
-
-    <!-- 阶段说明 -->
-    <div class="v2-phase-note">
-        <div><b>阶段 A（自动）</b>：输入需求 &rarr; [生成] 触发 Runtime 同步执行 Step 2~8（IR &rarr; 测试点 &rarr; 策略 &rarr; 用例 &rarr; 评审 &rarr; 优化）。</div>
-        <div><b>阶段 B（主动）</b>：查看结果后，用户主动 [编辑] 用例 / [重新评审]（Step 9，不在自动链内）。</div>
-        <div class="v2-sync-note">生成为同步执行，可能需要数分钟，请耐心等待，勿重复点击。</div>
-    </div>
-
-    <!-- ==================== 需求输入区（阶段 A） ==================== -->
-    <div class="card">
-        <div class="card-header"><h3>需求输入 · 阶段 A（触发生成）</h3></div>
-        <div class="card-body">
-            <div class="v2-form-group">
-                <label for="reqTitle">需求标题</label>
-                <input type="text" id="reqTitle" placeholder="如：用户手机号验证码登录">
-            </div>
-            <div class="v2-form-group">
-                <label for="reqText">需求描述</label>
-                <textarea id="reqText" placeholder="粘贴需求文本（Markdown / 纯文本）..."></textarea>
-            </div>
-            <div class="v2-actions">
-                <button class="btn btn-primary" id="btnGenerate">生成</button>
-                <span class="v2-loading" id="genLoading" style="display:none;"><span class="spinner"></span> 正在同步执行全链路，可能需要数分钟...</span>
-            </div>
-            <div class="v2-alert v2-alert-error" id="genError" style="display:none;"></div>
-        </div>
-    </div>
-
-    <!-- ==================== Run 列表区 ==================== -->
-    <div class="card">
-        <div class="card-header">
-            <h3>我的 Run 列表</h3>
-            <button class="btn btn-sm btn-ghost" id="btnRefreshRuns">刷新</button>
-        </div>
-        <div class="card-body">
-            <table class="v2-table" id="runsTable">
-                <thead>
-                    <tr><th>标题</th><th>状态</th><th>创建时间</th><th>失败步骤</th><th></th></tr>
-                </thead>
-                <tbody id="runsTableBody"></tbody>
-            </table>
-            <div class="v2-empty" id="runsEmpty" style="display:none;">暂无 Run。先在上方输入需求并点击 [生成]。</div>
-        </div>
-    </div>
-
-    <!-- ==================== Run 详情区 ==================== -->
-    <div class="card" id="runDetail" style="display:none;">
-        <div class="card-header">
-            <h3>Run 详情 <span class="v2-muted" id="runDetailTitle"></span></h3>
-            <button class="btn btn-sm btn-ghost" id="btnCloseRun">收起</button>
-        </div>
-        <div class="card-body">
-            <div class="v2-subsection">
-                <div class="v2-subtitle">状态 &amp; 计数</div>
-                <div id="runSummary"></div>
-            </div>
-            <div class="v2-subsection">
-                <div class="v2-subtitle">Coverage 双指标（Strategy Obligation / Requirement Item）</div>
-                <div id="runCoverage"></div>
-            </div>
-            <div class="v2-subsection">
-                <div class="v2-subtitle">TestPoints（provenance 标签 LLM / STRATEGY）</div>
-                <div id="runTestPoints"></div>
-            </div>
-            <div class="v2-subsection">
-                <div class="v2-subtitle">TestCases（状态色标，点击进详情）</div>
-                <div id="runTestCases"></div>
-            </div>
-            <div class="v2-subsection">
-                <div class="v2-subtitle">Review（6 维 + Overall）</div>
-                <div id="runReview"></div>
-            </div>
-            <div class="v2-subsection">
-                <div class="v2-subtitle">Optimizer（归档数 / 归档用例）</div>
-                <div id="runOptimizer"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- ==================== TestCase 详情区 ==================== -->
-    <div class="card" id="caseDetail" style="display:none;">
-        <div class="card-header">
-            <h3>TestCase 详情 <span class="v2-muted" id="caseDetailTitle"></span></h3>
-            <button class="btn btn-sm btn-ghost" id="btnCloseCase">收起</button>
-        </div>
-        <div class="card-body">
-            <div class="v2-actions">
-                <button class="btn btn-sm btn-outline" id="btnEditCase">编辑（阶段 B）</button>
-                <button class="btn btn-sm btn-outline" id="btnReReview">重新评审（阶段 B）</button>
-            </div>
-            <div class="v2-subsection"><div class="v2-subtitle">基本信息</div><div id="caseBasic"></div></div>
-            <div class="v2-subsection"><div class="v2-subtitle">Review（本用例相关 finding）</div><div id="caseReview"></div></div>
-            <div class="v2-subsection"><div class="v2-subtitle">Revision 列表</div><div id="caseRevisions"></div></div>
-            <div class="v2-subsection"><div class="v2-subtitle">Trace 链（RequirementItem &rarr; TestPoint &rarr; TestCase，只读）</div><div id="caseTrace"></div></div>
-        </div>
-    </div>
-
-</div>
-
-<!-- ==================== 编辑弹层（阶段 B） ==================== -->
-<div class="v2-modal-overlay" id="editModal" style="display:none;">
-    <div class="v2-modal">
-        <div class="v2-modal-header">
-            <h3>编辑 TestCase</h3>
-            <button class="v2-modal-close" id="btnCloseEdit">&times;</button>
-        </div>
-        <div class="v2-modal-body">
-            <input type="hidden" id="editTcId">
-            <input type="hidden" id="editRunId">
-            <input type="hidden" id="editUpdatedAt"><!-- 乐观锁：读取时的 updated_at -->
-            <div class="v2-form-group"><label for="editTitle">标题 (title)</label><input type="text" id="editTitle"></div>
-            <div class="v2-form-group"><label for="editModule">模块 (module)</label><input type="text" id="editModule"></div>
-            <div class="v2-form-group">
-                <label for="editPriority">优先级 (priority)</label>
-                <select id="editPriority">
-                    <option value="P0">P0</option><option value="P1">P1</option>
-                    <option value="P2">P2</option><option value="P3">P3</option>
-                </select>
-            </div>
-            <div class="v2-form-group"><label for="editPrecondition">前置条件 (precondition)</label><textarea id="editPrecondition" class="v2-ta-sm"></textarea></div>
-            <div class="v2-form-group"><label for="editSteps">步骤 (steps，每行一步；编辑将简化为纯动作描述)</label><textarea id="editSteps" class="v2-ta-sm"></textarea></div>
-            <div class="v2-form-group"><label for="editExpected">预期结果 (expected)</label><textarea id="editExpected" class="v2-ta-sm"></textarea></div>
-            <div class="v2-form-group"><label for="editRemark">备注 (remark)</label><textarea id="editRemark" class="v2-ta-sm"></textarea></div>
-            <div class="v2-alert v2-alert-error" id="editError" style="display:none;"></div>
-        </div>
-        <div class="v2-modal-footer">
-            <button class="btn btn-ghost" id="btnCancelEdit">取消</button>
-            <button class="btn btn-primary" id="btnSaveEdit">保存</button>
-        </div>
-    </div>
-</div>
-
-<div class="toast-container" id="toastContainer"></div>
-<script src="/static/v2_app.js"></script>
+</noscript>
+<script type="module" src="/static/v2/v2_react.js"></script>
 </body>
 </html>

@@ -25,7 +25,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09）：Step 1~9 已全部完成并推送；Step 10「V2 Runtime + Productization」✅ 全部完成——10.1（`e660ead`）/ 10.2（`5626084`）/ 10.3（`2ff8c9d`）/ 10.3.1 + 10.4（`cf15866`）/ 10.5（`c7955c8`）/ 10.6（`ff799ab`）已推送；10.7「记录真实运行数据」已完成（待推送）——交付 `docs/v2/step10-real-run-record.md`（脱敏永久记录：核心指标/关键字段提炼为表格，不嵌 JSON 全文；ULID 保留，需求正文/token/API Key/Authorization/base_url/user_id 脱敏）+ 更新本文件标记 Step 10 收尾。全量 980 passed + 3 skipped，ruff 双绿，schema_version=10。**Step 10 正式收尾，不提前进入 Step 11**；下一步 = §9.6「V2 中后期路线评审」（A-F 问题，待用户另开）。**
+**当前进度（截至 2026-09）：Step 1~10 已全部完成并推送（origin=gitee=`430a319` 三方同步）。Step 10 后又完成两项（待用户验收后提交）：① V2 产品级 UI/UX 重构——V2 前端升级 React+TS+Vite（`frontend-v2/`，产物 `static/v2/`），Run-centric IA（工作台/测试运行/详情 7 Tab/资源/设置），唯一后端补充只读端点 `GET /api/v2/runs/<id>/requirements`（13→14），旧 `static/v2_app.js`/`v2_style.css` 退役，详见 `docs/v2/v2-ui-react-refactor.md`；全量 984 passed + 3 skipped，ruff 双绿，schema_version=10，V1 零改动。② 中后期路线评审（A-F 问题）仍待用户另开。**
 
 **★ Step 9 后真实项目状态审计结论（Step 10 的由来）**：V2 后端代码完整但**完全未产品化**——`data/data_v2.db` 是空库（Tables: []，从未运行 create_v2_schema）、`web/` 目录 0 处引用 `core.v2`（前端纯 V1）、无 CLI 入口、无顶层 Runtime 串联 Step 2→8、V2 LLM 从未真实调用（875 tests 全 mock/临时 DB）。因此 Step 10 不新增 AI 功能，专注把已有能力变成用户可真实运行的产品链路。
 
@@ -104,10 +104,11 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | ├ 10.4 V2 前端接线 | ✅ 完成+推送 | `web/__init__.py` 加 /v2 路由 + `templates/v2.html` + `static/v2_app.js` + `static/v2_style.css`（独立页面，复用 V1 认证，不改 V1 三件套）；修复乐观锁时间戳 409 缺陷 + 3 回归 | `cf15866` |
 | ├ 10.5 真实 LLM Run | ✅ 完成+推送 | `scripts/v2_real_run.py` CLI（483 行）+ `examples/v2_sample_requirement.md`（订单退款场景）+ `tests/test_v2_real_run_script.py`（20 smoke）；真实跑通 Step 2→8（run_id=`01M2QBWABYW3VTNYK5BBX2WDN4`，9m26s，157 LLM calls，28 items / 174 TPs / 174 TCs / 25 obligations，review overall=85.9，optimizer archived=24）；output JSON 无 api_key；修复 Windows GBK emoji 编码 bug | `c7955c8` |
 | ├ 10.6 完整端到端验证 | ✅ 完成+推送 | `tests/test_step10_acceptance.py`（17 门槛 mock）+ `tests/test_step10_real_llm.py`（门槛 7-9 real_llm marker，本地验收用）+ `scripts/v2_step10_verify.py`（一键跑 + 22 条门槛报告表）+ pyproject 注册 real_llm marker | `ff799ab` |
-| └ 10.7 记录运行数据 | ✅ 完成（待推送） | `docs/v2/step10-real-run-record.md`（脱敏永久记录：9 节表格/列表，不嵌 JSON 全文）+ 更新本文件（Step 10 收尾）| — |
+| └ 10.7 记录运行数据 | ✅ 完成+推送 | `docs/v2/step10-real-run-record.md`（脱敏永久记录：9 节表格/列表，不嵌 JSON 全文）+ 更新本文件（Step 10 收尾）| `430a319` |
+| — V2 UI/UX 重构（React） | ✅ 完成（待验收提交） | `frontend-v2/`（React+TS+Vite SPA）+ `templates/v2.html` SPA 壳 + 只读端点 requirements（13→14）+ 旧 v2_app.js/v2_style.css 退役；详见 `docs/v2/v2-ui-react-refactor.md` | — |
 | 11~13 | ⬜ 未开始（顺序待 Step 10 完成后路线评审） | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 980 passed + 3 skipped**（Step 10.5 后 962 + 10.6 新增 18 acceptance + 3 real_llm marker 默认 skip），schema_version=10，ruff check/format 全绿。启用 real_llm（`V2_RUN_REAL_LLM=1`）后为 983 passed。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 984 passed + 3 skipped**（Step 10 基线 980 + UI 重构新增 requirements 端点 4 测试；启用 V2_RUN_REAL_LLM=1 后 987），schema_version=10，ruff check/format 全绿。
 
 ---
 
@@ -540,9 +541,9 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
   human_editor.py human_editor_orchestrator.py                           # Step 9 Human Editor（人工编辑 + Revision 快照 + 乐观锁 + Validator）
   bootstrap.py   # Step 10.1 V2 DB 真初始化（ensure_v2_ready，web 启动路径调用）
   runtime.py client_factory.py                                           # Step 10.2 顶层 Runtime（run_v2_pipeline）+ LLMClient 构建工厂
-web/             # Web 层：__init__.py（V1 蓝图 + /v2 页面路由 Step 10.4）+ v2_service.py（HTTP↔core/v2 适配 Step 10.3）+ v2_routes.py（13 个 /api/v2/* 端点）
+web/             # Web 层：__init__.py（V1 蓝图 + /v2 页面路由 Step 10.4）+ v2_service.py（HTTP↔core/v2 适配 Step 10.3）+ v2_routes.py（14 个 /api/v2/* 端点，含 UI 重构新增只读 requirements）
 scripts/         # CLI：v2_real_run.py（Step 10.5 真实 LLM 全链路，权威验证路径）+ v2_step10_verify.py（Step 10.6 一键验收 + 22 条门槛报告表）
-templates/v2.html static/v2_app.js static/v2_style.css   # Step 10.4 V2 前端（复用 V1 认证与基础样式；V1 三件套零改动）
+templates/v2.html（React SPA 壳）+ frontend-v2/（V2 前端源码 React+TS+Vite）+ static/v2/（构建产物，入库）  # UI 重构后形态；V1 三件套零改动
 docs/v2/         # 设计文档（step1-data-model.md + step3/step4/step5/step6/step7/step8/step9 + step10-real-run-record.md 真实运行脱敏记录 + 本文件）
 tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolver/migration
                  # ir_*/step2_acceptance

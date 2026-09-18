@@ -5,7 +5,8 @@
 
 ★ MVP 限制（P0-4）：同步执行，不实现 Celery / Redis / 消息队列 / 后台 Job。
 ★ 范围（P0-5）：只把已有 core/v2 能力接到 Web，不扩 Runtime、不新增 AI 能力。
-★ 端点（Step 10.3.1）：共 13 个 /api/v2/* 端点（1 健康检查 + 1 POST /runs + 7 Run/资产查询 + 4 TestCase 人工/追溯）。
+★ 端点（Step 10.3.1 + Step 11 UI 重构）：共 14 个 /api/v2/* 端点
+        （1 健康检查 + 1 POST /runs + 8 Run/资产查询 + 4 TestCase 人工/追溯）。
 """
 
 from __future__ import annotations
@@ -224,6 +225,32 @@ def get_coverage(run_id: str) -> dict:
         "strategy_obligation_coverage": repo.obligation_coverage_ratio(run_id),
         "requirement_item_coverage": None,
         "uncovered_item_ids": [],
+    }
+
+
+def get_requirements_context(run_id: str) -> dict | None:
+    """需求与 AI 分析上下文（只读，Step 11 UI 重构新增）：Doc + Version + Item 列表。
+
+    仅用于 V2 前端「需求与 AI 分析」页展示 Requirement IR；
+    复用已有 repository 查询，不改 schema / Runtime / Run 数据结构。Run 不存在→None（上层 404）。
+    """
+    run = repo.get_run(run_id)
+    if run is None:
+        return None
+    doc = repo.get_doc(run.doc_id)
+    version = repo.get_version(run.requirement_version_id)
+    items = repo.list_items(run.requirement_version_id)
+    return {
+        "run_id": run.id,
+        "status": _jsonable(run.status),
+        "doc": _jsonable(doc) if doc is not None else None,
+        "version": _jsonable(version) if version is not None else None,
+        "items": [_jsonable(i) for i in items],
+        "item_count": len(items),
+        "field_count": sum(len(i.fields) for i in items),
+        "rule_count": sum(len(i.rules) for i in items),
+        "permission_count": sum(len(i.permissions) for i in items),
+        "modules": sorted({i.module for i in items}),
     }
 
 

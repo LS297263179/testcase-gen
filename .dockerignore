@@ -9,3 +9,8 @@ output/
 .env
 .claude/
 worktrees/
+# V2 前端：源码工程依赖不入库镜像（构建产物 static/v2/ 已提交，镜像无需 Node）
+frontend-v2/node_modules/
+frontend-v2/dist/
+.venv/
+venv/

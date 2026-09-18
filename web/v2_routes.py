@@ -4,8 +4,8 @@
         业务流程全下沉到 core/v2/runtime.py（Runtime 是 Run 状态唯一控制者）。
 ★ P0-4：POST /runs 同步执行 = MVP 已知限制；10.3 不实现 Celery / Redis / 消息队列 / 后台 Job，异步化留未来。
 ★ P0-5：只接已有 core/v2 能力，不扩 Runtime、不新增 AI 能力、不做文件上传（POST /runs 仅 JSON）。
-★ 端点（Step 10.3.1）：共 13 个 /api/v2/* 端点 = health + POST /runs + GET /runs（列表）
-        + GET /runs/<id>{,/test-points,/test-cases,/review,/optimizer,/coverage}
+★ 端点（Step 10.3.1 + Step 11 UI 重构）：共 14 个 /api/v2/* 端点 = health + POST /runs + GET /runs（列表）
+        + GET /runs/<id>{,/test-points,/test-cases,/review,/optimizer,/coverage,/requirements}
         + POST /test-cases/<id>{/edit,/re-review} + GET /test-cases/<id>{/revisions,/trace}。
 """
 
@@ -147,6 +147,19 @@ def v2_get_coverage(run_id):
     if not v2_service.run_exists(run_id):
         return jsonify({"error": f"Run 不存在: {run_id}"}), 404
     return jsonify({"success": True, "coverage": v2_service.get_coverage(run_id)})
+
+
+@bp.route("/api/v2/runs/<run_id>/requirements", methods=["GET"])
+@login_required
+def v2_get_requirements(run_id):
+    """需求与 AI 分析（只读，Step 11 UI 重构）：Doc + Version + RequirementItem 列表。
+
+    仅供 V2 前端展示 Requirement IR；不改 schema / Runtime / Run 数据结构。
+    """
+    ctx = v2_service.get_requirements_context(run_id)
+    if ctx is None:
+        return jsonify({"error": f"Run 不存在: {run_id}"}), 404
+    return jsonify({"success": True, "requirements": ctx})
 
 
 # ============================================================

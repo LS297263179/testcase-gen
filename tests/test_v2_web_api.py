@@ -573,8 +573,10 @@ def test_34_v2_page_renders_when_logged_in(v2_client):
     rv = v2_client.get("/v2")
     assert rv.status_code == 200
     html = rv.get_data(as_text=True)
-    assert "v2_app.js" in html  # v2.html 标志
-    assert "v2_style.css" in html
+    # Step 11 产品重构：/v2 已升级为 React SPA 壳（构建产物 static/v2/v2_react.*）
+    assert "v2_react.js" in html
+    assert "v2_react.css" in html
+    assert 'id="root"' in html
 
 
 def test_35_v2_page_redirects_when_anonymous(v2_anon):
@@ -632,3 +634,63 @@ def test_38_edit_stale_zulu_still_409(v2_client):
         headers={"X-CSRF-Token": token},
     )
     assert rv.status_code == 409
+
+
+# ============================================================
+# GET /api/v2/runs/<id>/requirements（只读，Step 11 UI 重构第 14 端点）
+# ============================================================
+
+
+def test_39_requirements_context_with_items(v2_client):
+    """返回 Doc + Version + Item 列表及 fields/permissions 计数（复用播种数据，不改 schema）。"""
+    from core.schemas import DataType, FieldSpec, PermissionRule
+
+    seed = _seed_v2()
+    run = repo.get_run(seed.run_id)
+    repo.save_item(
+        RequirementItem(
+            version_id=run.requirement_version_id,
+            seq=2,
+            type=RequirementItemType.DATA_FIELD,
+            module="m2",
+            statement="手机号",
+            fields=[
+                FieldSpec(
+                    name="phone", label="手机号", data_type=DataType.STRING, required=True, min_length=11, max_length=11
+                )
+            ],
+            permissions=[PermissionRule(role="admin", resource="order", action="refund", allowed=True)],
+        )
+    )
+    rv = v2_client.get(f"/api/v2/runs/{seed.run_id}/requirements")
+    assert rv.status_code == 200
+    body = rv.get_json()
+    assert body["success"] is True
+    ctx = body["requirements"]
+    assert ctx["run_id"] == seed.run_id
+    assert ctx["item_count"] == 2
+    assert ctx["field_count"] == 1 and ctx["permission_count"] == 1 and ctx["rule_count"] == 0
+    assert ctx["modules"] == ["m", "m2"]
+    assert ctx["doc"]["title"] == "T"
+    assert ctx["version"]["version_no"] == 1
+    assert sorted(i["statement"] for i in ctx["items"]) == ["s", "手机号"]
+
+
+def test_40_requirements_404_for_missing_run(v2_client):
+    rv = v2_client.get(f"/api/v2/runs/{FAKE_RUN_ID}/requirements")
+    assert rv.status_code == 404
+
+
+def test_41_requirements_requires_login(v2_anon):
+    assert v2_anon.get(f"/api/v2/runs/{FAKE_RUN_ID}/requirements").status_code == 401
+
+
+def test_42_requirements_gating_503_when_not_ready(v2_client, monkeypatch):
+    """新端点纳入现有 V2_READY gating（before_request 自动覆盖）。"""
+    import web
+
+    seed = _seed_v2()
+    monkeypatch.setitem(web.app.config, "V2_READY", False)
+    rv = v2_client.get(f"/api/v2/runs/{seed.run_id}/requirements")
+    assert rv.status_code == 503
+    assert rv.get_json()["v2_ready"] is False

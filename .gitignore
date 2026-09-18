@@ -41,3 +41,8 @@ data/
 data.db
 *.log
 .coverage
+
+# V2 前端（React + TS + Vite）：依赖与中间物不入库；构建产物 static/v2/ 故意提交（部署无需 Node）
+frontend-v2/node_modules/
+frontend-v2/dist/
+frontend-v2/*.tsbuildinfo
