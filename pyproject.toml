@@ -72,3 +72,6 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+markers = [
+    "real_llm: 需要本地 10.5 真实产物 + V2_RUN_REAL_LLM=1 环境变量（本地验收用，非永久 CI 资产）",
+]
