@@ -6,7 +6,7 @@
   "description": "AI 测试工程平台 V2 前端（React + TypeScript + Vite）。构建产物输出到 ../static/v2/，服务端部署无需 Node。",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/bump-template-version.mjs",
     "typecheck": "tsc --noEmit",
     "preview": "vite preview"
   },

@@ -1,0 +1,32 @@
+/* ============================================================
+   V2 基础层：reset / 排版 / 全局交互态
+   ============================================================ */
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: "Segoe UI", "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+  font-size: var(--fs-body);
+  line-height: var(--lh);
+  color: var(--text-1);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4, p, ul, ol { margin: 0; }
+a { color: var(--primary); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: var(--primary-soft); }
+button { font-family: inherit; }
+
+/* 排版工具类（全站仅这 6 档） */
+.t-page { font-size: var(--fs-page); font-weight: 700; letter-spacing: -0.2px; }
+.t-drawer { font-size: var(--fs-drawer); font-weight: 700; }
+.t-section { font-size: var(--fs-strong); font-weight: 700; color: var(--text-1); }
+.t-body { font-size: var(--fs-body); color: var(--text-1); }
+.t-aux { font-size: var(--fs-aux); color: var(--text-3); }
+.t-num { font-size: var(--fs-num); font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.5px; }
+.num { font-variant-numeric: tabular-nums; }
+
+/* 全局焦点/选中态 */
+:focus-visible { outline: 2px solid var(--primary-ring); outline-offset: 1px; border-radius: 4px; }

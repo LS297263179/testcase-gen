@@ -20,9 +20,10 @@ export interface RunBundle {
   optimizer: OptimizerResult | null;
   requirements: RequirementsContext | null;
   reload: () => void;
-  /** 当前打开的 TestCase 详情 Drawer（跨 Tab 共享：Review「查看问题用例」也用它） */
+  /** 当前打开的 TestCase 详情 Drawer（跨 Tab 共享；action 支持直接进编辑/重评审） */
   caseDrawerId: string | null;
-  openCase: (id: string | null) => void;
+  caseDrawerAction: "" | "edit";
+  openCase: (id: string | null, action?: "" | "edit") => void;
 }
 
 const Ctx = createContext<RunBundle | null>(null);
@@ -37,7 +38,7 @@ export function RunBundleProvider({ runId, children }: { runId: string; children
   const [bundle, setBundle] = useState<RunBundle | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [tick, setTick] = useState(0);
-  const [caseDrawerId, setCaseDrawerId] = useState<string | null>(null);
+  const [caseDrawer, setCaseDrawer] = useState<{ id: string | null; action: "" | "edit" }>({ id: null, action: "" });
 
   useEffect(() => {
     let cancelled = false;
@@ -65,8 +66,9 @@ export function RunBundleProvider({ runId, children }: { runId: string; children
           optimizer: ok(opt),
           requirements: ok(req),
           reload: () => setTick((t) => t + 1),
-          caseDrawerId,
-          openCase: setCaseDrawerId,
+          caseDrawerId: caseDrawer.id,
+          caseDrawerAction: caseDrawer.action,
+          openCase: (id, action = "") => setCaseDrawer({ id, action }),
         });
       } catch (e) {
         if (!cancelled) setError(e);
@@ -78,10 +80,10 @@ export function RunBundleProvider({ runId, children }: { runId: string; children
     // caseDrawerId 不进依赖：Drawer 开关不触发重新拉取
   }, [runId, tick]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 保持 openCase 引用稳定：bundle 更新时同步 drawer 状态
+  // Drawer 开关不触发重新拉取，仅同步到已有 bundle
   useEffect(() => {
-    setBundle((b) => (b ? { ...b, caseDrawerId } : b));
-  }, [caseDrawerId]);
+    setBundle((b) => (b ? { ...b, caseDrawerId: caseDrawer.id, caseDrawerAction: caseDrawer.action } : b));
+  }, [caseDrawer]);
 
   const reload = useCallback(() => setTick((t) => t + 1), []);
 

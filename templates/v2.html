@@ -6,8 +6,9 @@
     <title>AI 测试工程平台 · V2</title>
     <!-- Step 11 产品重构：V2 前端为 React + TypeScript + Vite 单页应用。
          构建产物在 static/v2/（frontend-v2/ 源码，vite build 输出固定文件名）。
-         未登录由服务端 /v2 路由 302 跳回 V1（决策2 不变）；前端 /api/me 兜底。 -->
-    <link rel="stylesheet" href="/static/v2/v2_react.css">
+         ?v= 版本号由 npm run build 的 bump-template-version 脚本自动更新（缓存失效，零后端改动）。
+         认证沿用决策2：未登录由服务端 /v2 路由 302 跳回 V1；前端 /api/me 兑底。 -->
+    <link rel="stylesheet" href="/static/v2/v2_react.css?v=mu98dkmu">
 </head>
 <body>
 <div id="root"></div>
@@ -19,6 +20,6 @@
             生成构建产物（服务端部署仅需提交入库的产物，无需 Node 环境）。</p>
     </div>
 </noscript>
-<script type="module" src="/static/v2/v2_react.js"></script>
+<script type="module" src="/static/v2/v2_react.js?v=mu98dkmu"></script>
 </body>
 </html>

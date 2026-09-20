@@ -4,7 +4,7 @@
 // ============================================================
 
 import { useMemo, useState } from "react";
-import { Card, ProvBadge } from "../components/ui";
+import { ProvBadge, Section, StatStrip } from "../components/ui";
 import { useRunBundle } from "./RunBundle";
 
 export function TestPointsTab() {
@@ -37,37 +37,20 @@ export function TestPointsTab() {
 
   return (
     <div>
-      <Card title={`测试点设计来源（共 ${testPoints.length} 个）`}>
-        <div className="grid-4">
-          <div className="metric">
-            <div className="m-label">LLM 语义设计（Step 3）</div>
-            <div className="m-value">{stats.llm}</div>
-            <div className="m-sub">
-              单需求项 {stats.scope.get("item") ?? 0} · 跨项联动 {stats.scope.get("cross_item") ?? 0}
-            </div>
-          </div>
-          <div className="metric">
-            <div className="m-label">Strategy 确定性补充（Step 4）</div>
-            <div className="m-value">{stats.strategy}</div>
-            <div className="m-sub">边界值 / 等价类 / 权限矩阵（代码派生）</div>
-          </div>
-          <div className="metric">
-            <div className="m-label">覆盖义务</div>
-            <div className="m-value">{run.counts?.obligations ?? 0}</div>
-            <div className="m-sub">策略引擎派生的必测项</div>
-          </div>
-          <div className="metric">
-            <div className="m-label">技术分布</div>
-            <div className="m-value small" style={{ fontSize: 14, lineHeight: 1.6 }}>
-              {[...stats.dims.entries()].map(([k, v]) => `${k} ${v}`).join(" · ") || "-"}
-            </div>
-          </div>
-        </div>
-      </Card>
+      <Section title="AI 与规则的分工" hint="LLM 语义设计 + 策略引擎确定性补充">
+        <StatStrip
+          items={[
+            { label: "LLM 语义设计（Step 3）", value: stats.llm, sub: `单需求项 ${stats.scope.get("item") ?? 0} · 跨项 ${stats.scope.get("cross_item") ?? 0}`, tone: "hl" },
+            { label: "Strategy 确定性补充（Step 4）", value: stats.strategy, sub: "边界/等价类/权限", tone: "ok" },
+            { label: "覆盖义务", value: run.counts?.obligations ?? 0, sub: "策略派生必测项" },
+            { label: "维度分布", value: [...stats.dims.entries()].map(([k, v]) => `${k} ${v}`).join(" · ") || "-" },
+          ]}
+        />
+      </Section>
 
-      <Card
+      <Section
         title="测试点列表"
-        extra={
+        actions={
           <div className="filter-bar" style={{ margin: 0 }}>
             <input type="search" placeholder="搜索标题/描述/子分类..." value={q} onChange={(e) => setQ(e.target.value)} />
             <select value={prov} onChange={(e) => setProv(e.target.value)}>
@@ -119,9 +102,9 @@ export function TestPointsTab() {
             ))}
           </tbody>
         </table>
-        {filtered.length > 300 ? <div className="muted small">显示前 300 条（共 {filtered.length} 条，请用筛选缩小范围）。</div> : null}
+        {filtered.length > 300 ? <div className="t-aux">显示前 300 条（共 {filtered.length} 条，请用筛选缩小范围）。</div> : null}
         {!filtered.length ? <div className="empty">无匹配测试点。</div> : null}
-      </Card>
+      </Section>
     </div>
   );
 }

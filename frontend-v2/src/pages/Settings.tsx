@@ -97,6 +97,10 @@ export function Settings() {
                 <div className="form-group">
                   <label>生成模型（需求解析 / 测试点 / 用例合成）</label>
                   <input type="text" value={String(gen.model || "")} onChange={(e) => setSection("generate", "model", e.target.value)} />
+                  {/* P5：API Key 只显示已配置/未配置，不展示任何可识别内容 */}
+                  <div className="hint">
+                    API Key：<span className={`badge ${gen.api_key_hint ? "badge-run-done" : "badge-run-neutral"}`}>{gen.api_key_hint ? "已配置" : "未配置"}</span>
+                  </div>
                   {advanced ? (
                     <>
                       <div className="hint">api_type：{String(gen.api_type || "-")}</div>
@@ -105,7 +109,7 @@ export function Settings() {
                         type="password"
                         value={newGenKey}
                         onChange={(e) => setNewGenKey(e.target.value)}
-                        placeholder={`api_key（不修改则留空，当前 ${String(gen.api_key_hint || "****")}）`}
+                        placeholder="输入新 Key 才会更新；不修改则留空"
                         style={{ marginTop: 6 }}
                         autoComplete="off"
                       />
@@ -119,7 +123,10 @@ export function Settings() {
                 <div className="form-group">
                   <label>评审模型（AI Reviewer）</label>
                   <input type="text" value={String(rev.model || "")} onChange={(e) => setSection("review", "model", e.target.value)} />
-                  <div className="hint">enabled：{String(rev.enabled ?? true)} · Key：{String(rev.api_key_hint || "跟随生成配置或已设置 ****")}</div>
+                  <div className="hint">
+                    enabled：{String(rev.enabled ?? true)} · 评审 Key：
+                    <span className={`badge ${rev.api_key_hint ? "badge-run-done" : "badge-run-neutral"}`}>{rev.api_key_hint ? "已配置" : "未配置（沿用生成 Key）"}</span>
+                  </div>
                   {advanced ? (
                     <div className="muted small" style={{ marginTop: 6 }}>
                       评审 Key 如需修改请使用 V1 页面完整配置（避免在 V2 页回显密钥）。

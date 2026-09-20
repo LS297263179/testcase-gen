@@ -1,0 +1,74 @@
+/* ============================================================
+   V2 Design Token（P0 视觉体系 · 唯一颜色/字体/空间来源）
+   规则：
+   - 颜色只承担四种职责：状态、来源（AI/Strategy）、操作优先级、选中态。
+   - AI Violet / Strategy Teal 仅用于低饱和 Badge/Chip/状态点，
+     禁止作为大型区域背景或主要按钮色。
+   - 页面组件不允许自定义色值，一律引用本文件 token。
+   ============================================================ */
+
+:root {
+  /* ---- 品牌主色（Indigo 系，收敛为一个主色 + 一个 soft 底） ---- */
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --primary-soft: #eef2ff;
+  --primary-line: #c7d2fe;
+  --primary-ring: rgba(79, 70, 229, 0.28);
+
+  /* ---- 语义状态色（只用于状态与操作优先级） ---- */
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --success-line: #bbf7d0;
+  --warning: #b45309;
+  --warning-soft: #fff7e8;
+  --warning-line: #fed7aa;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  --info: #0369a1;
+  --info-soft: #eff6ff;
+  --info-line: #bae6fd;
+
+  /* ---- 来源识别色（AI/LLM = Violet，Strategy = Teal，仅 chip 级） ---- */
+  --ai: #6d28d9;
+  --ai-soft: #f5f3ff;
+  --ai-line: #ddd6fe;
+  --strategy: #0f766e;
+  --strategy-soft: #f0fdfa;
+  --strategy-line: #99f6e4;
+
+  /* ---- 中性灰阶 ---- */
+  --text-1: #0f172a; /* 主文本 */
+  --text-2: #475569; /* 次文本 */
+  --text-3: #94a3b8; /* 辅助文本 */
+  --bg: #f7f8fa;     /* 页面背景 */
+  --bg-soft: #f1f5f9; /* 浅底区域 */
+  --surface: #ffffff;
+  --line: #e5e9f0;    /* 唯一常规边框色 */
+  --divider: #edf1f6; /* 分隔线（比边框更弱） */
+
+  /* ---- Typography（6 档收敛） ---- */
+  --fs-aux: 12px;
+  --fs-body: 13px;
+  --fs-strong: 14px;
+  --fs-drawer: 16px;
+  --fs-page: 20px;
+  --fs-num: 26px;
+  --lh: 1.65;
+
+  /* ---- Space / Layout ---- */
+  --sp-1: 8px;
+  --sp-2: 16px;
+  --sp-3: 24px;
+  --sp-sec: 28px;
+  --page-max: 1280px;
+  --sidebar-w: 212px;
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 14px;
+
+  /* ---- Elevation（三级） ---- */
+  --shadow-none: none;
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-overlay: 0 12px 32px rgba(15, 23, 42, 0.16);
+}

@@ -1,23 +1,40 @@
 // ============================================================
-// 需求与 AI 分析页：展示 Requirement IR（Step 2 结构化解析结果）。
-// 数据源：GET /api/v2/runs/<id>/requirements（本轮新增只读端点）+ coverage。
-// 「AI 做了什么」第一层答案：把原始需求解析成了多少需求项/字段/规则/权限。
+// 需求与 AI 分析页（P0 重排 + P4 锚点定位）
+// 数据源：GET /api/v2/runs/<id>/requirements + coverage（真实端点，不伪造）。
+// P4：从 Review finding「查看需求」跳入时，通过 location.state.focusItem
+//     自动展开对应需求项、滚动定位并高亮 2s。
 // ============================================================
 
-import { Fragment, useState } from "react";
-import { Card, CoverageBar, EmptyState } from "../components/ui";
+import { Fragment, useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
+import { CoverageBar, Section, StatStrip } from "../components/ui";
 import { useRunBundle } from "./RunBundle";
 import type { RequirementItem } from "../types";
 
 export function RequirementsTab() {
   const { requirements: req, coverage, testPoints } = useRunBundle();
   const [open, setOpen] = useState<string | null>(null);
+  const loc = useLocation();
+  const focusItem = (loc.state as { focusItem?: string } | null)?.focusItem;
+
+  // P4 锚点：展开 + 滚动 + 高亮
+  useEffect(() => {
+    if (!focusItem) return;
+    setOpen(focusItem);
+    requestAnimationFrame(() => {
+      const el = document.getElementById("req-item-" + focusItem);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("item-flash");
+        setTimeout(() => el.classList.remove("item-flash"), 2200);
+      }
+    });
+  }, [focusItem, req]);
 
   if (!req) {
-    return <EmptyState text="需求 IR 数据不可用（该运行未关联需求版本，或初始化于旧版本）。" />;
+    return <div className="empty">需求 IR 数据不可用（该运行未关联需求版本，或初始化于旧版本）。</div>;
   }
 
-  // 需求项 → 测试点数量映射（test_point.item_ids 反查）
   const tpCountByItem = new Map<string, number>();
   testPoints.forEach((tp) => (tp.item_ids || []).forEach((id) => tpCountByItem.set(id, (tpCountByItem.get(id) || 0) + 1)));
 
@@ -27,82 +44,38 @@ export function RequirementsTab() {
     arr.push(it);
     byModule.set(it.module, arr);
   });
+  const low = req.items.filter((i) => i.confidence_level && i.confidence_level !== "high");
 
   return (
     <div>
-      <div className="grid-4" style={{ marginBottom: 16 }}>
-        <Card>
-          <div className="kv-grid">
-            <div className="kv">
-              <span className="k">需求文档</span>
-              <span className="v">{req.doc?.title || "-"}</span>
-            </div>
-            <div className="kv">
-              <span className="k">版本</span>
-              <span className="v">v{req.version?.version_no ?? "-"}</span>
-            </div>
-            <div className="kv">
-              <span className="k">来源类型</span>
-              <span className="v">{req.doc?.source_type || "-"}</span>
-            </div>
+      <Section title="AI 结构化解析产出" hint={`${req.doc?.title || "-"} · v${req.version?.version_no ?? "-"} · 来源 ${req.doc?.source_type || "-"}`}>
+        <StatStrip
+          items={[
+            { label: "需求项", value: req.item_count, tone: "hl" },
+            { label: "字段规格", value: req.field_count, sub: "驱动策略引擎" },
+            { label: "业务规则", value: req.rule_count },
+            { label: "权限规则", value: req.permission_count },
+            { label: "模块", value: req.modules.length },
+            { label: "低置信项", value: low.length, tone: low.length ? "warn" : "default", sub: low.length ? "建议人工核对" : "全部 high" },
+          ]}
+        />
+        <div className="score-grid" style={{ marginTop: 14, maxWidth: 560 }}>
+          <CoverageBar label="Strategy Obligation 覆盖" value={coverage?.strategy_obligation_coverage} />
+          <CoverageBar label="Requirement Item 覆盖" value={coverage?.requirement_item_coverage} />
+        </div>
+        {(coverage?.uncovered_item_ids || []).length ? (
+          <div className="alert alert-warn">{coverage!.uncovered_item_ids!.length} 个需求项尚未被任何测试点覆盖（见下方列表「覆盖测试点」列）。</div>
+        ) : null}
+        {low.length ? (
+          <div className="t-aux" style={{ marginTop: 8 }}>
+            低置信需求项：{low.slice(0, 5).map((i) => `${i.module} — ${i.statement.slice(0, 30)}`).join("；")}
+            {low.length > 5 ? ` 等 ${low.length} 项` : ""}
           </div>
-        </Card>
-        <Card title="AI 结构化解析产出">
-          <div className="kv-grid">
-            <div className="kv">
-              <span className="k">需求项</span>
-              <span className="v">{req.item_count}</span>
-            </div>
-            <div className="kv">
-              <span className="k">字段规格</span>
-              <span className="v">{req.field_count}</span>
-            </div>
-            <div className="kv">
-              <span className="k">业务规则</span>
-              <span className="v">{req.rule_count}</span>
-            </div>
-            <div className="kv">
-              <span className="k">权限规则</span>
-              <span className="v">{req.permission_count}</span>
-            </div>
-            <div className="kv">
-              <span className="k">模块数</span>
-              <span className="v">{req.modules.length}</span>
-            </div>
-          </div>
-        </Card>
-        <Card title="覆盖情况">
-          <div className="score-grid">
-            <CoverageBar label="Strategy Obligation" value={coverage?.strategy_obligation_coverage} />
-            <CoverageBar label="Requirement Item" value={coverage?.requirement_item_coverage} />
-          </div>
-          {(coverage?.uncovered_item_ids || []).length ? (
-            <div className="alert alert-warn small">存在 {coverage!.uncovered_item_ids!.length} 个未被测试点覆盖的需求项。</div>
-          ) : (
-            <div className="muted small">无未覆盖需求项。</div>
-          )}
-        </Card>
-        <Card title="低置信提示">
-          {(() => {
-            const low = req.items.filter((i) => i.confidence_level && i.confidence_level !== "high");
-            return low.length ? (
-              <div className="alert alert-warn small">
-                {low.length} 个需求项置信度非 high，建议人工核对：
-                {low.slice(0, 5).map((i) => (
-                  <div key={i.id}>
-                    · {i.module} — {i.statement.slice(0, 40)}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="muted small">所有需求项置信度为 high。</div>
-            );
-          })()}
-        </Card>
-      </div>
+        ) : null}
+      </Section>
 
       {[...byModule.entries()].map(([mod, items]) => (
-        <Card key={mod} title={`${mod}（${items.length} 项）`}>
+        <Section key={mod} title={mod} hint={`${items.length} 项`}>
           <table className="table">
             <thead>
               <tr>
@@ -119,7 +92,7 @@ export function RequirementsTab() {
                 const openRow = open === it.id;
                 return (
                   <Fragment key={it.id}>
-                    <tr className="clickable" onClick={() => setOpen(openRow ? null : it.id)}>
+                    <tr id={"req-item-" + it.id} className="clickable" onClick={() => setOpen(openRow ? null : it.id)}>
                       <td className="col-muted">{it.seq}</td>
                       <td>{it.type}</td>
                       <td>{it.statement}</td>
@@ -131,7 +104,7 @@ export function RequirementsTab() {
                     </tr>
                     {openRow ? (
                       <tr>
-                        <td colSpan={6} style={{ background: "var(--bg-elevated)" }}>
+                        <td colSpan={6} style={{ background: "var(--bg-soft)" }}>
                           <ItemDetail item={it} />
                         </td>
                       </tr>
@@ -141,7 +114,7 @@ export function RequirementsTab() {
               })}
             </tbody>
           </table>
-        </Card>
+        </Section>
       ))}
     </div>
   );
@@ -152,7 +125,7 @@ function ItemDetail({ item }: { item: RequirementItem }) {
     <div style={{ padding: "6px 4px" }}>
       {(item.fields || []).length ? (
         <>
-          <div className="section-title">字段规格（FieldSpec → 策略引擎输入）</div>
+          <div className="t-section" style={{ margin: "8px 0 6px" }}>字段规格（FieldSpec → 策略引擎输入）</div>
           <table className="table">
             <thead>
               <tr>
@@ -193,7 +166,7 @@ function ItemDetail({ item }: { item: RequirementItem }) {
       ) : null}
       {(item.rules || []).length ? (
         <>
-          <div className="section-title">业务规则</div>
+          <div className="t-section" style={{ margin: "8px 0 6px" }}>业务规则</div>
           {item.rules!.map((r, i) => (
             <div key={i} className="trace-card">
               <b>{r.name}</b>（{r.expression_type}）：{r.expression}
@@ -204,7 +177,7 @@ function ItemDetail({ item }: { item: RequirementItem }) {
       ) : null}
       {(item.permissions || []).length ? (
         <>
-          <div className="section-title">权限规则</div>
+          <div className="t-section" style={{ margin: "8px 0 6px" }}>权限规则</div>
           {item.permissions!.map((p, i) => (
             <div key={i} className="trace-card">
               {p.role} × {p.resource} × {p.action} → {p.allowed ? "允许" : "拒绝"}
@@ -215,16 +188,16 @@ function ItemDetail({ item }: { item: RequirementItem }) {
       ) : null}
       {(item.acceptance_criteria || []).length ? (
         <>
-          <div className="section-title">验收标准</div>
-          <ul className="steps">
+          <div className="t-section" style={{ margin: "8px 0 6px" }}>验收标准</div>
+          <ol className="steps">
             {item.acceptance_criteria!.map((a, i) => (
               <li key={i}>{a}</li>
             ))}
-          </ul>
+          </ol>
         </>
       ) : null}
       {item.source_ref?.value ? (
-        <div className="muted small" style={{ marginTop: 8 }}>
+        <div className="t-aux" style={{ marginTop: 8 }}>
           原文定位（{item.source_ref.locator}）：{item.source_ref.value}
         </div>
       ) : null}

@@ -110,7 +110,7 @@ export function Materials() {
                 <div className="fb-value" style={{ whiteSpace: "pre-wrap" }}>{detail.content || "（无文本内容）"}</div>
                 {(detail.images || []).length ? (
                   <div style={{ marginTop: 10 }}>
-                    <div className="section-title">图片（{detail.images!.length}）</div>
+                    <div className="t-section" style={{ marginBottom: 6 }}>图片（{detail.images!.length}）</div>
                     <div className="muted small">图片存储于 V1 资产库，V1 页面可查看原图。</div>
                   </div>
                 ) : null}

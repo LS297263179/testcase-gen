@@ -13,9 +13,12 @@ import { useRunBundle } from "./RunBundle";
 import type { CaseRevision, TestCase, TraceResult } from "../types";
 import { CASE_STATUS_LABEL } from "../utils";
 
+/** 可触发重评审的状态（validation_failed 必须先编辑修复，避免无效状态直接进 AI Review） */
+const REREVIEWABLE = ["reviewed", "edited", "re_review_required"];
+
 export function CaseDrawer() {
   const bundle = useRunBundle();
-  const { caseDrawerId, openCase, testCases, review, run, reload } = bundle;
+  const { caseDrawerId, caseDrawerAction, openCase, testCases, review, run, reload } = bundle;
   const toast = useToast();
   const [revs, setRevs] = useState<CaseRevision[] | null>(null);
   const [trace, setTrace] = useState<TraceResult | null>(null);
@@ -23,6 +26,11 @@ export function CaseDrawer() {
   const [busy, setBusy] = useState(false);
 
   const tc = caseDrawerId ? testCases.find((c) => c.id === caseDrawerId) : null;
+
+  // P3：列表「编辑」入口直达编辑弹窗
+  useEffect(() => {
+    setEditing(!!caseDrawerId && caseDrawerAction === "edit");
+  }, [caseDrawerId, caseDrawerAction]);
 
   useEffect(() => {
     if (!caseDrawerId) {
@@ -80,13 +88,17 @@ export function CaseDrawer() {
             <div className="alert alert-info">该用例不在当前运行数据中（可能属于其他运行）。</div>
           ) : (
             <>
-              <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-                <button className="btn btn-sm btn-outline" onClick={() => setEditing(true)}>
+              <div style={{ display: "flex", gap: 8, marginBottom: 14, alignItems: "center", flexWrap: "wrap" }}>
+                <button className="btn btn-sm btn-outline" onClick={() => setEditing(true)} disabled={tc.status === "archived"}>
                   编辑（人工确认 · Step 9）
                 </button>
-                <button className="btn btn-sm btn-outline" onClick={doReReview} disabled={busy}>
-                  {busy ? "评审中..." : "重新评审（阶段 B）"}
-                </button>
+                {REREVIEWABLE.includes(tc.status || "") ? (
+                  <button className="btn btn-sm btn-outline" onClick={doReReview} disabled={busy}>
+                    {busy ? "评审中..." : "重新评审（阶段 B）"}
+                  </button>
+                ) : null}
+                {tc.status === "validation_failed" ? <span className="t-aux">校验失败：请先编辑修复，修复后方可重新评审</span> : null}
+                {tc.status === "archived" ? <span className="t-aux">已归档用例只读，保留审计</span> : null}
               </div>
 
               <div className="kv-grid">
@@ -156,7 +168,7 @@ export function CaseDrawer() {
                 </div>
               ) : null}
 
-              <div className="section-title">AI 评审发现（本用例）</div>
+              <div className="t-section" style={{ margin: "18px 0 8px" }}>AI 评审发现（本用例）</div>
               {findings.length ? (
                 findings.map((f, i) => (
                   <div key={i} className={`finding sev-${(f.severity || "").toLowerCase()}`}>
@@ -176,10 +188,10 @@ export function CaseDrawer() {
                 </div>
               )}
 
-              <div className="section-title">追溯链（需求项 → 测试点 → 本用例 · Step 6）</div>
+              <div className="t-section" style={{ margin: "18px 0 8px" }}>追溯链（需求项 → 测试点 → 本用例 · Step 6）</div>
               {trace ? <TraceView trace={trace} /> : <div className="muted small">加载中或不可用。</div>}
 
-              <div className="section-title">修订历史（Revision · Step 9）</div>
+              <div className="t-section" style={{ margin: "18px 0 8px" }}>修订历史（Revision · Step 9）</div>
               {revs === null ? (
                 <div className="muted small">加载中...</div>
               ) : revs.length ? (
