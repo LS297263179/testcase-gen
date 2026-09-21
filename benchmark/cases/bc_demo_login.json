@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_demo_login",
+  "title": "手机号验证码登录（S2 最小示例）",
+  "requirement_file": "bc_demo_login_requirement.md",
+  "domain": "auth",
+  "difficulty": "easy",
+  "tags": ["demo", "s2-fixture"],
+  "context": "Step 11 S2 最小示例 fixture：演示 BenchmarkCase 数据契约；S4 正式 Case 编写时按 docs/v2/step11-benchmark-evaluation.md §14 清单扩充替换。",
+  "benchmark_version": "bench-v0.0-demo",
+  "gold_ref": "bc_demo_login.gold.json"
+}

@@ -1,0 +1,395 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_02_refund_order",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_02_refund_order_requirement.md 产出：先按需求章节逐节原子化测试责任（§2 字段→data_field、§3 规则→business_rule、§4 矩阵→permission、§6/§7 异常与验收→constraint/场景锚点），形成 Gold 初稿后才对照 Step 10.5 脱敏记录核对字段命名与结构表达方式（见 reference_cases 留痕）；未挑选/复制任何 runtime TestPoint、TestCase、RequirementItem 作为 Gold 内容，未根据当前模型行为调整标准。min_covered_points=3 仅用于退款金额边界义务（验收标准 5 逐字要求 0.01/订单金额/订单金额+0.01 三点逐一验证），其余义务保持默认 1。scenario 锚点措辞均取自需求原文提示语，避免过度文学化或过宽泛。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-refund-entry",
+      "module": "退款申请",
+      "type": "function",
+      "statement": "用户在订单详情页发起退款申请，填写退款金额、退款原因、问题描述、联系方式后提交",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_03d11972e15df5a56b5dcd362bf38a50"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-amount-range",
+      "module": "退款申请",
+      "type": "data_field",
+      "statement": "退款金额必填，最小值 0.01，最大值不超过订单实付金额，保留 2 位小数",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_127c1139705d2438372a53139291da57"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-reason-enum",
+      "module": "退款申请",
+      "type": "data_field",
+      "statement": "退款原因必填，只能从质量问题、描述不符、物流损坏、七天无理由、其他中选择",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_fa47125cfb4cb87b7ba01275b1c1321f"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-description-len",
+      "module": "退款申请",
+      "type": "data_field",
+      "statement": "问题描述非必填，最大长度 500 字符",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_544e25dd0baf73c4e69046bbda4161e5"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-phone-format",
+      "module": "退款申请",
+      "type": "data_field",
+      "statement": "联系方式手机号必填，须为 11 位中国大陆手机号，符合 ^1[3-9]\\d{9}$ 格式",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_83b0948b27d7eef89c6f6c50fa232588"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-evidence-limit",
+      "module": "退款申请",
+      "type": "data_field",
+      "statement": "退款凭证图片非必填，最多上传 5 张，单张图片最大 5MB",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_459901e92a58bcbcab85a40548405f6f"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-time-window",
+      "module": "退款申请",
+      "type": "business_rule",
+      "statement": "订单完成后 7 天内可申请退款，超过 7 天系统拒绝申请",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_5ea733b6c690ee4223fc7f46384b7a29"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-no-duplicate",
+      "module": "退款申请",
+      "type": "business_rule",
+      "statement": "仅状态为未申请或已驳回的订单可申请退款，审核中、已退款的订单不可重复申请",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_29d87043b4ebc789803a6c178e16c081"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-large-amount-review",
+      "module": "退款审批",
+      "type": "business_rule",
+      "statement": "退款金额大于 1000 元时必须经管理员审核通过后才能进入财务打款流程",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_dba7c17f517728b7236d455329dff3e1"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-amount-upper",
+      "module": "退款申请",
+      "type": "business_rule",
+      "statement": "退款金额不得超过订单实付金额",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_a592fd01947c464b5eae3e7b0ca8a546"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-evidence-required",
+      "module": "退款申请",
+      "type": "business_rule",
+      "statement": "退款原因为质量问题或物流损坏时必须上传至少 1 张凭证图片",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_29dbd73f9ddaef2520c80e7be54248e4"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-permission-matrix",
+      "module": "退款审批",
+      "type": "permission",
+      "statement": "权限按角色矩阵控制：customer 可创建、查看、撤销本人申请但不可审批；customer_service 可查看全部并可代客发起但不可审批；admin 可查看、审批通过、驳回；finance 仅可对已审批通过的申请执行打款且不可审批",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_59104b9864ee18637cc45156115b16fa"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-denied-403",
+      "module": "退款审批",
+      "type": "constraint",
+      "statement": "权限矩阵中所有拒绝项，接口层必须返回 403 而非 200",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_42da58568afa2db0471e03b43d5422f8"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-over-amount-rejected",
+      "title": "退款金额超过订单实付金额被拒绝",
+      "requirement_gold_ids": [
+        "gr-amount-upper",
+        "gr-amount-range"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "输入退款金额"
+      ],
+      "expected_outcomes": [
+        "超过订单实付金额"
+      ]
+    },
+    {
+      "scenario_id": "cs-time-window",
+      "title": "订单完成超过 7 天后申请退款被拒绝",
+      "requirement_gold_ids": [
+        "gr-time-window"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "提交退款申请"
+      ],
+      "expected_outcomes": [
+        "已超过退款申请时效"
+      ]
+    },
+    {
+      "scenario_id": "cs-duplicate-blocked",
+      "title": "审核中的订单不可重复发起退款申请",
+      "requirement_gold_ids": [
+        "gr-no-duplicate"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "发起退款申请"
+      ],
+      "expected_outcomes": [
+        "不可重复申请"
+      ]
+    },
+    {
+      "scenario_id": "cs-large-amount-gate",
+      "title": "大额退款未审核时财务不可打款",
+      "requirement_gold_ids": [
+        "gr-large-amount-review"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "财务无法看到打款入口"
+      ]
+    },
+    {
+      "scenario_id": "cs-evidence-required",
+      "title": "质量问题未上传凭证时阻止提交",
+      "requirement_gold_ids": [
+        "gr-evidence-required"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "提交退款申请"
+      ],
+      "expected_outcomes": [
+        "请上传凭证图片"
+      ]
+    },
+    {
+      "scenario_id": "cs-privilege-denied",
+      "title": "无审批权限角色执行审批被接口拒绝",
+      "requirement_gold_ids": [
+        "gr-denied-403",
+        "gr-permission-matrix"
+      ],
+      "expected_techniques": [
+        "permission_matrix"
+      ],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "返回 403"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "refund_amount",
+      "technique": "boundary_value",
+      "description": "退款金额数值边界覆盖（0.01 / 订单实付金额 / 两侧越界值逐一验证，需求验收标准 5 逐字要求）",
+      "requirement_gold_id": "gr-amount-range",
+      "min_covered_points": 3
+    },
+    {
+      "target": "refund_amount.required",
+      "technique": "equivalence_class",
+      "description": "退款金额必填校验（提供/缺失两类）",
+      "requirement_gold_id": "gr-amount-range",
+      "min_covered_points": 1
+    },
+    {
+      "target": "reason.enum",
+      "technique": "equivalence_class",
+      "description": "退款原因枚举等价类（5 个合法值 + 非法值）",
+      "requirement_gold_id": "gr-reason-enum",
+      "min_covered_points": 1
+    },
+    {
+      "target": "description.length",
+      "technique": "boundary_value",
+      "description": "问题描述长度边界覆盖（最大 500 字符）",
+      "requirement_gold_id": "gr-description-len",
+      "min_covered_points": 1
+    },
+    {
+      "target": "contact_phone.pattern",
+      "technique": "equivalence_class",
+      "description": "手机号正则模式等价类（合法 11 位 / 10 位 / 12 位 / 非 1[3-9] 开头，验收标准 6）",
+      "requirement_gold_id": "gr-phone-format",
+      "min_covered_points": 1
+    },
+    {
+      "target": "customer:refund_application:approve",
+      "technique": "permission_matrix",
+      "description": "customer 不可审批（拒绝项）",
+      "requirement_gold_id": "gr-permission-matrix",
+      "min_covered_points": 1
+    },
+    {
+      "target": "admin:refund_application:approve",
+      "technique": "permission_matrix",
+      "description": "admin 可审批（允许项，大额场景）",
+      "requirement_gold_id": "gr-permission-matrix",
+      "min_covered_points": 1
+    },
+    {
+      "target": "finance:refund_payout:execute",
+      "technique": "permission_matrix",
+      "description": "finance 仅可对已审批通过申请执行打款",
+      "requirement_gold_id": "gr-permission-matrix",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "numeric_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-amount-range"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-amount-range"
+    },
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-reason-enum"
+    },
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-description-len"
+    },
+    {
+      "feature": "pattern_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-phone-format"
+    },
+    {
+      "feature": "permission_rule",
+      "technique": "permission_matrix",
+      "requirement_gold_id": "gr-permission-matrix"
+    }
+  ],
+  "reference_cases": [
+    {
+      "source": "v2_run_01M2QBWABYW3VTNYK5BBX2WDN4",
+      "note": "仅阅读 docs/v2/step10-real-run-record.md 与本地 output 快照，用于理解字段英文标识（refund_amount 等）与 V2 产物 module/type/statement 的表达结构；未从中挑选或复制任何 TestPoint/TestCase/RequirementItem 作为本 Gold 内容。"
+    }
+  ],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-permission-matrix",
+      "description": "拆分为按角色/按行的多条权限需求项，或仅覆盖关键行（拒绝项必测、允许项可合并）均视为合理粒度差异"
+    },
+    {
+      "for_gold_id": "gr-amount-range",
+      "description": "拆分为「最小值 0.01 + 2 位小数」与「上限=订单实付金额」两项，或与 gr-amount-upper 合并表述均可接受"
+    },
+    {
+      "for_gold_id": "gr-phone-format",
+      "description": "以 data_type=phone 语义（而非显式正则）表达 11 位手机号约束同样可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-amount-overrun",
+      "description": "出现「退款金额超过订单实付金额仍提交成功」的用例或预期",
+      "severity_note": "与 gr-amount-upper / gr-amount-range 直接矛盾"
+    },
+    {
+      "pattern_id": "fp-bypass-review-payout",
+      "description": "出现「大额（>1000）退款未经管理员审核即可财务打款成功」的用例或预期",
+      "severity_note": "与 gr-large-amount-review 直接矛盾"
+    },
+    {
+      "pattern_id": "fp-privilege-escalation",
+      "description": "出现 customer 或 finance 角色审批通过退款申请并成功的用例",
+      "severity_note": "与 gr-permission-matrix 拒绝项直接矛盾"
+    },
+    {
+      "pattern_id": "fp-expired-window-ok",
+      "description": "出现「订单完成超过 7 天仍可成功发起退款申请」的用例或预期",
+      "severity_note": "与 gr-time-window 直接矛盾"
+    }
+  ]
+}

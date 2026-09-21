@@ -1,0 +1,7 @@
+{
+  "manifest_id": "bm-demo",
+  "benchmark_version": "bench-v0.0-demo",
+  "cases": ["bc_demo_login"],
+  "repeat": 1,
+  "notes": "S2 最小示例 manifest（演示数据契约与 loader 配对校验）；正式 runset 清单于 S4/S6 定义。"
+}

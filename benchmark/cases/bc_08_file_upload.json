@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_08_file_upload",
+  "title": "邮件附件上传（类型/大小/数量约束）",
+  "requirement_file": "bc_08_file_upload_requirement.md",
+  "domain": "file",
+  "difficulty": "medium",
+  "tags": ["bench-v0.1", "upload-constraints", "enum"],
+  "context": "bench-v0.1 正式 Case #08：枚举类型白名单 + 数值大小边界 + 数量规则；验收标准含逐字多点验证要求（4 类型逐一 / 边界内外分别）。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_08_file_upload.gold.json"
+}

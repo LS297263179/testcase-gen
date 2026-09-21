@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_05_admin_rbac",
+  "title": "后台角色权限管理（权限矩阵主载体）",
+  "requirement_file": "bc_05_admin_rbac_requirement.md",
+  "domain": "admin",
+  "difficulty": "medium",
+  "tags": ["bench-v0.1", "permission-matrix", "role-enum"],
+  "context": "bench-v0.1 正式 Case #05：15 行角色×资源×操作矩阵 + 角色枚举字段，permission_matrix 策略义务的主要载体；矩阵聚合为一条 Gold 责任、关键行下沉为 obligations。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_05_admin_rbac.gold.json"
+}

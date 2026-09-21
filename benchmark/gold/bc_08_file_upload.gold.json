@@ -1,0 +1,236 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_08_file_upload",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_08_file_upload_requirement.md 产出：§2 字段逐条→data_field、§3 规则→business_rule、§4 提示语→场景锚点；未参考、未复制任何 runtime 产物；min_covered_points 提升仅两处且有逐字依据——file_type.enum=4（验收标准 2「4 种合法类型必须逐一上传成功验证」）、file_size=2（验收标准 1「10MB 与 10.01MB 必须分别验证」），其余义务默认 1。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-upload-entry",
+      "module": "附件上传",
+      "type": "function",
+      "statement": "用户撰写邮件时选择附件文件上传，通过后附件附于邮件",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_89d9a93707f1d415b0ab4905428ae78d"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-file-required",
+      "module": "附件上传",
+      "type": "data_field",
+      "statement": "附件文件必填，添加附件操作必须选择文件",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_54528f90e3474a7813c8bb863aed3c02"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-file-type",
+      "module": "附件校验",
+      "type": "data_field",
+      "statement": "文件类型必填，只能从 jpg、png、pdf、docx 中选择",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0320fa277a18aa8851ae09b497a580d6"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-file-size",
+      "module": "附件校验",
+      "type": "data_field",
+      "statement": "文件大小必填，最小值 0.1MB，最大值 10MB",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_cf1fe78cb4e61164ca481eda1d71742b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-file-name",
+      "module": "附件校验",
+      "type": "data_field",
+      "statement": "文件名称必填，最大长度 100 字符",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_dcf8eff329f7c29166f088253e9cc99b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-count-limit",
+      "module": "附件校验",
+      "type": "business_rule",
+      "statement": "单封邮件最多上传 9 个附件",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_b157543f831b493febf6891b848c1511"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-upload-success",
+      "title": "合法附件上传成功",
+      "requirement_gold_ids": [
+        "gr-upload-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "添加附件"
+      ],
+      "expected_outcomes": [
+        "附件上传成功"
+      ]
+    },
+    {
+      "scenario_id": "cs-size-exceeded",
+      "title": "超过 10MB 被拒",
+      "requirement_gold_ids": [
+        "gr-file-size"
+      ],
+      "expected_techniques": [
+        "boundary_value"
+      ],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "单个文件不得超过 10MB"
+      ]
+    },
+    {
+      "scenario_id": "cs-type-rejected",
+      "title": "白名单外类型被拒",
+      "requirement_gold_ids": [
+        "gr-file-type"
+      ],
+      "expected_techniques": [
+        "equivalence_class"
+      ],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "不支持的文件类型"
+      ]
+    },
+    {
+      "scenario_id": "cs-count-exceeded",
+      "title": "第 10 个附件被拒",
+      "requirement_gold_ids": [
+        "gr-count-limit"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "最多上传 9 个附件"
+      ]
+    },
+    {
+      "scenario_id": "cs-name-too-long",
+      "title": "超长文件名被拒",
+      "requirement_gold_ids": [
+        "gr-file-name"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "文件名不能超过 100 个字符"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "file_type.enum",
+      "technique": "equivalence_class",
+      "description": "文件类型等价类（验收标准 2：4 种合法类型逐一验证 + 非法类型）",
+      "requirement_gold_id": "gr-file-type",
+      "min_covered_points": 4
+    },
+    {
+      "target": "file_type.required",
+      "technique": "equivalence_class",
+      "description": "文件类型必填校验等价类",
+      "requirement_gold_id": "gr-file-type",
+      "min_covered_points": 1
+    },
+    {
+      "target": "file_size",
+      "technique": "boundary_value",
+      "description": "文件大小数值边界覆盖（验收标准 1：10MB 与 10.01MB 边界内外分别验证）",
+      "requirement_gold_id": "gr-file-size",
+      "min_covered_points": 2
+    },
+    {
+      "target": "attach_file.required",
+      "technique": "equivalence_class",
+      "description": "附件文件必填空值校验等价类",
+      "requirement_gold_id": "gr-file-required",
+      "min_covered_points": 1
+    },
+    {
+      "target": "file_name.length",
+      "technique": "boundary_value",
+      "description": "文件名长度边界覆盖（max 100）",
+      "requirement_gold_id": "gr-file-name",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-file-type"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-file-type"
+    },
+    {
+      "feature": "numeric_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-file-size"
+    },
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-file-name"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-count-limit",
+      "description": "附件数量上限以业务规则或计数字段约束表达均可接受"
+    },
+    {
+      "for_gold_id": "gr-file-size",
+      "description": "文件大小下限 0.1MB 责任并入大小条目或单独成条均可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-oversize-success",
+      "description": "出现「单个文件超过 10MB 上传成功」的用例",
+      "severity_note": "与 gr-file-size 直接冲突"
+    },
+    {
+      "pattern_id": "fp-any-type-allowed",
+      "description": "出现「exe 等白名单外类型上传成功」的用例",
+      "severity_note": "与 gr-file-type 白名单冲突"
+    }
+  ]
+}

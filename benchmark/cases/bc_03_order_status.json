@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_03_order_status",
+  "title": "订单状态流转（状态机语义设计题）",
+  "requirement_file": "bc_03_order_status_requirement.md",
+  "domain": "order",
+  "difficulty": "medium",
+  "tags": ["bench-v0.1", "state-machine", "scenario-heavy"],
+  "context": "bench-v0.1 正式 Case #03：状态机流转考察 LLM 语义设计能力；state transition 是 Step 4 明确延后的策略能力，本 case 不伪造 strategy，覆盖责任由 critical_scenarios 承担。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_03_order_status.gold.json"
+}

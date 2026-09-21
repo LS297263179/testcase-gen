@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_02_refund_order",
+  "title": "订单退款申请（复杂业务规则 / 三策略全覆盖）",
+  "requirement_file": "bc_02_refund_order_requirement.md",
+  "domain": "order",
+  "difficulty": "medium",
+  "tags": ["bench-v0.1", "strategy-full", "permission", "match-keys"],
+  "context": "正式 Benchmark Case #02：字段/规则/权限三类结构化需求，考察 Step 3 LLM 轨道与 Step 4 三策略轨道的合流质量。match_keys 指纹由 core/v2/fingerprint.compute_item_identity_fingerprint 按本 Gold 的 module/type/statement 生成并逐条复核（S4 指令 §10）。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_02_refund_order.gold.json"
+}

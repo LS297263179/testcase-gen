@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_09_approval_flow",
+  "title": "差旅报销审批流程（跨 item 关联 + 权限矩阵）",
+  "requirement_file": "bc_09_approval_flow_requirement.md",
+  "domain": "workflow",
+  "difficulty": "hard",
+  "tags": ["bench-v0.1", "cross-item", "permission", "secondary-approval"],
+  "context": "bench-v0.1 正式 Case #09：金额驱动的分级审批 + 角色矩阵 + 自审批禁止，考察跨 item 关联责任（Phase B 能力观察点）。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_09_approval_flow.gold.json"
+}

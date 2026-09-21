@@ -1,0 +1,201 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_06_search",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_06_search_requirement.md 产出：§2 三字段→data_field（本 case 无必填字段，keyword 显式可空）、§3 健壮性/交互规则→constraint 与 business_rule、§4 提示语→场景锚点、§5 验收→多点义务依据；未参考、未复制任何 runtime 产物；min_covered_points 提升两处且有逐字依据——sort_by.enum=4（验收标准 3「四种排序方式必须逐一验证」）、page_size=3（验收标准 1「1/100/101 逐一验证」）。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-search-entry",
+      "module": "商品搜索",
+      "type": "function",
+      "statement": "用户输入搜索关键词并提交后返回匹配的商品结果",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_36f30931f80ade3fdf798ec473ef0853"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-keyword-optional",
+      "module": "商品搜索",
+      "type": "constraint",
+      "statement": "搜索关键词可为空，留空提交时展示全部商品",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_6cb2f069280cdcd6c920f46ea83dbec0"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-keyword-length",
+      "module": "商品搜索",
+      "type": "data_field",
+      "statement": "搜索关键词最大长度 50 字符",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_b8d6ab85e7b4ce6eee96227fb53ff60e"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-sort-enum",
+      "module": "搜索结果",
+      "type": "data_field",
+      "statement": "排序方式默认综合，只能从综合、销量、价格升序、价格降序中选择",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_6723868ac585a6a0b1a37840bfad8b31"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-page-size",
+      "module": "搜索结果",
+      "type": "data_field",
+      "statement": "每页条数为 1 至 100 的整数，默认 20",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_6c357ff9755068ee734fac459db2fe78"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-special-char",
+      "module": "商品搜索",
+      "type": "constraint",
+      "statement": "关键词包含特殊字符时按普通字符串处理，不得引发系统错误",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_ac3c617230f3e00e8c2a2d4becabe18a"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-empty-result",
+      "title": "无匹配结果提示",
+      "requirement_gold_ids": [
+        "gr-search-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "输入关键词"
+      ],
+      "expected_outcomes": [
+        "未找到相关商品，请调整搜索条件"
+      ]
+    },
+    {
+      "scenario_id": "cs-browse-all",
+      "title": "空关键词浏览全部商品",
+      "requirement_gold_ids": [
+        "gr-keyword-optional"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "已展示全部商品"
+      ]
+    },
+    {
+      "scenario_id": "cs-keyword-too-long",
+      "title": "超长关键词被拒",
+      "requirement_gold_ids": [
+        "gr-keyword-length"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "关键词长度不能超过 50 个字符"
+      ]
+    },
+    {
+      "scenario_id": "cs-page-limit",
+      "title": "分页超限拦截",
+      "requirement_gold_ids": [
+        "gr-page-size"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "每页最多展示 100 条"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "keyword.length",
+      "technique": "boundary_value",
+      "description": "关键词长度边界覆盖（max 50）",
+      "requirement_gold_id": "gr-keyword-length",
+      "min_covered_points": 1
+    },
+    {
+      "target": "sort_by.enum",
+      "technique": "equivalence_class",
+      "description": "排序方式等价类（验收标准 3：四种排序逐一验证 + 非法值）",
+      "requirement_gold_id": "gr-sort-enum",
+      "min_covered_points": 4
+    },
+    {
+      "target": "page_size",
+      "technique": "boundary_value",
+      "description": "每页条数数值边界覆盖（验收标准 1：1/100/101 逐一验证）",
+      "requirement_gold_id": "gr-page-size",
+      "min_covered_points": 3
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-keyword-length"
+    },
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-sort-enum"
+    },
+    {
+      "feature": "numeric_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-page-size"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-keyword-optional",
+      "description": "keyword 以 nullable 字段属性表达与以「留空浏览」交互规则表达均可接受"
+    },
+    {
+      "for_gold_id": "gr-special-char",
+      "description": "特殊字符健壮性并入搜索功能责任或单独成条均可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-special-char-crash",
+      "description": "出现「特殊字符关键词导致服务端错误/注入生效」的用例设计",
+      "severity_note": "与 gr-special-char 直接冲突"
+    },
+    {
+      "pattern_id": "fp-required-keyword",
+      "description": "出现「关键词必填、留空提交报错」与留空浏览需求矛盾的假设",
+      "severity_note": "与 gr-keyword-optional 冲突"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_10_report_export",
+  "title": "销售日报导出（数据一致性 / 空数据行为）",
+  "requirement_file": "bc_10_report_export_requirement.md",
+  "domain": "report",
+  "difficulty": "medium",
+  "tags": ["bench-v0.1", "data-consistency", "empty-data"],
+  "context": "bench-v0.1 正式 Case #10：日期区间一致性、行数上限、空数据不生成文件等数据行为约束 + 轻量权限矩阵。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_10_report_export.gold.json"
+}

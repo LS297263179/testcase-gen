@@ -1,0 +1,320 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_01_login",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_01_login_requirement.md 产出：按 §2 字段→data_field、§3 规则→business_rule、§4/§5 提示语与验收→场景锚点逐节原子化；未参考、未复制任何 runtime 产物；min_covered_points=4 仅用于密码长度边界（验收标准 2 逐字要求 7/8/20/21 四点逐一验证），其余义务默认 1；scenario 锚点全部取自 §4/§5 原文提示语。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-register-entry",
+      "module": "注册",
+      "type": "function",
+      "statement": "用户使用手机号、用户名、密码与验证码提交注册",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_93c848d6b11c46daa7bede10ab4cdee4"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-login-entry",
+      "module": "登录",
+      "type": "function",
+      "statement": "使用正确的用户名和密码登录成功，进入首页",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_ee92b3062dd163b08f08840a7af711d6"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-username-len",
+      "module": "注册",
+      "type": "data_field",
+      "statement": "用户名必填，最小长度 4，最大长度 20 字符",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_708f4ddda8f9e1f88e5ab1e01590ec34"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-username-unique",
+      "module": "注册",
+      "type": "constraint",
+      "statement": "同一系统内用户名必须唯一，使用已存在用户名注册时必须提示该用户名已被注册",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0cfb0367c959ae4cdb7a67d95c43a67e"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-password-len",
+      "module": "注册",
+      "type": "data_field",
+      "statement": "密码必填，最小长度 8，最大长度 20 字符，至少包含字母与数字",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0563a81357f58fb62f9b98aa6d920eb7"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-phone-format",
+      "module": "注册",
+      "type": "data_field",
+      "statement": "手机号必填，须为符合 ^1[3-9]\\d{9}$ 的 11 位中国大陆手机号",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0f80b8a69a515eb13e2493f4d4726742"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-code-format",
+      "module": "注册",
+      "type": "data_field",
+      "statement": "验证码必填，须为符合 ^\\d{6}$ 的 6 位纯数字",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_96658511d5bf06743d4f57dc0379ec1f"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-lock-rule",
+      "module": "登录",
+      "type": "business_rule",
+      "statement": "连续输错密码 5 次后账号锁定 15 分钟",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_f2115a3869989a30b6d12ba14d7a0288"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-code-expired",
+      "module": "注册",
+      "type": "business_rule",
+      "statement": "验证码超过 5 分钟未使用则失效，需重新获取",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_4d90f3968ee4a2a304ba2072eba7c23b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-unregistered",
+      "module": "登录",
+      "type": "business_rule",
+      "statement": "使用未注册的手机号登录必须被拒绝",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_9f1f74127d835cadad9b383a367ed814"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-login-success",
+      "title": "正确凭证登录成功",
+      "requirement_gold_ids": [
+        "gr-login-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "输入用户名",
+        "输入密码"
+      ],
+      "expected_outcomes": [
+        "进入首页"
+      ]
+    },
+    {
+      "scenario_id": "cs-wrong-password",
+      "title": "错误密码被拒并提示",
+      "requirement_gold_ids": [
+        "gr-login-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "输入密码"
+      ],
+      "expected_outcomes": [
+        "用户名或密码错误"
+      ]
+    },
+    {
+      "scenario_id": "cs-lockout",
+      "title": "连续 5 次失败触发锁定",
+      "requirement_gold_ids": [
+        "gr-lock-rule"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "连续输错密码 5 次"
+      ],
+      "expected_outcomes": [
+        "账号已被锁定，请 15 分钟后再试"
+      ]
+    },
+    {
+      "scenario_id": "cs-code-expired",
+      "title": "过期验证码注册失败",
+      "requirement_gold_ids": [
+        "gr-code-expired"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "验证码已过期，请重新获取"
+      ]
+    },
+    {
+      "scenario_id": "cs-unregistered-login",
+      "title": "未注册手机号登录被拒",
+      "requirement_gold_ids": [
+        "gr-unregistered"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "该手机号尚未注册"
+      ]
+    },
+    {
+      "scenario_id": "cs-username-duplicate",
+      "title": "重复用户名注册被拒",
+      "requirement_gold_ids": [
+        "gr-username-unique"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "提交注册"
+      ],
+      "expected_outcomes": [
+        "该用户名已被注册"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "username.length",
+      "technique": "boundary_value",
+      "description": "用户名长度边界覆盖（4~20 字符）",
+      "requirement_gold_id": "gr-username-len",
+      "min_covered_points": 1
+    },
+    {
+      "target": "password.length",
+      "technique": "boundary_value",
+      "description": "密码长度边界覆盖（验收标准 2：7/8/20/21 四点逐一验证）",
+      "requirement_gold_id": "gr-password-len",
+      "min_covered_points": 4
+    },
+    {
+      "target": "password.required",
+      "technique": "equivalence_class",
+      "description": "密码必填校验等价类",
+      "requirement_gold_id": "gr-password-len",
+      "min_covered_points": 1
+    },
+    {
+      "target": "mobile_phone.format",
+      "technique": "equivalence_class",
+      "description": "手机号 phone 格式等价类（合法/非法 11 位）",
+      "requirement_gold_id": "gr-phone-format",
+      "min_covered_points": 1
+    },
+    {
+      "target": "verify_code.pattern",
+      "technique": "equivalence_class",
+      "description": "验证码 6 位纯数字正则等价类",
+      "requirement_gold_id": "gr-code-format",
+      "min_covered_points": 1
+    },
+    {
+      "target": "username.unique",
+      "technique": "equivalence_class",
+      "description": "用户名唯一性等价类（首次注册成功 / 重复注册被拒）",
+      "requirement_gold_id": "gr-username-unique",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-username-len"
+    },
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-password-len"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-password-len"
+    },
+    {
+      "feature": "typed_format_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-phone-format"
+    },
+    {
+      "feature": "pattern_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-code-format"
+    },
+    {
+      "feature": "unique_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-username-unique"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-phone-format",
+      "description": "手机号格式责任以 data_type=phone（.format）或以 pattern（.pattern）单条表达均可接受"
+    },
+    {
+      "for_gold_id": "gr-username-unique",
+      "description": "唯一性并入用户名 data_field 条目（必填+长度+唯一一条表述）亦可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-bypass-lock",
+      "description": "出现「连续输错密码 5 次后仍可无限重试」或与锁定规则矛盾的用例",
+      "severity_note": "与 gr-lock-rule 直接冲突"
+    },
+    {
+      "pattern_id": "fp-bypass-format",
+      "description": "出现「非 11 位手机号可注册成功」或「4 位验证码通过校验」等与字段格式约束矛盾的用例",
+      "severity_note": "与 gr-phone-format / gr-code-format 直接冲突"
+    }
+  ]
+}

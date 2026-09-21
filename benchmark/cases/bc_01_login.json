@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_01_login",
+  "title": "用户注册与登录（基础账号体系）",
+  "requirement_file": "bc_01_login_requirement.md",
+  "domain": "auth",
+  "difficulty": "easy",
+  "tags": ["bench-v0.1", "strategy-baseline", "form-fields"],
+  "context": "bench-v0.1 正式 Case #01：字段约束密集型基础题，考察 IR 抽取 + 等价类/边界值策略基线。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_01_login.gold.json"
+}

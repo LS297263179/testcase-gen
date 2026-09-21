@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_04_payment",
+  "title": "订单支付（金额边界 / 支付安全规则）",
+  "requirement_file": "bc_04_payment_requirement.md",
+  "domain": "payment",
+  "difficulty": "hard",
+  "tags": ["bench-v0.1", "numeric-boundary", "security-rules"],
+  "context": "bench-v0.1 正式 Case #04：数值边界 + 枚举 + 支付安全类业务规则，考察金额六点边界与锁定/限额规则的语义覆盖。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_04_payment.gold.json"
+}

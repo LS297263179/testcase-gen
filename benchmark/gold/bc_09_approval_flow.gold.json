@@ -1,0 +1,304 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_09_approval_flow",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_09_approval_flow_requirement.md 产出：§2 字段→data_field、§3 四条流程规则各立独立责任、§4 权限矩阵聚合为一条 permission 责任 + 关键行下沉为 obligations（避免 6 行逐条拆细）、§5 提示语作场景锚点；未参考、未复制任何 runtime 产物；所有义务 min_covered_points=1（需求无逐字多点验证要求）。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-submit",
+      "module": "报销申请",
+      "type": "function",
+      "statement": "员工填写报销金额与报销事由后提交差旅报销单",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_6de8bf66bf87ba9e04cda511c3477376"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-amount",
+      "module": "报销申请",
+      "type": "data_field",
+      "statement": "报销金额必填，最小值 0.01，最大值 50000，保留 2 位小数",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_b116118b9246538788f5b8cfbc04c64c"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-reason",
+      "module": "报销申请",
+      "type": "data_field",
+      "statement": "报销事由必填，最小长度 10，最大长度 200 字符",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_61bd7b87aecda01011ac2f1cf7aad58e"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-reject-reason",
+      "module": "报销审批",
+      "type": "data_field",
+      "statement": "审批驳回时必须填写驳回原因，最大长度 200 字符",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_e0124f595cbf6f0b3433ee019c4338ee"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-second-review",
+      "module": "报销审批",
+      "type": "business_rule",
+      "statement": "金额大于 5000 元的报销单须经部门主管一级审批后再由财务总监二级审批",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_8f9602438bd67f633730f90d4a1632d1"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-no-self-approve",
+      "module": "报销审批",
+      "type": "business_rule",
+      "statement": "任何审批人不能审批本人提交的报销单",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_6cf34ab6882d18f503c76b44aa491e18"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-approve-flow",
+      "module": "报销审批",
+      "type": "business_rule",
+      "statement": "审批全部通过后报销单进入出纳打款队列",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_76b750ec7c8919f3a4e6a5d9bb910fdb"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-permission-matrix",
+      "module": "报销审批",
+      "type": "permission",
+      "statement": "报销权限：employee 可创建但不可审批；dept_manager 可一级审批；finance_director 可二级终审；cashier 可打款但不可审批",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_4ad3003c300f59025eb247cd9eed3320"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-cashier-precondition",
+      "module": "报销审批",
+      "type": "constraint",
+      "statement": "出纳在审批全部完成前不得执行打款",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0c75bd6afd7d4cf32de74780fe04df71"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-second-review",
+      "title": "大额报销触发财务总监二级审批",
+      "requirement_gold_ids": [
+        "gr-second-review"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "需财务总监审批"
+      ]
+    },
+    {
+      "scenario_id": "cs-approve-flow",
+      "title": "审批通过流转至出纳",
+      "requirement_gold_ids": [
+        "gr-approve-flow"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "审批通过，流转至出纳"
+      ]
+    },
+    {
+      "scenario_id": "cs-self-approve-denied",
+      "title": "审批本人报销单被拒",
+      "requirement_gold_ids": [
+        "gr-no-self-approve"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "执行审批操作"
+      ],
+      "expected_outcomes": [
+        "不能审批本人提交的报销单"
+      ]
+    },
+    {
+      "scenario_id": "cs-reject-reason-required",
+      "title": "驳回未填原因被拦截",
+      "requirement_gold_ids": [
+        "gr-reject-reason"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "请填写驳回原因"
+      ]
+    },
+    {
+      "scenario_id": "cs-employee-approve-denied",
+      "title": "普通员工执行审批被拒",
+      "requirement_gold_ids": [
+        "gr-permission-matrix"
+      ],
+      "expected_techniques": [
+        "permission_matrix"
+      ],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "无审批权限"
+      ]
+    },
+    {
+      "scenario_id": "cs-pay-before-approved",
+      "title": "未完成审批时出纳打款被拒",
+      "requirement_gold_ids": [
+        "gr-cashier-precondition"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "该报销单尚未完成审批"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "expense_amount",
+      "technique": "boundary_value",
+      "description": "报销金额数值边界覆盖（0.01~50000）",
+      "requirement_gold_id": "gr-amount",
+      "min_covered_points": 1
+    },
+    {
+      "target": "expense_amount.required",
+      "technique": "equivalence_class",
+      "description": "报销金额必填校验等价类",
+      "requirement_gold_id": "gr-amount",
+      "min_covered_points": 1
+    },
+    {
+      "target": "expense_reason.length",
+      "technique": "boundary_value",
+      "description": "报销事由长度边界覆盖（10~200 字符）",
+      "requirement_gold_id": "gr-reason",
+      "min_covered_points": 1
+    },
+    {
+      "target": "employee:expense_claim:approve",
+      "technique": "permission_matrix",
+      "description": "employee 审批报销单必须被拒绝",
+      "requirement_gold_id": "gr-permission-matrix",
+      "min_covered_points": 1
+    },
+    {
+      "target": "dept_manager:expense_claim:approve",
+      "technique": "permission_matrix",
+      "description": "dept_manager 一级审批权限覆盖",
+      "requirement_gold_id": "gr-permission-matrix",
+      "min_covered_points": 1
+    },
+    {
+      "target": "cashier:expense_claim:approve",
+      "technique": "permission_matrix",
+      "description": "cashier 审批必须被拒绝",
+      "requirement_gold_id": "gr-permission-matrix",
+      "min_covered_points": 1
+    },
+    {
+      "target": "cashier:expense_claim:pay",
+      "technique": "permission_matrix",
+      "description": "cashier 审批通过后打款权限覆盖",
+      "requirement_gold_id": "gr-cashier-precondition",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "numeric_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-amount"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-amount"
+    },
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-reason"
+    },
+    {
+      "feature": "permission_rule",
+      "technique": "permission_matrix",
+      "requirement_gold_id": "gr-permission-matrix"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-permission-matrix",
+      "description": "权限矩阵拆分为按角色或按操作行的多条 permission 责任均可接受"
+    },
+    {
+      "for_gold_id": "gr-reason",
+      "description": "报销事由长度上下限拆为两条责任亦可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-self-approve-ok",
+      "description": "出现「审批人成功审批本人提交的报销单」的用例",
+      "severity_note": "与 gr-no-self-approve 直接冲突"
+    },
+    {
+      "pattern_id": "fp-pay-without-approval",
+      "description": "出现「报销单未完成审批即可打款成功」的用例",
+      "severity_note": "与 gr-cashier-precondition 直接冲突"
+    },
+    {
+      "pattern_id": "fp-large-bypass-director",
+      "description": "出现「大于 5000 元报销单未经财务总监即完成审批」的用例",
+      "severity_note": "与 gr-second-review 直接冲突"
+    }
+  ]
+}

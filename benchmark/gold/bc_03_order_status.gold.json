@@ -1,0 +1,186 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_03_order_status",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_03_order_status_requirement.md 产出：按 §2 流转路径 + §3 每条约束规则原子化为独立责任，§4 提示语原文作为场景锚点；未参考、未复制任何 runtime 产物。obligations_expected 与 strategy_expectations 有意留空：状态流转属 Step 4 明确延后的策略能力（STATE_TRANSITION），按设计不伪造策略要求，语义覆盖责任全部由 critical_scenarios 承担；两清单为空时对应指标按「不可评」呈现（设计文档 §6 口径）。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-status-model",
+      "module": "订单状态",
+      "type": "function",
+      "statement": "订单按待支付、已支付、已发货、已完成、已取消、售后中、已退款的状态机路径流转",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_b446a4199500c7f3a82f0fe6f5009366"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-auto-cancel",
+      "module": "订单状态",
+      "type": "business_rule",
+      "statement": "待支付订单超过 30 分钟未支付自动取消",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_b093c77b35181b61b46c20d027c99e4e"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-ship-requires-paid",
+      "module": "订单状态",
+      "type": "business_rule",
+      "statement": "仅已支付状态的订单可以发货，未支付订单发货必须被拒绝",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0ace8a466f3f75a216b67499529eec54"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-cancel-requires-pending",
+      "module": "订单状态",
+      "type": "business_rule",
+      "statement": "仅待支付状态的订单可以被用户取消",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_dac39812658214f5494583a3c3059d20"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-pay-requires-pending",
+      "module": "订单状态",
+      "type": "business_rule",
+      "statement": "仅待支付状态的订单允许支付，已取消或已退款订单不可再支付",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_70238d21f8cbe14106c88012c0f4538a"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-aftersale-condition",
+      "module": "订单状态",
+      "type": "business_rule",
+      "statement": "已支付且未进入售后的订单可发起售后申请",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_95636a87784a0a5c694a1c512488aa01"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-status-notify",
+      "module": "订单状态",
+      "type": "interaction",
+      "statement": "每次订单状态变更必须触发消息推送",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_49f4d7501f9568c4897959d3278a51e8"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-auto-cancel",
+      "title": "超时未支付自动取消",
+      "requirement_gold_ids": [
+        "gr-auto-cancel"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "订单已超时自动取消"
+      ]
+    },
+    {
+      "scenario_id": "cs-ship-unpaid-denied",
+      "title": "未支付订单发货被拒",
+      "requirement_gold_ids": [
+        "gr-ship-requires-paid"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "未支付订单不可发货"
+      ]
+    },
+    {
+      "scenario_id": "cs-cancel-paid-denied",
+      "title": "已支付订单取消被拒",
+      "requirement_gold_ids": [
+        "gr-cancel-requires-pending"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "仅待支付订单可以取消"
+      ]
+    },
+    {
+      "scenario_id": "cs-pay-cancelled-denied",
+      "title": "已取消订单支付被拒",
+      "requirement_gold_ids": [
+        "gr-pay-requires-pending"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "订单状态不允许支付"
+      ]
+    },
+    {
+      "scenario_id": "cs-aftersale-submit",
+      "title": "已支付订单发起售后成功",
+      "requirement_gold_ids": [
+        "gr-aftersale-condition"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "售后申请已提交，请等待审核"
+      ]
+    }
+  ],
+  "obligations_expected": [],
+  "strategy_expectations": [],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-status-model",
+      "description": "状态机以单条聚合责任表达，或按每条流转边拆分为多条 Gold 责任均可接受"
+    },
+    {
+      "for_gold_id": "gr-auto-cancel",
+      "description": "超时取消与用户主动取消拆为两条责任亦可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-terminal-reopen",
+      "description": "出现「已取消/已退款终态订单重新支付或流转成功」的用例",
+      "severity_note": "与 gr-pay-requires-pending 及 §2 状态机直接冲突"
+    },
+    {
+      "pattern_id": "fp-skip-transition",
+      "description": "出现「已支付订单跳过发货直接变为已完成」的用例",
+      "severity_note": "与 gr-status-model 流转路径冲突"
+    }
+  ]
+}

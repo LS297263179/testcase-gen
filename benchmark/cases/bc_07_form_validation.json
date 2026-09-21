@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_07_form_validation",
+  "title": "营销活动报名表单（策略特征密集题）",
+  "requirement_file": "bc_07_form_validation_requirement.md",
+  "domain": "form",
+  "difficulty": "medium",
+  "tags": ["bench-v0.1", "strategy-zoo", "field-validation"],
+  "context": "bench-v0.1 正式 Case #07：单一表单同时具备长度/格式/数值/唯一/枚举/必填六类测试特征，是 STRATEGY_FEATURE_TECHNIQUES 条件触发的主载体。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_07_form_validation.gold.json"
+}

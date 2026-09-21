@@ -1,0 +1,11 @@
+{
+  "case_id": "bc_06_search",
+  "title": "商品搜索（弱结构化需求 + 排序分页）",
+  "requirement_file": "bc_06_search_requirement.md",
+  "domain": "search",
+  "difficulty": "easy",
+  "tags": ["bench-v0.1", "weak-structure", "robustness"],
+  "context": "bench-v0.1 正式 Case #06：较少字段约束的功能型需求，考察 LLM 语义轨道与健壮性责任（特殊字符/空结果）；策略责任天然较少，属设计内分布。match_keys 指纹由 compute_item_identity_fingerprint 生成并逐条复核。",
+  "benchmark_version": "bench-v0.1",
+  "gold_ref": "bc_06_search.gold.json"
+}

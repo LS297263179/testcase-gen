@@ -1,0 +1,255 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_10_report_export",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_10_report_export_requirement.md 产出：§2 三字段→data_field（两个必填日期 + 格式枚举）、§3 四条规则各立独立责任（其中空数据与文件命名为 constraint）、§4 矩阵聚合为一条 permission 责任并把 staff 拒绝行下沉为 obligation、§5 验收→锚点与多点依据；未参考、未复制任何 runtime 产物；min_covered_points=2 仅用于 export_format.enum（验收标准 2「xlsx 与 csv 分别验证导出成功」），其余默认 1。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-export-entry",
+      "module": "报表导出",
+      "type": "function",
+      "statement": "管理员选择日期范围与导出格式后执行销售日报导出",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_938105cee19cc2fb042aa634b708b3b0"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-start-date",
+      "module": "报表导出",
+      "type": "data_field",
+      "statement": "开始日期必填",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_44f02ae14745a45716d925c4ddd7c81a"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-end-date",
+      "module": "报表导出",
+      "type": "data_field",
+      "statement": "结束日期必填",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_318488ebd988ea6530b7536fd11922a8"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-format",
+      "module": "报表导出",
+      "type": "data_field",
+      "statement": "导出格式必填，只能从 xlsx、csv 中选择",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_f0d1a4a5f806f5d9f8dc57d8801f2f87"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-date-order",
+      "module": "报表导出",
+      "type": "business_rule",
+      "statement": "结束日期不得早于开始日期",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_283c9ea5dd12f3c7fc61e877da0edd39"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-row-limit",
+      "module": "报表导出",
+      "type": "business_rule",
+      "statement": "导出请求数据量超过 100000 行时必须拒绝导出",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_b4decd2aaa5fc5714c3788876a537e0b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-empty-data",
+      "module": "报表导出",
+      "type": "constraint",
+      "statement": "所选周期内无数据时不得生成空文件",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_3f23705dfdf10fc02ef08f2b7cc296c9"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-permission",
+      "module": "导出权限",
+      "type": "permission",
+      "statement": "manager 可导出报表，staff 导出报表必须被拒绝",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_1f979674af9510e2be8e3667427e18fc"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-export-success",
+      "title": "合法条件导出成功",
+      "requirement_gold_ids": [
+        "gr-export-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "选择导出格式"
+      ],
+      "expected_outcomes": [
+        "导出成功，文件已开始下载"
+      ]
+    },
+    {
+      "scenario_id": "cs-empty-data",
+      "title": "无数据不生成文件",
+      "requirement_gold_ids": [
+        "gr-empty-data"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "所选周期内无数据"
+      ]
+    },
+    {
+      "scenario_id": "cs-date-order-violation",
+      "title": "结束日期早于开始日期被拒",
+      "requirement_gold_ids": [
+        "gr-date-order"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "结束日期不能早于开始日期"
+      ]
+    },
+    {
+      "scenario_id": "cs-row-limit-exceeded",
+      "title": "超行数上限被拒",
+      "requirement_gold_ids": [
+        "gr-row-limit"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "数据量超出导出上限，请缩小日期范围"
+      ]
+    },
+    {
+      "scenario_id": "cs-staff-denied",
+      "title": "staff 导出被拒",
+      "requirement_gold_ids": [
+        "gr-permission"
+      ],
+      "expected_techniques": [
+        "permission_matrix"
+      ],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "您没有该操作权限"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "start_date.required",
+      "technique": "equivalence_class",
+      "description": "开始日期必填空值校验等价类",
+      "requirement_gold_id": "gr-start-date",
+      "min_covered_points": 1
+    },
+    {
+      "target": "end_date.required",
+      "technique": "equivalence_class",
+      "description": "结束日期必填空值校验等价类",
+      "requirement_gold_id": "gr-end-date",
+      "min_covered_points": 1
+    },
+    {
+      "target": "export_format.enum",
+      "technique": "equivalence_class",
+      "description": "导出格式等价类（验收标准 2：xlsx 与 csv 分别验证 + 非法格式）",
+      "requirement_gold_id": "gr-format",
+      "min_covered_points": 2
+    },
+    {
+      "target": "staff:report:export",
+      "technique": "permission_matrix",
+      "description": "staff 导出报表必须被拒绝（矩阵拒绝项）",
+      "requirement_gold_id": "gr-permission",
+      "min_covered_points": 1
+    },
+    {
+      "target": "manager:report:export",
+      "technique": "permission_matrix",
+      "description": "manager 导出报表必须允许",
+      "requirement_gold_id": "gr-permission",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-start-date"
+    },
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-format"
+    },
+    {
+      "feature": "permission_rule",
+      "technique": "permission_matrix",
+      "requirement_gold_id": "gr-permission"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-start-date",
+      "description": "起止日期必填合并为「日期范围必填」一条责任亦可接受"
+    },
+    {
+      "for_gold_id": "gr-permission",
+      "description": "权限按 manager/staff 拆为两条责任亦可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-empty-file-generated",
+      "description": "出现「无数据时生成空文件并导出成功」的用例",
+      "severity_note": "与 gr-empty-data 及验收标准 4 直接冲突"
+    },
+    {
+      "pattern_id": "fp-staff-export-ok",
+      "description": "出现「staff 角色成功导出报表」的用例",
+      "severity_note": "与 gr-permission 直接冲突"
+    }
+  ]
+}

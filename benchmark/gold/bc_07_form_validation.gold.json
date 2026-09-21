@@ -1,0 +1,289 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_07_form_validation",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_07_form_validation_requirement.md 产出：§2 六个字段逐字段原子化测试责任（长度/格式/必填/数值范围/唯一/枚举），§3 规则与 §4 提示语→场景锚点；未参考、未复制任何 runtime 产物；min_covered_points=4 仅用于年龄边界（验收标准 1 逐字要求 17/18/60/61 四点逐一验证），其余义务默认 1；优惠码长度约束不再单独登记义务（同字段唯一性责任已覆盖该需求，避免重复拆细）。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-signup-entry",
+      "module": "报名表单",
+      "type": "function",
+      "statement": "用户填写姓名、邮箱、手机号、年龄与性别后提交报名表单完成活动报名",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_ba29fc2e9be5ae550466ead8609194e1"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-full-name",
+      "module": "报名表单",
+      "type": "data_field",
+      "statement": "姓名必填，最小长度 2，最大长度 20 字符",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0c59b5b12d96f27c176e6840d0544906"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-email",
+      "module": "报名表单",
+      "type": "data_field",
+      "statement": "邮箱必填且必须为合法邮箱格式",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_ed279de4c5dbc6557b418a98dad99adf"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-mobile",
+      "module": "报名表单",
+      "type": "data_field",
+      "statement": "手机号必填，须为符合 ^1[3-9]\\d{9}$ 的 11 位中国大陆手机号",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_351fa354018fc9719c99c8f427e5424b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-age",
+      "module": "报名表单",
+      "type": "data_field",
+      "statement": "年龄必填，取值范围 18 至 60 的整数",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_c214ae08845d69b3c1dad7072029ac99"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-coupon",
+      "module": "报名表单",
+      "type": "data_field",
+      "statement": "优惠码非必填，长度 6 至 12 字符，活动期内必须全局唯一",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_80b2d1435a100c15ffd34b63dfa0e0e0"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-gender",
+      "module": "报名表单",
+      "type": "data_field",
+      "statement": "性别必填，只能从男、女、其他中选择",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_c241ec8755aa64750b220586ee7a14ec"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-duplicate",
+      "module": "报名表单",
+      "type": "business_rule",
+      "statement": "同一手机号在同一活动中仅允许报名一次",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_76c13912cfc1d14af0bb45a8d0357c88"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-submit-success",
+      "title": "合法报名信息提交成功",
+      "requirement_gold_ids": [
+        "gr-signup-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "提交报名表单"
+      ],
+      "expected_outcomes": [
+        "提交成功，我们将尽快与您联系"
+      ]
+    },
+    {
+      "scenario_id": "cs-email-invalid",
+      "title": "非法邮箱被拦截",
+      "requirement_gold_ids": [
+        "gr-email"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "请输入正确的邮箱地址"
+      ]
+    },
+    {
+      "scenario_id": "cs-age-restricted",
+      "title": "年龄超出范围被拒",
+      "requirement_gold_ids": [
+        "gr-age"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "仅限 18-60 周岁用户参加"
+      ]
+    },
+    {
+      "scenario_id": "cs-coupon-used",
+      "title": "已使用优惠码被拒",
+      "requirement_gold_ids": [
+        "gr-coupon"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "该优惠码已被使用"
+      ]
+    },
+    {
+      "scenario_id": "cs-duplicate-signup",
+      "title": "同手机号重复报名被拒",
+      "requirement_gold_ids": [
+        "gr-duplicate"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "提交报名表单"
+      ],
+      "expected_outcomes": [
+        "您已报名过本次活动"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "full_name.length",
+      "technique": "boundary_value",
+      "description": "姓名长度边界覆盖（2~20 字符）",
+      "requirement_gold_id": "gr-full-name",
+      "min_covered_points": 1
+    },
+    {
+      "target": "email.format",
+      "technique": "equivalence_class",
+      "description": "邮箱格式等价类（合法/非法邮箱）",
+      "requirement_gold_id": "gr-email",
+      "min_covered_points": 1
+    },
+    {
+      "target": "email.required",
+      "technique": "equivalence_class",
+      "description": "邮箱必填校验等价类",
+      "requirement_gold_id": "gr-email",
+      "min_covered_points": 1
+    },
+    {
+      "target": "mobile.pattern",
+      "technique": "equivalence_class",
+      "description": "手机号正则等价类（含 10 位/12 位/错误前缀）",
+      "requirement_gold_id": "gr-mobile",
+      "min_covered_points": 1
+    },
+    {
+      "target": "age",
+      "technique": "boundary_value",
+      "description": "年龄数值边界覆盖（验收标准 1：17/18/60/61 逐一验证）",
+      "requirement_gold_id": "gr-age",
+      "min_covered_points": 4
+    },
+    {
+      "target": "coupon_code.unique",
+      "technique": "equivalence_class",
+      "description": "优惠码全局唯一性等价类（首次可用/复用被拒）",
+      "requirement_gold_id": "gr-coupon",
+      "min_covered_points": 1
+    },
+    {
+      "target": "gender.enum",
+      "technique": "equivalence_class",
+      "description": "性别 3 合法枚举值 + 非法值等价类",
+      "requirement_gold_id": "gr-gender",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-full-name"
+    },
+    {
+      "feature": "typed_format_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-email"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-email"
+    },
+    {
+      "feature": "pattern_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-mobile"
+    },
+    {
+      "feature": "numeric_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-age"
+    },
+    {
+      "feature": "unique_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-coupon"
+    },
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-gender"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-mobile",
+      "description": "手机号格式责任以 data_type=phone（.format）或 pattern（.pattern）单条表达均可接受"
+    },
+    {
+      "for_gold_id": "gr-coupon",
+      "description": "优惠码拆为「长度约束」与「唯一性」两条 Gold 责任亦可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-age-bypass",
+      "description": "出现「年龄 17 岁或 61 岁报名成功」的用例",
+      "severity_note": "与 gr-age 及验收标准 1 直接冲突"
+    },
+    {
+      "pattern_id": "fp-duplicate-allow",
+      "description": "出现「同一手机号同活动可重复报名成功」的用例",
+      "severity_note": "与 gr-duplicate 直接冲突"
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "manifest_id": "bm-bench-v0-1",
+  "benchmark_version": "bench-v0.1",
+  "cases": [
+    "bc_01_login",
+    "bc_02_refund_order",
+    "bc_03_order_status",
+    "bc_04_payment",
+    "bc_05_admin_rbac",
+    "bc_06_search",
+    "bc_07_form_validation",
+    "bc_08_file_upload",
+    "bc_09_approval_flow",
+    "bc_10_report_export"
+  ],
+  "repeat": 1,
+  "notes": "bench-v0.1 正式 runset manifest（S4 定稿：10 个 case 全部完成，按 case_id 排序）；S6 Runner 按本清单执行 runset。"
+}

@@ -1,0 +1,256 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_05_admin_rbac",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_05_admin_rbac_requirement.md 产出：角色枚举字段→data_field、15 行矩阵聚合为一条 permission 责任（避免逐行拆细导致 Gold 全集化）、矩阵关键行（拒绝项与代表性允许项）下沉为 obligations、§4 规则与 §5 提示语→场景锚点；未参考、未复制任何 runtime 产物；所有义务 min_covered_points=1。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-role-assign",
+      "module": "角色管理",
+      "type": "function",
+      "statement": "管理员为后台账号分配角色，角色决定其可访问的资源与操作",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_3f0d60034aad7042a7df1908df79e005"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-role-type",
+      "module": "角色管理",
+      "type": "data_field",
+      "statement": "角色类型必填，只能从超级管理员、运营、审计中选择",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_0c4c460503c8c4490195252f82a26c42"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-account-status",
+      "module": "角色管理",
+      "type": "data_field",
+      "statement": "账号状态为启用或停用枚举，停用账号不允许登录后台",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_12e450a95023d5314f762b93254b24f9"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-permission",
+      "module": "权限矩阵",
+      "type": "permission",
+      "statement": "权限按矩阵控制：admin 对 user、content、audit_log 全部操作允许；operator 允许 user 的查看与编辑及 content 的查看与新建，拒绝 user 新建与 audit_log 查看；auditor 仅允许 audit_log 查看",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_9b3f7c4e401ac5cbc23d29f22958001b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-take-effect",
+      "module": "权限矩阵",
+      "type": "business_rule",
+      "statement": "角色或权限变更后即时生效，用户下一次操作即按新权限约束",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_f67642704060cdf7aeecbdfe5b879c58"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-audit-trail",
+      "module": "审计",
+      "type": "constraint",
+      "statement": "admin 对用户与内容的写操作必须记录审计日志",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_9f14b3b8753818aeb5f69b1b3e759d15"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-deny-prompt",
+      "module": "权限矩阵",
+      "type": "constraint",
+      "statement": "矩阵中所有拒绝项必须被拦截并提示您没有该操作权限",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_cbf85b5ae3e21164dce7b0aa533a1ab3"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-operator-create-denied",
+      "title": "运营新建用户被拒",
+      "requirement_gold_ids": [
+        "gr-permission",
+        "gr-deny-prompt"
+      ],
+      "expected_techniques": [
+        "permission_matrix"
+      ],
+      "expected_actions": [
+        "新建用户"
+      ],
+      "expected_outcomes": [
+        "您没有该操作权限"
+      ]
+    },
+    {
+      "scenario_id": "cs-auditor-content-denied",
+      "title": "审计删除内容被拒",
+      "requirement_gold_ids": [
+        "gr-permission"
+      ],
+      "expected_techniques": [
+        "permission_matrix"
+      ],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "您没有该操作权限"
+      ]
+    },
+    {
+      "scenario_id": "cs-disabled-login",
+      "title": "停用账号登录被拒",
+      "requirement_gold_ids": [
+        "gr-account-status"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "登录后台"
+      ],
+      "expected_outcomes": [
+        "账号已停用，请联系管理员"
+      ]
+    },
+    {
+      "scenario_id": "cs-admin-audit-trail",
+      "title": "管理员删除用户留痕",
+      "requirement_gold_ids": [
+        "gr-audit-trail"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "删除用户"
+      ],
+      "expected_outcomes": [
+        "操作已记录审计日志"
+      ]
+    },
+    {
+      "scenario_id": "cs-take-effect",
+      "title": "权限变更即时生效",
+      "requirement_gold_ids": [
+        "gr-take-effect"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "按新权限约束"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "role_type.enum",
+      "technique": "equivalence_class",
+      "description": "角色类型 3 合法枚举值 + 非法值等价类",
+      "requirement_gold_id": "gr-role-type",
+      "min_covered_points": 1
+    },
+    {
+      "target": "role_type.required",
+      "technique": "equivalence_class",
+      "description": "角色类型必填校验等价类",
+      "requirement_gold_id": "gr-role-type",
+      "min_covered_points": 1
+    },
+    {
+      "target": "operator:user:create",
+      "technique": "permission_matrix",
+      "description": "operator 新建用户必须被拒绝（矩阵拒绝项）",
+      "requirement_gold_id": "gr-permission",
+      "min_covered_points": 1
+    },
+    {
+      "target": "operator:audit_log:view",
+      "technique": "permission_matrix",
+      "description": "operator 查看审计日志必须被拒绝（职责分离）",
+      "requirement_gold_id": "gr-permission",
+      "min_covered_points": 1
+    },
+    {
+      "target": "auditor:audit_log:view",
+      "technique": "permission_matrix",
+      "description": "auditor 查看审计日志必须允许（审计角色核心职责）",
+      "requirement_gold_id": "gr-permission",
+      "min_covered_points": 1
+    },
+    {
+      "target": "admin:user:delete",
+      "technique": "permission_matrix",
+      "description": "admin 删除用户必须允许（全权限代表行）",
+      "requirement_gold_id": "gr-permission",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-role-type"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-role-type"
+    },
+    {
+      "feature": "permission_rule",
+      "technique": "permission_matrix",
+      "requirement_gold_id": "gr-permission"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-permission",
+      "description": "矩阵聚合为一条责任，或按角色拆分为 admin/operator/auditor 三条责任均可接受"
+    },
+    {
+      "for_gold_id": "gr-account-status",
+      "description": "账号状态拆为「枚举字段」与「停用不可登录规则」两条亦可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-auditor-write",
+      "description": "出现「auditor 成功编辑或删除内容/用户」的用例",
+      "severity_note": "与 gr-permission 矩阵直接冲突"
+    },
+    {
+      "pattern_id": "fp-disabled-login-ok",
+      "description": "出现「停用账号仍可登录后台」的用例",
+      "severity_note": "与 gr-account-status 及验收标准 3 冲突"
+    }
+  ]
+}

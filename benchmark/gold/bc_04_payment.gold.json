@@ -1,0 +1,278 @@
+{
+  "gold_version": "gold-v0.1",
+  "case_id": "bc_04_payment",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_04_payment_requirement.md 产出：§2 字段→data_field、§3 规则→business_rule、§4 验收→场景锚点逐节原子化；未参考、未复制任何 runtime 产物；min_covered_points=3 仅用于支付金额边界（验收标准 2 逐字要求 0.01/50000/50000.01 三点逐一验证），其余义务默认 1；场景锚点均取自需求原文提示语。",
+  "gold_authoring": "human_independent",
+  "gold_requirements": [
+    {
+      "gold_id": "gr-pay-entry",
+      "module": "收银台",
+      "type": "function",
+      "statement": "用户在收银台选择支付方式并输入支付密码完成订单支付",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_11b8ded272ee278ae36aeb5349a0f7dc"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-amount",
+      "module": "收银台",
+      "type": "data_field",
+      "statement": "支付金额必填，最小值 0.01，最大值 50000，保留 2 位小数",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_67f281413759ec48b2fd3ece941b819d"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-channel",
+      "module": "收银台",
+      "type": "data_field",
+      "statement": "支付方式必填，只能从余额支付、微信支付、支付宝、银行卡中选择",
+      "priority_hint": "P1",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_d16b41cce537ff2a303ca0283e2b0585"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-pay-password",
+      "module": "收银台",
+      "type": "data_field",
+      "statement": "支付密码必填，须为符合 ^\\d{6}$ 的 6 位纯数字",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_bae9e47e81dcacea0f56e99ca8d3793b"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-discount",
+      "module": "收银台",
+      "type": "data_field",
+      "statement": "优惠码非必填，最大长度 16 字符",
+      "priority_hint": "P2",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_9092b37f0cd384fa6ff62fc6ffe90c92"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-balance",
+      "module": "收银台",
+      "type": "business_rule",
+      "statement": "选择余额支付时账户余额不足则支付失败",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_c6600d06464822345cfcbad6a97f4a71"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-limit",
+      "module": "收银台",
+      "type": "business_rule",
+      "statement": "支付金额超过 50000 元时拒绝交易",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_85cc70a25f1f7def743469457acdbd57"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-large-sms",
+      "module": "支付安全",
+      "type": "business_rule",
+      "statement": "单笔支付金额大于 1000 元必须输入短信验证码二次确认",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_ac79fbf221f4dc13105b5ceaff2bf15c"
+        ],
+        "variants": []
+      }
+    },
+    {
+      "gold_id": "gr-pwd-lock",
+      "module": "支付安全",
+      "type": "business_rule",
+      "statement": "支付密码连续输错 3 次后支付功能锁定 24 小时",
+      "priority_hint": "P0",
+      "match_keys": {
+        "identity_fingerprints": [
+          "ri_4b916df7f7f9e7c2dce9ea78a8b5d02c"
+        ],
+        "variants": []
+      }
+    }
+  ],
+  "critical_scenarios": [
+    {
+      "scenario_id": "cs-pay-success",
+      "title": "正确支付密码完成支付",
+      "requirement_gold_ids": [
+        "gr-pay-entry"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "输入支付密码"
+      ],
+      "expected_outcomes": [
+        "支付成功"
+      ]
+    },
+    {
+      "scenario_id": "cs-balance-insufficient",
+      "title": "余额不足支付被拒",
+      "requirement_gold_ids": [
+        "gr-balance"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "余额不足，请更换支付方式"
+      ]
+    },
+    {
+      "scenario_id": "cs-over-limit",
+      "title": "超过单笔限额被拒",
+      "requirement_gold_ids": [
+        "gr-limit"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "超出单笔支付限额"
+      ]
+    },
+    {
+      "scenario_id": "cs-large-sms-required",
+      "title": "大额支付触发短信二次验证",
+      "requirement_gold_ids": [
+        "gr-large-sms"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [],
+      "expected_outcomes": [
+        "请输入短信验证码"
+      ]
+    },
+    {
+      "scenario_id": "cs-pwd-locked",
+      "title": "密码错 3 次后支付锁定",
+      "requirement_gold_ids": [
+        "gr-pwd-lock"
+      ],
+      "expected_techniques": [],
+      "expected_actions": [
+        "输入支付密码"
+      ],
+      "expected_outcomes": [
+        "支付功能已被锁定"
+      ]
+    }
+  ],
+  "obligations_expected": [
+    {
+      "target": "pay_amount",
+      "technique": "boundary_value",
+      "description": "支付金额数值边界覆盖（验收标准 2：0.01/50000/50000.01 逐一验证）",
+      "requirement_gold_id": "gr-amount",
+      "min_covered_points": 3
+    },
+    {
+      "target": "pay_amount.required",
+      "technique": "equivalence_class",
+      "description": "支付金额必填校验等价类",
+      "requirement_gold_id": "gr-amount",
+      "min_covered_points": 1
+    },
+    {
+      "target": "pay_channel.enum",
+      "technique": "equivalence_class",
+      "description": "支付方式 4 合法枚举值 + 非法值等价类",
+      "requirement_gold_id": "gr-channel",
+      "min_covered_points": 1
+    },
+    {
+      "target": "pay_password.pattern",
+      "technique": "equivalence_class",
+      "description": "支付密码 6 位数字正则等价类",
+      "requirement_gold_id": "gr-pay-password",
+      "min_covered_points": 1
+    },
+    {
+      "target": "discount_code.length",
+      "technique": "boundary_value",
+      "description": "优惠码长度边界覆盖（max 16）",
+      "requirement_gold_id": "gr-discount",
+      "min_covered_points": 1
+    }
+  ],
+  "strategy_expectations": [
+    {
+      "feature": "numeric_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-amount"
+    },
+    {
+      "feature": "required_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-amount"
+    },
+    {
+      "feature": "enum_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-channel"
+    },
+    {
+      "feature": "pattern_field",
+      "technique": "equivalence_class",
+      "requirement_gold_id": "gr-pay-password"
+    },
+    {
+      "feature": "length_range",
+      "technique": "boundary_value",
+      "requirement_gold_id": "gr-discount"
+    }
+  ],
+  "reference_cases": [],
+  "acceptable_variants": [
+    {
+      "for_gold_id": "gr-balance",
+      "description": "「余额充足可支付」与「余额不足被拒」合并为一条或拆为两条责任均可接受"
+    },
+    {
+      "for_gold_id": "gr-large-sms",
+      "description": "大额二次验证表达为 sms_code 字段条件必填或直接作为业务规则条目均可接受"
+    }
+  ],
+  "forbidden_patterns": [
+    {
+      "pattern_id": "fp-pay-after-lock",
+      "description": "出现「支付功能锁定后仍可支付成功」的用例",
+      "severity_note": "与 gr-pwd-lock 及验收标准 3 直接冲突"
+    },
+    {
+      "pattern_id": "fp-over-limit-success",
+      "description": "出现「金额大于 50000 支付成功」的用例",
+      "severity_note": "与 gr-limit 直接冲突"
+    }
+  ]
+}
