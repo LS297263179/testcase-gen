@@ -18,6 +18,8 @@ config.yaml
 
 # 输出文件
 output/
+# Step 11 S6：Benchmark runset 快照（本地/验收产物；正式 baseline 由 S7 显式提升入库）
+benchmark/runsets/
 
 # 调试文件
 _debug_*.txt

@@ -380,3 +380,63 @@ Playwright / API 自动执行 / UI E2E 执行、Preference Learning、Prompt Opt
 | 10 | 不改 Runtime；Benchmark 层日志捕获 + PipelineResult + 产物状态启发式分类（含局限记录） | §9.2、§9.3 |
 | 11 | Compare 第一版不做 CI 强门禁 | §11 |
 | 12 | 独立 benchmark DB，严禁污染 data/data_v2.db | §12 |
+
+---
+
+## 附录 B：S6 Benchmark Runner 实施说明（2026-09-21 验收通过）
+
+> 性质：本附录是 §9.3 / §10 / §12 / §13 在 S6 落地时的**实施细化记录**，不改变 §2~§15 的任何冻结结论。
+> 全部规则已由 `tests/test_benchmark_runner.py`（58 例，零真实 LLM）锁定。
+> 交付：`core/v2/eval/runner_lib.py`（纯函数层）+ `scripts/v2_benchmark.py`（独立 CLI 进程）+ `.gitignore` 一行。
+
+### B.1 五态分类补充：源 3 产物计数采用「阶段门控」
+
+§9.3 源 3 若照字面直接判零，会把"尚未执行的阶段自然产生零计数"误报为 LLM_FAILURE
+（例：Runtime 在 testpoints 阶段因非 LLM 原因失败，下游 `test_cases` 天然为 0，却被判 LLM 故障）。
+S6 实现按"该阶段是否真的跑到"门控：
+
+| 降级信号 | 生效前提（缺一不计） | 规则 id |
+|---|---|---|
+| `items == 0` | IR 阶段已实际执行（`steps` 中存在 `ir` 记录，含 "IR 未产出 items" 失败点） | `count_items_zero` |
+| `test_cases == 0` | TestCase 阶段已执行且**成功**，且无非 LLM 失败原因可解释该零产出 | `count_test_cases_zero` |
+| `reviewed == 0` | Review 阶段本应执行 + 已有 TestCase + Review 结果明确缺失/失败 | `review_result_missing` |
+
+> 这是对 §9.3 三源启发式分类的实施细化，用于避免“尚未执行的阶段自然零计数”误报为 LLM_FAILURE。
+
+门控方向仍保留 §9.2-3 的取证口径：**IR 跑完却 0 items 仍判 LLM_FAILURE**——认证类 LLM 故障被底层吞掉后，
+这是 PipelineResult 上唯一可机器读取的症状。残余误判代价照旧由"非 COMPLETED 不进质量分母"吸收（§9.1、§16）。
+
+同期锁定的其他分类细则：
+- 源 1 只匹配 §9.3 列举的 **5 条最终降级**日志前缀；`LLM 调用失败（第 N 次）…后重试` 与
+  `模型不支持图片输入，已自动忽略图片` 计入 `ignored_intermediate_signals`，不参与判 LLM_FAILURE。
+- 日志按 (case, repeat) 单元的 `mark/since` **增量窗口**归属，跨 case、跨 repeat 互不串信号。
+- 原始日志与异常文本**不整段落盘**：只留 `safe_prefix(≤160 字符) + hash(16 位)` 与命中的规则 id。
+
+### B.2 S6 已冻结实现决策
+
+| # | 决策 | 冻结依据 |
+|---|---|---|
+| 1 | `success=True` + 已确认 LLM 降级信号 → `LLM_FAILURE`（核心产物已降级，不进质量分母） | §9.1、§9.3 |
+| 2 | 非 COMPLETED：仍运行 S3 Hard Eval（保留 cost/counts 观测，质量格按 S3 契约自动为 None），**不调用 S5 真实 LLM** | §6 指标 #10、§9 |
+| 3 | ARCHIVED TestCase 不进入最终质量评价集合，仅以 `archived_test_case_ids` / `archived_test_cases` 作运行与优化观察 | §3.5、Step 8 语义 |
+| 4 | Benchmark DB 默认 **fresh**（runset 前清理库文件与 WAL 伴随文件）；`--reuse-db` 仅供调试；两者互斥 | §12 |
+| 5 | Runner 默认执行 S5，**不提供 `--skip-soft`**（正式 runset 必须含语义轨道） | §1 可重复定位 |
+| 6 | S6 输出目录 `benchmark/runsets/<runset_id>/`：`runset.json` + `cases/<case_id>__rNN.json` + `manifest.resolved.json` + `_COMPLETE.json` | §0 目标链路 |
+| 7 | `benchmark/runsets/` **不进入 Git**（baseline 由 S7 显式提升入库） | §12.4 同族纪律 |
+| 8 | `HardMetricsReport` 序列化由 S6 `runner_lib.hard_to_payload/from_payload` 提供，`metrics_hard.py` 零改动 | §2 边界 3、11 |
+| 9 | S5 客户端经现有 `build_llm_client("review")` 获取（review 未启用时工厂自带回退到 generate 配置），不改 `client_factory.py`、不新增 purpose | §2 边界 2、3 |
+| 10 | Runtime 一律 `client=None` 调用（保持产品路径 generate/review 双客户端行为不变）；S5 的 LLM 调用数单独对账为 `llm_calls{pipeline, s5_soft, total}` | §2 边界 2、§6 指标 #10 |
+
+### B.3 S6 环境指纹与落盘安全实施
+
+- 指纹覆盖 §10 表格全项（23 字段），并额外并列 `business_prompt_versions`（6 个常量）与
+  `s5_prompt_version`：`GenerationConfig.prompt_version` 由 Step 3/5 逐步追加、`reviewer_version` 由 Step 7 追加，
+  **单靠 GenerationConfig 不足以代表 6 个业务 Prompt**，故 runset 同时记常量聚合与 cfg 原值。
+- `case_set_digest` = manifest 所列 case 的 `case.json + requirement.md + gold.json` 字节摘要聚合哈希；
+  另有 per-case `case_fingerprint`（`gold_version` + 三个文件摘要），供 S8 判定数据集是否发生过漂移。
+- `git_probe`：git 不可用或调用失败 → `git_commit/git_branch/git_dirty = null` + `git_probe="unknown"`，**不阻断 benchmark**。
+- 敏感防护沿用 §10.1 双保险（白名单挑字段 + 写盘前 `assert_no_sensitive`），关键字在既有基础上追加
+  `base_url` / `credential`；`resolved_benchmark_db` 只记路径，不含任何凭证。
+- 半成品保护：runset 目录先落 `INCOMPLETE` 标记，全部落盘成功后才写 `_COMPLETE.json` 并摘除标记；
+  敏感自检或写盘失败 → exit 5 且不产 `runset.json`（避免留下"看起来完整"的 runset）。
+- CLI 退出码：`0=全 COMPLETED / 1=存在非 COMPLETED / 2=参数错误 / 3=DB 与生产库路径保护 / 4=数据集校验失败 / 5=落盘或敏感自检失败`。
