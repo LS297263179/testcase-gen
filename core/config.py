@@ -93,6 +93,10 @@ def get_model_config() -> dict:
     if raw:
         try:
             config = json.loads(raw)
+            # 空配置守卫：网页保存可能落下 "{}" / 空段，它在下面 truthy 且解析成功，
+            # 会直接 return 空 dict 并遮蔽 config.yaml 兜底，导致 model/base_url 全空。
+            if not isinstance(config, dict) or not any(config.get(s) for s in ("generate", "review")):
+                raise ValueError("数据库模型配置为空或缺少 generate/review 段")
             # 解密 API Key
             for section in ("generate", "review"):
                 if section in config and "api_key" in config[section]:

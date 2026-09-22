@@ -25,7 +25,8 @@ from core.v2.eval.schema import (
     BenchmarkGold,
     StrategyExpectation,
 )
-from core.v2.fingerprint import compute_item_identity_fingerprint, normalize_text
+from core.v2.eval.textops import anchor_satisfied  # S7 裁决 D8：锚点判定抽为公共 helper（实现逐字搬迁，行为不变）
+from core.v2.fingerprint import compute_item_identity_fingerprint
 
 # CANDIDATE 提示下限：低于 Step 6 MODIFIED 判定阈值（0.6），仅用于"值得人工看一眼"的候选。
 # 注意：达到任何相似度都只产生 CANDIDATE，绝不产生 AUTO_HIT（冻结）。
@@ -292,17 +293,6 @@ class ArtifactIndex:
         return None
 
 
-def _anchor_satisfied(anchor: str, haystacks: list[str]) -> bool:
-    """结构锚点判定：归一化后必须是某个**结构化字段**（step.action / tc.expected）的组成部分。
-
-    只在结构化字段内比对，不扫描自由全文（设计文档 §8：禁止关键词撞到即覆盖）。
-    """
-    needle = normalize_text(anchor)
-    if not needle:
-        return False
-    return any(needle in normalize_text(text) for text in haystacks if text)
-
-
 @dataclass
 class ScenarioOutcome:
     """单条 CriticalScenario 的 anchor 判定结果（逐 anchor 呈现，可解释）。"""
@@ -361,10 +351,10 @@ def match_critical_scenarios(
             anchors["techniques"] = not missing_tech
         if sc.expected_actions:
             action_fields = [step.action for tc in tcs for step in tc.steps]
-            anchors["actions"] = all(_anchor_satisfied(a, action_fields) for a in sc.expected_actions)
+            anchors["actions"] = all(anchor_satisfied(a, action_fields) for a in sc.expected_actions)
         if sc.expected_outcomes:
             expected_fields = [tc.expected for tc in tcs]
-            anchors["outcomes"] = all(_anchor_satisfied(a, expected_fields) for a in sc.expected_outcomes)
+            anchors["outcomes"] = all(anchor_satisfied(a, expected_fields) for a in sc.expected_outcomes)
 
         sub = [v for k, v in anchors.items() if k != "requirement_items"]
         if all(anchors.values()):

@@ -89,6 +89,89 @@ class TestConfig:
         assert cfg["generate"]["api_key"] == "test-key"
 
 
+class TestModelConfigEmptyGuard:
+    """D7②：数据库 model_config 为空对象/空段时不得遮蔽 config.yaml 兜底。
+
+    独立可回滚：只依赖 `core.config.get_model_config`，与 V2 / Benchmark 三轨改造无任何耦合。
+    yaml 侧一律用 monkeypatch 的哨兵值，不读取真实 config.yaml（该文件不入 git、内容因机器而异）。
+    """
+
+    _YAML = {
+        "generate": {
+            "api_type": "openai",
+            "base_url": "http://yaml-fallback",
+            "api_key": "yaml-key",
+            "model": "yaml-model",
+            "image_model": "yaml-image-model",
+        },
+        "review": {
+            "enabled": True,
+            "api_type": "openai",
+            "base_url": "http://yaml-fallback",
+            "api_key": "yaml-key",
+            "model": "yaml-review-model",
+        },
+    }
+
+    def _patch(self, monkeypatch, raw):
+        """把 DB 侧 model_config 固定为 raw，并把 yaml 兜底换成哨兵配置。"""
+        import copy
+
+        from core import db
+
+        monkeypatch.setattr(db, "get_setting", lambda key: raw if key == "model_config" else None)
+        monkeypatch.setattr("core.config.load_yaml_config", lambda: copy.deepcopy(self._YAML))
+
+    def test_empty_object_falls_back_to_yaml(self, monkeypatch):
+        """网页保存落下的 "{}" 曾直接 return {} → model/base_url 全空"""
+        from core.config import get_model_config
+
+        self._patch(monkeypatch, "{}")
+        cfg = get_model_config()
+        assert cfg["generate"]["model"] == "yaml-model"
+        assert cfg["generate"]["base_url"] == "http://yaml-fallback"
+        assert cfg["review"]["model"] == "yaml-review-model"
+
+    def test_empty_sections_fall_back_to_yaml(self, monkeypatch):
+        from core.config import get_model_config
+
+        self._patch(monkeypatch, '{"generate": {}, "review": {}}')
+        cfg = get_model_config()
+        assert cfg["generate"]["model"] == "yaml-model"
+        assert cfg["review"]["model"] == "yaml-review-model"
+
+    def test_non_dict_json_falls_back_to_yaml(self, monkeypatch):
+        """JSON 合法但不是配置对象（null / 数组）同样不得遮蔽兜底"""
+        from core.config import get_model_config
+
+        for raw in ("null", "[]", '""'):
+            self._patch(monkeypatch, raw)
+            cfg = get_model_config()
+            assert cfg["generate"]["model"] == "yaml-model", raw
+
+    def test_partial_db_config_still_wins_over_yaml(self, monkeypatch):
+        """守卫不得过度：DB 有有效段时仍优先，缺失的 api_key 照旧从 yaml 补"""
+        from core.config import get_model_config
+
+        self._patch(monkeypatch, '{"generate": {"model": "db-model", "base_url": "http://db"}}')
+        cfg = get_model_config()
+        assert cfg["generate"]["model"] == "db-model"
+        assert cfg["generate"]["base_url"] == "http://db"
+        assert cfg["generate"]["api_key"] == "yaml-key"
+        assert "review" not in cfg  # 不伪造 DB 未声明的段
+
+    def test_empty_config_logs_warning(self, monkeypatch, caplog):
+        """降级必须留痕，便于排查"配置莫名变成文件兜底" """
+        import logging
+
+        from core.config import get_model_config
+
+        self._patch(monkeypatch, "{}")
+        with caplog.at_level(logging.WARNING, logger="core.config"):
+            get_model_config()
+        assert any("generate/review" in r.message for r in caplog.records)
+
+
 # ============================================================
 # 2. 数据库层完整测试
 # ============================================================

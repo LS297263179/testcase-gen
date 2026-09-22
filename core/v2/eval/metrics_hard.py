@@ -17,6 +17,15 @@
   - Duplication 复用 Step 7 review_hard.compute_duplication，EXACT 与 SEMANTIC 分别呈现（S3 修正 4）；
   - TP/TC 数量仅观察，不设门槛；
   - REVIEWER-BASED 仅透传 Step 7 产物（并列展示，不与 GOLD-BASED 混算）。
+
+S7 三轨口径（架构裁决 D1/D2/D3/D9/D10，详见设计文档附录 C）：
+  - `AUTO_HIT` 正式定义为 **"确定性关联命中"**，不再等同 fingerprint exact；关联由 `rails.associate_gold`
+    按 `identity > bridge > anchor` 优先级去重产出，每条命中带 `via` 标注；
+  - `requirement_coverage` 分子 = 确定性关联到的 Gold 条数（含 anchor 多义，item_id 不猜）；
+  - `identity_match_rate` 是**独立诊断单元**（Identity Rail 仅衡量 parser 身份稳定性），
+    严禁把 `identity_match_rate=0` 解读为 requirement coverage=0；
+  - scenario / strategy 判定不再以 identity AUTO_HIT 作为准入门；
+  - obligation / structural / duplication / reviewer 四项口径**完全不变**。
 """
 
 from __future__ import annotations
@@ -37,11 +46,9 @@ from core.v2.eval.matching import (
     ItemMatchState,
     ObligationState,
     ScenarioState,
-    check_strategy_expectations,
-    match_critical_scenarios,
-    match_gold_requirements,
     match_obligations,
 )
+from core.v2.eval.rails import RailPending, associate_gold
 from core.v2.eval.schema import BenchmarkGold, BenchmarkRunStatus, MetricProvenance
 from core.v2.review_hard import compute_duplication, compute_executability_structural
 
@@ -224,6 +231,12 @@ class HardMetricsReport:
     requirement_precision: MetricCell = field(default_factory=MetricCell)  # 辅助观察
     test_point_precision: MetricCell = field(default_factory=MetricCell)  # 辅助观察（trace 代理口径）
 
+    # --- S7 三轨诊断（裁决 D1：Identity Rail 与 requirement_coverage 并列展示，互不代替）---
+    identity_match_rate: MetricCell = field(default_factory=MetricCell)  # fingerprint 精确命中率（仅诊断）
+    via_counts: dict = field(default_factory=dict)  # {identity, bridge, anchor, candidate, ambiguous, miss}
+    identity_diagnostics: dict = field(default_factory=dict)  # parser 身份稳定性明细
+    anchor_scope: str = ""  # anchor haystack 口径（裁决 D9）
+
     # --- 三态分列（MISS / INVALID / PENDING_REVIEW 不混算）---
     requirement_matches: list = field(default_factory=list)  # ItemMatch 明细
     scenario_outcomes: list = field(default_factory=list)  # ScenarioOutcome 明细
@@ -292,8 +305,12 @@ def _collect_invalid(obs: RunObservation) -> list[InvalidFinding]:
     return findings
 
 
-def _collect_pending(obs: RunObservation, mr) -> list[PendingReviewItem]:
-    """PENDING_REVIEW 收集（修正 3：Gold 外生成物只登记，不判 ADDITIONAL_VALID）。"""
+def _collect_pending(obs: RunObservation, mr, rail_pending: tuple[RailPending, ...] = ()) -> list[PendingReviewItem]:
+    """PENDING_REVIEW 收集（修正 3：Gold 外生成物只登记，不判 ADDITIONAL_VALID）。
+
+    `rail_pending` 为 S7 三轨关联层新增的待裁决条目（裁决 D10：anchor 多义 / 不可反查、场景不可判），
+    与 S3 既有 kind 并列，不覆盖、不互算。
+    """
     pending: list[PendingReviewItem] = []
     for m in mr.matches:
         if m.state == ItemMatchState.CANDIDATE:
@@ -318,6 +335,8 @@ def _collect_pending(obs: RunObservation, mr) -> list[PendingReviewItem]:
                     f"TestPoint 未关联任何 Gold 命中项（title={tp.title}）：仅登记，不判 ADDITIONAL_VALID",
                 )
             )
+    for rp in rail_pending:
+        pending.append(PendingReviewItem(rp.kind, rp.ref_id, rp.detail))
     return pending
 
 
@@ -380,23 +399,40 @@ def evaluate_hard_metrics(obs: RunObservation) -> HardMetricsReport:
             "duplication_score",
             "requirement_precision",
             "test_point_precision",
+            "identity_match_rate",
         ):
             setattr(report, name, MetricCell(**skip.__dict__))
         return report
 
     # ================== GOLD-BASED 硬指标 ==================
     index = obs.artifacts.to_index()
-    mr = match_gold_requirements(obs.gold, obs.artifacts.items)
+    rail = associate_gold(obs.gold, index)  # S7 三轨关联（identity > bridge > anchor，裁决 D1/D3）
+    mr = rail.matches
     report.requirement_matches = mr.matches
-    report.scenario_outcomes = match_critical_scenarios(obs.gold, mr, index)
+    report.scenario_outcomes = rail.scenario_outcomes
     report.obligation_outcomes = match_obligations(obs.gold, index)
-    report.strategy_outcomes = check_strategy_expectations(obs.gold, mr, index)
+    report.strategy_outcomes = rail.strategy_outcomes
+    report.via_counts = dict(rail.via_counts)
+    report.identity_diagnostics = rail.diagnostics.to_dict()
+    report.anchor_scope = rail.anchor_scope
 
-    # 1) Requirement Coverage（分母 = Gold 项数；AUTO_HIT 是唯一计分来源）
+    # 1) Requirement Coverage（分母 = Gold 项数；分子 = 三轨确定性关联条数，裁决 D1）
     total_gold = len(obs.gold.gold_requirements)
-    hits = len(mr.auto)
+    hits = len(rail.associated_gold_ids)
     report.requirement_coverage = _ratio(hits, total_gold)
-    report.requirement_coverage.detail = f"四态计数 {mr.summary()}"
+    report.requirement_coverage.detail = (
+        f"确定性关联 {hits}/{total_gold}；via={rail.via_counts}；identity 四态 {mr.summary()}"
+    )
+
+    # 1b) Identity Rail 诊断单元（裁决 D1：与 requirement_coverage 并列，严禁互相替代解读）
+    diag = rail.diagnostics
+    report.identity_match_rate = MetricCell(
+        numerator=diag.auto_hit_identity_only,
+        denominator=diag.gold_total or None,
+        value=diag.identity_match_rate,
+        provenance=MetricProvenance.CODE,
+        detail="Identity Rail（fingerprint 精确）仅诊断 parser 身份稳定性；为 0 不代表需求覆盖为 0",
+    )
 
     # 2) Critical Scenario Coverage（COVERED 才计分；AMBIGUOUS/PARTIAL 明细另列）
     state_count: dict[str, int] = {}
@@ -443,7 +479,7 @@ def evaluate_hard_metrics(obs: RunObservation) -> HardMetricsReport:
 
     # 6) INVALID / PENDING_REVIEW / MISS 三态分列
     report.invalid = _collect_invalid(obs)
-    report.pending_review = _collect_pending(obs, mr)
+    report.pending_review = _collect_pending(obs, mr, tuple(rail.pending))
     report.missing_risk = {
         "gold_miss_ids": [m.gold_id for m in mr.matches if m.state == ItemMatchState.MISS],
         "scenario_open_ids": [so.scenario_id for so in report.scenario_outcomes if so.state != ScenarioState.COVERED],

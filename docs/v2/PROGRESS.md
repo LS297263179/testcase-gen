@@ -16,7 +16,7 @@
 | 8️⃣ | `docs/v2/step8-dedup-optimizer.md` | ~271 | Step 8 Dedup Optimizer 设计（canonicalize pairs + survivor 优先级 + 双边状态检查 + 有条件重评审） | 要改去重/优化时读 |
 | 9️⃣ | `docs/v2/step9-human-edit.md` | ~283 | Step 9 Human Editor 设计（编辑白名单 + Revision 快照 + changed_fields + 乐观锁 + Validator + AFTER_HUMAN_EDIT 重评审） | 要改人工编辑时读 |
 | 🔟 | `docs/v2/v2-ui-react-refactor.md` | — | V2 前端 React+TS+Vite 重构设计（Run-centric IA + 退役清单） | 要改 V2 前端时读 |
-| 1️⃣1️⃣ | `docs/v2/step11-benchmark-evaluation.md` | ~440 | **Step 11 冻结设计 v1.0**（架构边界 18 条 / Gold 独立性 / 四态 Matching / Metrics 手册 / 双轨评价 / Reliability 五态 / bench-v0.1 数据契约）+ **附录 B：S6 Runner 实施说明**（源 3 阶段门控 / S6 冻结决策 / 指纹与落盘安全） | 要动 Benchmark/评价层（S7~S8）前**必读** |
+| 1️⃣1️⃣ | `docs/v2/step11-benchmark-evaluation.md` | ~575 | **Step 11 冻结设计 v1.0**（架构边界 18 条 / Gold 独立性 / 四态 Matching / Metrics 手册 / 双轨评价 / Reliability 五态 / bench-v0.1 数据契约）+ **附录 B：S6 Runner 实施说明**（源 3 阶段门控 / S6 冻结决策 / 指纹与落盘安全）+ **附录 C：S7 三轨关联口径**（AUTO_HIT 重定义 / identity 仅诊断 / bridge·anchor 准入六条 / D10 不猜 item_id / 双模型对照证据 / 与 S3 差异清单 / 挂账） | 要动 Benchmark/评价层（S7~S8）前**必读** |
 
 辅助参考：`AGENTS.md` / `CLAUDE.md`（项目速查 + Prompt 位置表）、`README.md`（面向用户的功能说明）。
 
@@ -27,7 +27,7 @@
 本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
-**当前进度（截至 2026-09-21）：Step 1~10 全部完成并推送（含 `cdb325c` V2 产品级 UI/UX 重构——React+TS+Vite `frontend-v2/`，产物 `static/v2/v2_react.js`+`v2_react.css`，Run-centric IA，只读端点 requirements 13→14，旧 `v2_app.js`/`v2_style.css` 退役，详见 `docs/v2/v2-ui-react-refactor.md`——与 `d1c5345` V2 Product Polish）。中后期路线评审已由用户拍板：Step 11 = Quality Evaluation Foundation + Benchmark Foundation，冻结设计见 `docs/v2/step11-benchmark-evaluation.md`。Step 11 已完成 S1~S6：设计冻结 + eval schema/loader + 确定性评价引擎 matching/metrics_hard + **bench-v0.1 正式数据集**（10 case / 10 requirement / 83 人工独立 Gold / manifest）+ S5 语义评价层 + **S6 Benchmark Runner**（`scripts/v2_benchmark.py` 独立进程 + 独立 benchmark DB + 五态启发式分类 + 环境指纹 + runset 快照）。S1~S4 已推（`0cb4bf5`）、S5 已推（`7b59bfe`）、S6 本地待推。全量 **1223 passed + 3 skipped**，ruff 双绿，schema_version=10，V1 零改动。下一步 = S7 真实 runset 执行 + Baseline v0.1（待用户指令，见 §11）。**
+**当前进度（截至 2026-09-21）：Step 1~10 全部完成并推送（含 `cdb325c` V2 产品级 UI/UX 重构——React+TS+Vite `frontend-v2/`，产物 `static/v2/v2_react.js`+`v2_react.css`，Run-centric IA，只读端点 requirements 13→14，旧 `v2_app.js`/`v2_style.css` 退役，详见 `docs/v2/v2-ui-react-refactor.md`——与 `d1c5345` V2 Product Polish）。中后期路线评审已由用户拍板：Step 11 = Quality Evaluation Foundation + Benchmark Foundation，冻结设计见 `docs/v2/step11-benchmark-evaluation.md`。Step 11 已完成 S1~S6：设计冻结 + eval schema/loader + 确定性评价引擎 matching/metrics_hard + **bench-v0.1 正式数据集**（10 case / 10 requirement / 83 人工独立 Gold / manifest）+ S5 语义评价层 + **S6 Benchmark Runner**（`scripts/v2_benchmark.py` 独立进程 + 独立 benchmark DB + 五态启发式分类 + 环境指纹 + runset 快照）+ **S7 三轨关联改造**（架构裁决 D1~D10/D13：`rails.py` identity 诊断 > obligation bridge > scenario anchor，`AUTO_HIT` 重定义为"确定性关联命中"并带 `via`，新增 `identity_match_rate`/`via_counts`/`identity_diagnostics` 报告面，`metrics_soft.py` 零改动；bc_01 Gold → `gold-v0.2`；另含 D7② V1 空配置守卫与 D6 `config.yaml` baseline 模型同步 `qwen3.8-flash`）。S1~S4 已推（`0cb4bf5`）、S5 已推（`7b59bfe`）、S6 已推（`f72db13`）、S7 本地待推。全量 **1276 passed + 3 skipped**，ruff 双绿，schema_version=10，V1 除 D7② 4 行守卫外零改动。下一步 = S7 正式 baseline-v0.1（10 case 全量 runset）+ S8 Compare（均待用户指令，见 §11）。**
 
 **★ Step 9 后真实项目状态审计结论（Step 10 的由来）**：V2 后端代码完整但**完全未产品化**——`data/data_v2.db` 是空库（Tables: []，从未运行 create_v2_schema）、`web/` 目录 0 处引用 `core.v2`（前端纯 V1）、无 CLI 入口、无顶层 Runtime 串联 Step 2→8、V2 LLM 从未真实调用（875 tests 全 mock/临时 DB）。因此 Step 10 不新增 AI 功能，专注把已有能力变成用户可真实运行的产品链路。
 
@@ -63,7 +63,7 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
  ├─ Step 10：V2 Runtime + Productization（DB 真初始化/顶层 Runtime/Web API/前端接线/真实 LLM Run/E2E 验证/运行数据） ✅ 完成
  ├─ Step 11：Quality Evaluation + Benchmark Foundation（原 Step 11+12 合并；★路线评审已拍板，设计冻结 v1.0）
  │          S1 设计冻结 ✅ / S2 Schema+Loader ✅ / S3 确定性评价引擎 ✅ / S4 bench-v0.1 数据集 ✅
- │          S5 ✅ / S6 Runner ✅ / S7~S8（真实 runset+Baseline / Compare）⬜ 未开始
+ │          S5 ✅ / S6 Runner ✅ / S7 三轨关联改造 ✅（baseline-v0.1 全量 runset 待跑）/ S8（Compare）⬜ 未开始
  ├─ Step 12：（并入 Step 11 的 Benchmark 轨道；剩余候选主题待 S8 后再评审）
  └─ Step 13：Preference Learning（用户反馈→提示词/偏好优化；数据源 = Step 9 changed_fields）（待路线评审）
 
@@ -111,10 +111,10 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | └ 10.7 记录运行数据 | ✅ 完成+推送 | `docs/v2/step10-real-run-record.md`（脱敏永久记录：9 节表格/列表，不嵌 JSON 全文）+ 更新本文件（Step 10 收尾）| `430a319` |
 | — V2 UI/UX 重构（React） | ✅ 完成+已推送 | `frontend-v2/`（React+TS+Vite SPA）+ `templates/v2.html` SPA 壳 + 只读端点 requirements（13→14）+ 旧 v2_app.js/v2_style.css 退役；详见 `docs/v2/v2-ui-react-refactor.md` | 已推 origin+gitee (`cdb325c`) |
 | — V2 Product Polish | ✅ 完成+已推送 | P0 视觉设计系统升级 + P1~P5 交互打磨 | 已推 origin+gitee (`d1c5345`) |
-| 11 Quality Eval + Benchmark（S1~S8） | ⏳ **S1~S6 ✅ / S7~S8 ⬜** | S1 `docs/v2/step11-benchmark-evaluation.md`（冻结 v1.0）；S2 `core/v2/eval/schema.py`（Case/Gold/Manifest+loader）；S3 `core/v2/eval/`{matching,metrics_hard}.py（四态匹配+硬指标+RunObservation 契约，零 LLM）；S4 `benchmark/`（bench-v0.1：10 case+10 requirement+11 gold+manifest）+ 4 测试文件 147 例；S5 `core/v2/eval/`{metrics_soft,semantic_prompts}.py（语义三态+forbidden suspect+candidate 预审+JSON 契约）+ 34 例；S6 `core/v2/eval/runner_lib.py`+`scripts/v2_benchmark.py`（独立 CLI 进程+独立 benchmark DB+五态阶段门控分类+环境指纹+runset 快照+生产库硬护栏）+ 58 例；详见 §11 | S1~S4 已推 (`0cb4bf5`)；S5 已推 (`7b59bfe`)；S6 本地待推 |
+| 11 Quality Eval + Benchmark（S1~S8） | ⏳ **S1~S7 ✅（S7 三轨改造完成；baseline-v0.1 全量 runset 待跑）/ S8 ⬜** | S1 `docs/v2/step11-benchmark-evaluation.md`（冻结 v1.0）；S2 `core/v2/eval/schema.py`（Case/Gold/Manifest+loader）；S3 `core/v2/eval/`{matching,metrics_hard}.py（四态匹配+硬指标+RunObservation 契约，零 LLM）；S4 `benchmark/`（bench-v0.1：10 case+10 requirement+11 gold+manifest）+ 4 测试文件 147 例；S5 `core/v2/eval/`{metrics_soft,semantic_prompts}.py（语义三态+forbidden suspect+candidate 预审+JSON 契约）+ 34 例；S6 `core/v2/eval/runner_lib.py`+`scripts/v2_benchmark.py`（独立 CLI 进程+独立 benchmark DB+五态阶段门控分类+环境指纹+runset 快照+生产库硬护栏）+ 58 例；S7 `core/v2/eval/`{rails,textops}.py（三轨关联 identity 诊断>bridge>anchor + D10 不猜 item_id）+ `metrics_hard.py`/`runner_lib.py` 接入 + bc_01 Gold `gold-v0.2` + D7② `core/config.py` 空配置守卫 + D6 `config.yaml` 模型同步 + 48 例 + 设计文档附录 C；详见 §11 | S1~S4 已推 (`0cb4bf5`)；S5 已推 (`7b59bfe`)；S6 已推 (`f72db13`)；S7 本地待推 |
 | 12~13 | ⬜ 未开始（Step 12 剩余主题与 Step 13 待 S8 后再评审） | — | — |
 
-**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 1223 passed + 3 skipped**（Step 11 S2~S6 新增 239 例 Benchmark/Eval 测试，其中 S5 语义层 34、S6 Runner 58；启用 V2_RUN_REAL_LLM=1 后 +3），schema_version=10，ruff check/format 全绿。
+**测试基线**：V1 原有 126 例（零回归）+ V2 新增，**当前全量 1276 passed + 3 skipped**（Step 11 S2~S7 新增 292 例 Benchmark/Eval 测试，其中 S5 语义层 34、S6 Runner 58、S7 三轨 48；另 S7 的 D7② 在 `tests/test_regression.py` 新增 5 例 V1 配置守卫；启用 V2_RUN_REAL_LLM=1 后 +3），schema_version=10，ruff check/format 全绿。
 
 ---
 
@@ -550,9 +550,11 @@ core/v2/         # V2 持久层 + 领域服务（独立 data_v2.db，schema_vers
   eval/        # Step 11 Benchmark 评价层（Runtime 外部只读观测，零 DB 写入）
     schema.py  #   S2：Case/Gold/Manifest 契约 + loader + fail-fast 数据集校验 + eval 私有枚举
     matching.py#   S3：四态 Matching（match_keys>重算>similarity 不计分）+ 场景锚点 + 义务 + 策略触发
-    metrics_hard.py # S3：硬指标 + RunObservation 统一输入契约（Cost/Latency/双轨 Reviewer 透传）
-    metrics_soft.py semantic_prompts.py # S5：语义三态 + forbidden suspect + candidate 预审 + benchmark-soft-v1 JSON 契约
+    metrics_hard.py # S3：硬指标 + RunObservation 统一输入契约（Cost/Latency/双轨 Reviewer 透传）；S7 接入三轨关联 + identity 诊断单元
+    metrics_soft.py semantic_prompts.py # S5：语义三态 + forbidden suspect + candidate 预审 + benchmark-soft-v1 JSON 契约（S7 零改动）
     runner_lib.py#  S6：Artifacts 装配（ARCHIVED 排除）+ 五态阶段门控分类 + Hard 序列化 + 环境指纹 + 原子写/敏感自检 + 生产库护栏
+    textops.py #    S7（裁决 D8）：`anchor_satisfied` / `statement_similarity` 两个通用文本 helper（非 NLP 层，配防漂移测试）
+    rails.py   #    S7（裁决 D1/D2/D3/D9/D10）：三轨关联唯一入口 identity(诊断)>bridge>anchor + RailMatch.via + IdentityDiagnostics + D10 不猜 item_id
 web/             # Web 层：__init__.py（V1 蓝图 + /v2 页面路由 Step 10.4）+ v2_service.py（HTTP↔core/v2 适配 Step 10.3）+ v2_routes.py（14 个 /api/v2/* 端点，含 UI 重构新增只读 requirements）
 scripts/         # CLI：v2_real_run.py（Step 10.5 真实 LLM 全链路，权威验证路径）+ v2_step10_verify.py（Step 10.6 一键验收 + 22 条门槛报告表）+ v2_benchmark.py（Step 11 S6 Benchmark Runner，独立进程 + 独立 benchmark DB + runset 快照）
 benchmark/       # Step 11 S4 bench-v0.1 数据集（cases/ 10 正式+demo 的 json+requirement.md；gold/ 11；manifests/ bm-bench-v0-1 十 case + bm-demo[bench-v0.0-demo 隔离]）；runsets/（S6 输出，已 gitignore 不入库）
@@ -575,13 +577,14 @@ tests/           # test_schemas/state_machine/v2_repository/v2_roundtrip/resolve
                  # test_benchmark_formal_data（S4 机械契约回归 13）/test_benchmark_bc02_synthetic（S4 正负向+通用接线 14）
                  # test_benchmark_metrics_soft（S5 语义层 34：三态/降级/双轨隔离/批次/序列化）
                  # test_benchmark_runner（S6 Runner 58：DB 隔离与生产库护栏/五态分类/ARCHIVED 口径/指纹/防泄漏/runset 契约/CLI）
+                 # test_benchmark_rails（S7 三轨 48：textops+防漂移/identity 轨不变/bridge/anchor/D10 不猜/无模糊计分/S5 零改动接线/报告面守卫/两真实库回归/边界纪律）
 ```
 
 ## 8. 运行 / 验证命令（PowerShell）
 
 ```powershell
 # venv 已就绪（若无：python -m venv .venv; .\.venv\Scripts\pip install -e ".[dev]"）
-.\.venv\Scripts\python.exe -m pytest -q                    # 期望 1223 passed + 3 skipped（real_llm marker 默认 skip；启用 V2_RUN_REAL_LLM=1 后 1226）
+.\.venv\Scripts\python.exe -m pytest -q                    # 期望 1276 passed + 3 skipped（real_llm marker 默认 skip；启用 V2_RUN_REAL_LLM=1 后 1279）
 .\.venv\Scripts\python.exe -m ruff check .                 # 期望 All checks passed
 .\.venv\Scripts\python.exe -m ruff format --check .        # 期望全部 formatted
 .\.venv\Scripts\python.exe start.py -p 5000 --no-browser   # 启动服务（V1 在 /，V2 在 /v2；改代码/提示词需重启，DB model_config 实时生效）
@@ -752,7 +755,7 @@ python scripts/v2_step10_verify.py --with-real-llm # 期望 22 PASS / 0 FAIL / 0
 
 ---
 
-## 11. Step 11「Quality Evaluation + Benchmark Foundation」（S1~S6 ✅ 2026-09-21；S1~S4 已推 `0cb4bf5`，S5 已推 `7b59bfe`，S6 本地待推）
+## 11. Step 11「Quality Evaluation + Benchmark Foundation」（S1~S6 ✅ 2026-09-21；S7 三轨改造 ✅ 2026-09-22；S1~S4 已推 `0cb4bf5`，S5 已推 `7b59bfe`，S6 已推 `f72db13`，S7 本地待推）
 
 **目标链路（冻结）**：`Benchmark Case → scripts/v2_benchmark.py → run_v2_pipeline → V2 原有产物 → Evaluator → Report → Baseline v0.1`。评价层位于 Runtime 外部，18 条架构边界冻结于 `docs/v2/step11-benchmark-evaluation.md`（不改 V1/Runtime/orchestrator/API/前端/Prompt/core.schemas/DDL，schema_version 保持 10，独立 benchmark DB）。
 
@@ -764,9 +767,11 @@ python scripts/v2_step10_verify.py --with-real-llm # 期望 22 PASS / 0 FAIL / 0
 | S4 | **bench-v0.1 正式数据集**：10 业务域 case（auth/order×2/payment/admin/search/form/file/workflow/report）+ 10 纯业务 requirement + **83 条人工独立 Gold**（52 场景/52 义务/41 策略；9 条 min_covered_points>1 全部有验收标准逐字依据；83/83 指纹由 helper 生成并双层复核）+ 正式 manifest（cases=10）+ demo 隔离（bench-v0.0-demo）+ 机械契约回归（per-gold 指纹唯一）+ 正负向/通用 Synthetic | `benchmark/**` + `tests/test_benchmark_formal_data.py`(13) + `tests/test_benchmark_bc02_synthetic.py`(14) | ✅ 验收通过+已提交推送 |
 | S5 | 语义评价层（Semantic Accuracy 三态 correct/partial/incorrect + pending 治理 / forbidden LLM 仅产 suspect 不写 S3 invalid / additional_valid 仅产 suggested / 双轨物理隔离透传 / 确定性分批 20+6000 独占+24000 拆分 / JSON `benchmark-soft-v1` 序列化；独立评价 Prompt 非第二套 Reviewer，零 DB 依赖） | `core/v2/eval/`{metrics_soft,semantic_prompts}.py + `tests/test_benchmark_metrics_soft.py`(34 测试) | ✅ 验收通过 |
 | S6 | Benchmark Runner：`core/v2/eval/runner_lib.py`（纯函数层：Artifacts 装配含 ARCHIVED 排除 / 五态**阶段门控**分类 / Hard 序列化 / 环境指纹 / 原子写+敏感自检 / 生产库护栏）+ `scripts/v2_benchmark.py`（**独立 CLI 进程**：进程入口 `set_v2_db_path` → benchmark DB 默认 fresh → 输入预检 → `run_v2_pipeline(client=None, text=...)` → S3 常跑、非 COMPLETED 不跑 S5 LLM → `benchmark/runsets/<id>/`（runset.json + cases/*.json + manifest.resolved.json + `_COMPLETE.json`）；退出码 0/1/2/3/4/5；不新增 `--skip-soft/--compare/--stop-after` 等越权参数） | `core/v2/eval/runner_lib.py`(839) + `scripts/v2_benchmark.py`(662) + `tests/test_benchmark_runner.py`(58) + `.gitignore`(`benchmark/runsets/`) + 设计文档附录 B | ✅ 验收通过 |
-| S7 | 真实 runset 执行 + Baseline v0.1 报告 | — | ⬜ |
+| S7 | **三轨关联改造（架构裁决 D1~D10/D13 + D7②/D6）** + bc_01 双模型 smoke 复测：新增 `core/v2/eval/rails.py`（三轨关联唯一入口：Identity 仅诊断 / obligation bridge / scenario anchor，`identity>bridge>anchor` 去重，D10 `item_id` 不猜）+ `core/v2/eval/textops.py`（D8 两个通用 helper + 防漂移测试）；`metrics_hard.py` 接入（`HardMetricsReport` 新增 `identity_match_rate`/`via_counts`/`identity_diagnostics`/`anchor_scope`，`AUTO_HIT` 正式重定义为"确定性关联命中"）；`runner_lib.py` payload 扩展（8 cell + match 带 `via`，**S6 形态旧 runset 仍可加载**）；bc_01 Gold anchor 修订 → `gold-v0.2`（三条非原文锚点改为需求原文逐字）；D7② `core/config.py` 空配置守卫（独立可回滚 V1 小改动 + 5 例回归）；D6 `config.yaml` fallback 模型同步 `qwen3.8-flash`。`metrics_soft.py`/`matching.py` identity 语义/Runtime/Parser/Prompt/DDL/API/前端 **零改动**。**注：正式 baseline-v0.1（10 case 全量 runset）尚未执行**，仍需用户指令 | `core/v2/eval/`{rails,textops}.py + `metrics_hard.py`/`runner_lib.py` 改动 + `benchmark/gold/bc_01_login.gold.json`(v0.2) + `tests/test_benchmark_rails.py`(48) + `core/config.py` + `tests/test_regression.py`(+5) + 设计文档附录 C | ✅ 改造完成（G1~G4 全过）；⬜ baseline-v0.1 待跑 |
 | S8 | Compare/Delta（无 CI 门禁）+ Step 11 收尾文档 | — | ⬜ |
 
 **Gold 独立性铁律（S4 已执行并留痕）**：Gold = `原始需求 → 人工独立分析 → Gold`；禁止 runtime 输出筛选闭环；Gold 是 floor 非 ceiling；TP 数量不设门槛、precision/recall 非唯一核心；`authoring_note`/`reference_cases` 全程留痕（bc_03~bc_10 未查阅任何素材，bc_02 仅命名口径核对）。
 
-**挂账事项**：① `ObligationExpected.target` 的 schema 注释"角色-资源"应更正为实际 `role:resource:action`（非阻塞，单独 cleanup）；② S7 解读报告时 requirement coverage 基线偏低属措辞漂移设计内结果，禁止反向修改 Gold。
+**挂账事项**：① `ObligationExpected.target` 的 schema 注释"角色-资源"应更正为实际 `role:resource:action`（非阻塞，单独 cleanup）；② S7 解读报告时 requirement coverage 基线偏低属措辞漂移设计内结果，**禁止反向修改 Gold 迁就模型**；③ **D7①**（`POST /api/model-config` 缺空值守卫，可写入空 model/base_url）仅立案未改；④ **D13**：bc_01 §5.3 前后端双拦截覆盖、「验证码错误」场景挂 Gold v0.3；⑤ **bc_03_order_status 的 `obligations_expected` 为空** → bridge 轨对该 case 不可用，真实运行时其 requirement coverage 只能靠 identity+anchor，挂 Gold v0.3（`benchmark/gold` 属只读冻结面）；⑥ **bc_demo_login 2 条 `ri_` 指纹**（`gr-login-ok`/`gr-phone-len`）与重算值不符，因 `test_benchmark_formal_data.py` 只过滤 `bench-v0.1` 而从未触发；⑦ **D14 立案未实施**：多 Gold 场景（N>1）反查到 M 个 item 且 `M != N` 时应同按 D10 处理（`item_id=None`+pending）；前置已实测 10 个 formal case 理想 runtime 下 3 个多 Gold 场景全部 M==N、触发 0 次，故 formal 全绿契约与附录 C.5 全部数字均不受影响。
+
+**S7 数字口径声明**：附录 C.5 表格中的 8/10、3/6、0.5994、43/66 等**只是本次三轨重构的回归对照基线（regression acceptance fixture）**，不得表述为产品质量目标、验收门槛或 AI 能力评分；deepseek 与 qwen 两列差异只陈述可观测事实，**不构成模型能力优劣排名**。裁决 D5：`qwen3.8-flash` 为 v0.1 正式 baseline 模型，DeepSeek 仅历史/对照 smoke，两者指标不得混算。

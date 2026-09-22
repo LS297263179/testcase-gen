@@ -80,6 +80,8 @@ def _ideal_runtime(
         ref = [item_of[g] for g in sc.requirement_gold_ids if g in item_of]
         if not ref:
             continue
+        if omit_gr and omit_gr in sc.requirement_gold_ids:
+            continue  # S7 三轨后：需求项缺失须连带撤掉其结构化证据，否则 anchor 轨会正当救回该 Gold
         outcomes = [] if sc.scenario_id == drop_outcomes_for_scenario else list(sc.expected_outcomes)
         steps = [TestStep(seq=i + 1, action=a) for i, a in enumerate(sc.expected_actions)] or [
             TestStep(seq=1, action="执行相关操作")

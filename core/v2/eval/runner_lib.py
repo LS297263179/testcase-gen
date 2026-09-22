@@ -31,7 +31,6 @@ from typing import Any
 from core.schemas import GenerationConfig, TargetType, Technique, TestCase, TestCaseStatus
 from core.v2 import repository as repo
 from core.v2.eval.matching import (
-    ItemMatch,
     ItemMatchState,
     ObligationOutcome,
     ObligationState,
@@ -51,6 +50,7 @@ from core.v2.eval.metrics_hard import (
     RunObservation,
     StepTiming,
 )
+from core.v2.eval.rails import RailMatch
 from core.v2.eval.schema import BenchmarkRunStatus, MetricProvenance
 from core.v2.eval.semantic_prompts import SEMANTIC_EVAL_PROMPT_VERSION
 from core.v2.prompts import PARSER_PROMPT_VERSION
@@ -571,6 +571,7 @@ _HARD_CELLS = (
     "duplication_score",
     "requirement_precision",
     "test_point_precision",
+    "identity_match_rate",  # S7 三轨：Identity Rail 诊断单元（裁决 D1，与 requirement_coverage 并列）
 )
 
 
@@ -603,6 +604,9 @@ def hard_to_payload(report: HardMetricsReport) -> dict:
         "run_status": _en(report.run_status),
         "quality_evaluated": report.quality_evaluated,
         "metrics": {name: _cell_to(getattr(report, name)) for name in _HARD_CELLS},
+        "via_counts": dict(report.via_counts),
+        "identity_diagnostics": dict(report.identity_diagnostics),
+        "anchor_scope": report.anchor_scope,
         "requirement_matches": [
             {
                 "gold_id": m.gold_id,
@@ -611,6 +615,7 @@ def hard_to_payload(report: HardMetricsReport) -> dict:
                 "item_ids": list(m.item_ids),
                 "similarity": m.similarity,
                 "basis": m.basis,
+                "via": getattr(m, "via", ""),
             }
             for m in report.requirement_matches
         ],
@@ -646,16 +651,20 @@ def hard_from_payload(payload: dict) -> HardMetricsReport:
     for name, cell in payload["metrics"].items():
         setattr(report, name, _cell_from(cell))
     report.requirement_matches = [
-        ItemMatch(
+        RailMatch(
             gold_id=m["gold_id"],
             state=ItemMatchState(m["state"]),
             item_id=m["item_id"],
             item_ids=list(m["item_ids"]),
             similarity=m["similarity"],
             basis=m["basis"],
+            via=m.get("via", ""),  # 旧 payload（S6 及以前）无 via → 空串，向后兼容
         )
         for m in payload["requirement_matches"]
     ]
+    report.via_counts = dict(payload.get("via_counts", {}))
+    report.identity_diagnostics = dict(payload.get("identity_diagnostics", {}))
+    report.anchor_scope = payload.get("anchor_scope", "")
     report.scenario_outcomes = [
         ScenarioOutcome(
             scenario_id=o["scenario_id"],

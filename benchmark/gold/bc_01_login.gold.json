@@ -1,7 +1,7 @@
 {
-  "gold_version": "gold-v0.1",
+  "gold_version": "gold-v0.2",
   "case_id": "bc_01_login",
-  "authoring_note": "人工独立分析 benchmark/cases/bc_01_login_requirement.md 产出：按 §2 字段→data_field、§3 规则→business_rule、§4/§5 提示语与验收→场景锚点逐节原子化；未参考、未复制任何 runtime 产物；min_covered_points=4 仅用于密码长度边界（验收标准 2 逐字要求 7/8/20/21 四点逐一验证），其余义务默认 1；scenario 锚点全部取自 §4/§5 原文提示语。",
+  "authoring_note": "人工独立分析 benchmark/cases/bc_01_login_requirement.md 产出：按 §2 字段→data_field、§3 规则→business_rule、§4/§5 提示语与验收→场景锚点逐节原子化；未参考、未复制任何 runtime 产物；min_covered_points=4 仅用于密码长度边界（验收标准 2 逐字要求 7/8/20/21 四点逐一验证），其余义务默认 1。｜gold-v0.2 修订（2026-09-22，架构裁决 D4）：cs-login-success 的 expected_actions 由「输入用户名/输入密码」改为原文逐字短语「使用正确的用户名和密码」（验收标准第 1 条）；cs-wrong-password 的 expected_actions 置空（原文无对应动作短语，仅保留 outcome「用户名或密码错误」＝§4 提示文案，与 cs-code-expired/cs-unregistered-login 的既有写法一致）；cs-username-duplicate 的 expected_actions 由「提交注册」改为「使用已存在用户名注册」（验收标准第 4 条）。三处修订依据均为需求原文逐字子串，未参考任何模型输出；同时更正本 note 原「scenario 锚点全部取自 §4/§5 原文提示语」的表述——修订前有 3 个动作锚点并非原文短语。gold_requirements 未改动，故 ri_ 指纹（module|type|statement）全部不变。",
   "gold_authoring": "human_independent",
   "gold_requirements": [
     {
@@ -144,8 +144,7 @@
       ],
       "expected_techniques": [],
       "expected_actions": [
-        "输入用户名",
-        "输入密码"
+        "使用正确的用户名和密码"
       ],
       "expected_outcomes": [
         "进入首页"
@@ -158,9 +157,7 @@
         "gr-login-entry"
       ],
       "expected_techniques": [],
-      "expected_actions": [
-        "输入密码"
-      ],
+      "expected_actions": [],
       "expected_outcomes": [
         "用户名或密码错误"
       ]
@@ -211,7 +208,7 @@
       ],
       "expected_techniques": [],
       "expected_actions": [
-        "提交注册"
+        "使用已存在用户名注册"
       ],
       "expected_outcomes": [
         "该用户名已被注册"

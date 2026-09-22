@@ -440,3 +440,136 @@ S6 实现按"该阶段是否真的跑到"门控：
 - 半成品保护：runset 目录先落 `INCOMPLETE` 标记，全部落盘成功后才写 `_COMPLETE.json` 并摘除标记；
   敏感自检或写盘失败 → exit 5 且不产 `runset.json`（避免留下"看起来完整"的 runset）。
 - CLI 退出码：`0=全 COMPLETED / 1=存在非 COMPLETED / 2=参数错误 / 3=DB 与生产库路径保护 / 4=数据集校验失败 / 5=落盘或敏感自检失败`。
+
+---
+
+## 附录 C：S7 三轨关联口径（架构裁决 D1/D2/D3/D9/D10，2026-09-22）
+
+> 本附录只**追加**，不修改 §2~§17 与附录 A/B 的冻结正文。凡与 B.2 第 8 条（"`metrics_hard.py` 零改动"）
+> 冲突之处，以本附录为准：该条是 S6 期的实施决策，S7 经裁决 D2 明确授权修改 `metrics_hard.py` 与 `runner_lib.py`。
+
+### C.1 AUTO_HIT 的正式重定义
+
+S7 起 `AUTO_HIT` 定义为 **"确定性关联命中"**，**不再等同 fingerprint exact**。每条 `AUTO_HIT` 必须携带
+`via ∈ {identity, bridge, anchor}`；`CANDIDATE / AMBIGUOUS / MISS` 一律不自动计分，照旧进 `pending_review`。
+
+报告必须**同时**展示三项，缺一不可：`requirement_coverage`、`identity_match_rate`、`via_counts`。
+
+> **禁止将 `AUTO_HIT=0` 或 `identity_match_rate=0` 解读为 requirement coverage = 0。**
+> 该禁令已机器化：`IdentityDiagnostics.to_dict()["note"]` 与 `identity_match_rate` 的 `MetricCell.detail`
+> 均自带此句，测试 `TestStepBReportSurface::test_identity_zero_does_not_imply_coverage_zero` 强制校验。
+
+§4.1 的四态匹配规则、`CANDIDATE_SIMILARITY_FLOOR`、`ri_` 指纹公式、module 匹配、相似度实现**一字未改**；
+`matching.py` 本轮的全部 diff 仅为裁决 D8 的机械抽取（import 替换 + 删 `_anchor_satisfied` 定义 + 2 处调用改名）。
+
+### C.2 三轨定义与优先级
+
+| 轨 | 通道 | 定位 | 计分 |
+|---|---|---|---|
+| **Identity** | `ri_` 指纹精确相等（`matching.match_gold_requirements` 原样复用） | 诊断 parser 身份稳定性 | 计入 `identity_match_rate`，**不单独代表覆盖** |
+| **Semantic · bridge** | `Gold.obligations_expected.requirement_gold_id` → runtime `CoverageObligation` 的 `(technique, target)` 精确匹配 → `obligation.item_id` | 核心：全链路结构化、零相似度、跨模型稳定 | 计入 `requirement_coverage` |
+| **Semantic · anchor** | `Gold.critical_scenarios` 的 `expected_actions/expected_outcomes` 在结构化字段内子串判定 → 经 `requirement_gold_ids` 形成 Gold 映射 | 核心：覆盖无 obligation 桥的需求 | 计入 `requirement_coverage` |
+| **Structural** | `structural_validity` / `duplication_score`（`review_hard` 口径） | 不变 | 不变 |
+
+关联优先级与去重：**`identity > bridge > anchor`**，同一 Gold 只计一次。`obligation_coverage`、
+`structural_validity`、`duplication_score`、`reviewer_based` 四项口径**完全不变**。
+
+anchor 轨的准入条件（裁决 D3，六条全部强制）：① 必须对应 Gold `critical_scenario`；② 只检查
+`step.action` / `tc.expected`；③ **不扫描** `title` / `precondition` / `remark` 等自由文本；④ **不使用**
+similarity/fuzzy 自动计分（相似度只出现在 Identity 诊断里，用于挑"最像的那条"作对照）；⑤ 必须有明确的
+`requirement_gold_id`；⑥ candidate/pending 永不自动计分。
+
+### C.3 anchor 作用域（裁决 D9）
+
+anchor 判定的 haystack = **全量非 ARCHIVED TestCase**（`HardMetricsReport.anchor_scope =
+"all_non_archived_testcases"`，随 payload 落盘），而非"仅追溯到已 identity 命中 item 的 TC"。
+理由：否则等于把 identity 前置依赖重新引入 anchor 轨，三轨退化为单轨。ARCHIVED 由 S6 装配层
+（`runner_lib.load_eval_artifacts`）排除，与附录 B.2 第 3 条同源。
+
+场景判定不再以 identity AUTO_HIT 作为**准入门**：引用项未 identity 命中不再直接判 MISSING/AMBIGUOUS，
+而是照常按结构化锚点判定；identity 是否命中降级为 `anchors["requirement_items"]` **诊断位**。
+未声明任何结构化锚点的场景 → `AMBIGUOUS` + `scenario_unjudgeable` pending，不强行计分。
+
+### C.4 D10 不猜原则
+
+anchor 命中多个 runtime item 时：`requirement_coverage` **计入**，但 `item_id = None`（不猜）、保留
+`item_ids`、登记 `anchor_item_ambiguous` pending、**不向 S5 提供 trace**。`metrics_soft.py` 零改动即满足此约束
+——它只鸭子类型读取 `state == AUTO_HIT and m.item_id`，`item_id=None` 的项自然落入 `undetermined_items`。
+反查不到任何 item 时登记 `anchor_item_unresolved`。
+
+`RailMatch.matches.auto` 只收"唯一 item 映射"，因此 `requirement_precision` 与 S5 trace 永不基于猜测。
+`strategy_outcomes` 对 `auto` 中缺失的 Gold 返回 `met=None`（不可判），**不伪造 False**。
+
+### C.5 双模型对照证据（回归对照基线，非质量目标、非能力排名）
+
+bc_01_login 同条件 smoke 各 1 次，gold-v0.2 口径，经 `evaluate_hard_metrics` 报告层复算：
+
+| 观测项 | deepseek smoke | qwen smoke |
+|---|---|---|
+| `requirement_coverage` | 8/10 | 8/10 |
+| `identity_match_rate` | 0.0 | 0.0 |
+| `via_counts` | identity 0 / bridge 5 / anchor 3（+candidate 2） | identity 0 / bridge 5 / anchor 3（+miss 1 / candidate 1） |
+| `critical_scenario_coverage` | 3/6 | 3/6 |
+| statement 逐字率 | 0/10 | 0/10 |
+| module 一致数 | 3/10 | 0/10 |
+| type 一致数 | 9/10 | 8/10 |
+| 最佳相似度均值 | 0.5994 | 0.4523 |
+| AUTO_HIT 中有唯一 item_id | 7 / 8 | 7 / 8 |
+| S5 送评 TC | 43 / 66 | 42 / 48 |
+
+**这些数字只是本次重构的 regression acceptance fixture**，不得表述为产品质量目标、验收门槛或 AI 能力评分；
+两列差异只陈述可观测事实（module 重命名程度、措辞相似度），**不构成模型能力优劣排名**。
+裁决 D5：`qwen3.8-flash` 为 v0.1 正式 baseline 模型，DeepSeek 仅历史/对照 smoke，两者指标不得混算。
+
+关键归因结论：`identity_match_rate = 0` 的根因是 Step 2 parser 对 statement 的改写（两模型逐字率均为 0/10），
+**且已有 3 条 Gold 项本身就是需求原文逐字仍不命中** → 无论改写 Gold 措辞还是强制 parser 逐字照抄都无法修复。
+这正是引入 bridge/anchor 两轨的依据，也是裁决 4"不得为了 benchmark 把 Parser 变成复制器"的实证基础。
+
+### C.6 与 S3 的行为差异清单（值或语义变化，均已核对既有断言）
+
+1. `requirement_matches` 元素类型 `ItemMatch` → `RailMatch`（子类，多 `via`），既有读取路径不受影响。
+2. `scenario_outcomes[].anchors["requirement_items"]` 语义：由"引用项 identity AUTO_HIT"变为"引用项 **via=identity** 关联"；
+   bridge 关联的 Gold 该诊断位为 False。仅诊断，不参与计分。
+3. `requirement_coverage.detail` / `scenario.detail` 文案变更（新增 `via=` 分布）。
+4. `missing_risk["strategy_unmet_ids"]` **含义**由"多数不可判（met=None）"变为真实 True/False。
+5. `missing_risk["gold_miss_ids"]` 为三轨后状态：被 bridge/anchor 救回的 Gold 不再算 MISS；
+   identity 侧的缺失改由 `identity_diagnostics.identity_miss_gold_ids` 单独承载，**不计入 `total_open`**（避免诊断污染风险计数）。
+6. `requirement_precision` / `test_point_precision` 分子 `consumed_item_ids` 现含 bridge 解析出的 item，定义变宽。
+7. `pending_review` 新增 3 个 kind：`anchor_item_ambiguous` / `anchor_item_unresolved` / `scenario_unjudgeable`。
+8. payload 形状：`metrics` 7 → **8** cell（新增 `identity_match_rate`）；`requirement_matches[]` 新增 `via`；
+   顶层新增 `via_counts` / `identity_diagnostics` / `anchor_scope`。
+   `hard_from_payload` 一律用 `.get()` 读取新键 → **S6 形态 runset 仍可直接加载**（已用两个磁盘上的真实
+   runset 验证：`via==""`、`via_counts=={}`、`identity_match_rate is None`，再序列化对既有字段无损）。
+
+既有断言变化：**共 0 条**。唯一受影响的 `test_benchmark_bc02_synthetic.py::test_B_missing_item_breaks_auto_hit`
+通过给 `_ideal_runtime` 增加 2 行（`omit_gr` 时连带跳过引用它的场景）恢复其原本文档声明的负例语义
+——"删掉一条 runtime item → 对应 Gold 不再 AUTO_HIT、Coverage 下降、关联场景非 COVERED"。
+原 fixture 只删 `RequirementItem` 却保留了携带锚点文本的 TC，在三轨下不再是"需求缺失"负例，
+而变成"identity 指纹缺失但结构化证据存在"（该情形已由 `tests/test_benchmark_rails.py` 在合成与两个真实库上覆盖）。
+`omit_gr` 为 None 时新增分支恒不触发，A/C/D 与 10 个 formal case 全绿契约经实测不受影响。
+
+### C.7 挂账（本轮明确不做）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| **D7①** | 仅立案 | `POST /api/model-config` 缺空值守卫，可写入空 model/base_url。**本轮不修改**（裁决 9） |
+| **D7②** | 已实施 | `core/config.py:get_model_config` 增 4 行空配置守卫（非 dict 或 generate/review 两段皆空 → 落 yaml 兜底并留 warning）；独立可回滚，配 `TestModelConfigEmptyGuard` 5 例；与 S7 三轨逻辑零耦合 |
+| **D13** | 挂 Gold v0.3 | bc_01 §5.3 前后端双拦截覆盖、「验证码错误」场景暂不补，避免混淆归因 |
+| **bc_03 缺 obligations** | 挂 Gold v0.3 | `bc_03_order_status` 的 `obligations_expected` 为空 → bridge 轨对该 case 不可用，真实运行时其 `requirement_coverage` 只能靠 identity+anchor；`benchmark/gold` 属只读冻结面，本轮授权仅覆盖 bc_01 anchor |
+| **bc_demo_login 指纹** | 待修 | 2 条 `ri_` 指纹（`gr-login-ok` / `gr-phone-len`）与重算值不符；因 `test_benchmark_formal_data.py` 只过滤 `bench-v0.1` 而从未触发 |
+| **D14** | 立案未实施 | 多 Gold 场景（N>1）反查到 M 个 item 且 `M != N` 时，应同样按 D10 处理（`item_id=None` + pending），因单个 item 无法被确定性认定为 N 条 Gold 的共同唯一表达。前置已实测：10 个 formal case 理想 runtime 下 3 个多 Gold 场景全部 M==N，触发 0 次 → formal 全绿契约不受影响；bc_01 无多 Gold 场景 → C.5 全部数字不受影响。作用域仅限真实运行中 identity 与 bridge 双双落空的情形 |
+
+### C.8 S7 代码落点
+
+- 新增 `core/v2/eval/textops.py`（44 行，裁决 D8）：仅 `anchor_satisfied` / `statement_similarity` 两个通用 helper，
+  不扩展为额外 NLP 层；防漂移测试 `test_no_drift_against_change_impact_similarity` 锁定其与
+  `change_impact._similarity` 同口径。
+- 新增 `core/v2/eval/rails.py`（裁决 D2）：`associate_gold` 为 `metrics_hard` 的唯一关联入口，
+  产出 `RailReport{matches, scenario_outcomes, strategy_outcomes, diagnostics, associated_gold_ids, via_counts, pending, anchor_scope}`。
+  不 import `runtime` / `metrics_hard` / `metrics_soft`（避免循环依赖，已由 AST 边界测试强制）。
+- 改 `core/v2/eval/metrics_hard.py`：`HardMetricsReport` 新增 `identity_match_rate` / `via_counts` /
+  `identity_diagnostics` / `anchor_scope`；非 COMPLETED 跳过清单同步纳入 `identity_match_rate`。
+- 改 `core/v2/eval/runner_lib.py`：`_HARD_CELLS` 7 → 8，payload 增 `via` / `via_counts` / `identity_diagnostics` / `anchor_scope`，
+  `hard_from_payload` 向后兼容。
+- **未改**：`matching.py`（仅 D8 机械抽取）、`metrics_soft.py`、`schema.py`、Runtime、Parser、6 个业务 Prompt、
+  DDL、`schema_version`（仍为 10）、V2 API、Frontend、`scripts/v2_benchmark.py`。
