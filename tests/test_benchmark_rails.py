@@ -35,6 +35,7 @@ from core.v2.eval.metrics_hard import EvalArtifacts, HardMetricsReport, RunObser
 from core.v2.eval.metrics_soft import evaluate_soft_metrics
 from core.v2.eval.rails import (
     PENDING_ANCHOR_ITEM_AMBIGUOUS,
+    PENDING_ANCHOR_ITEM_UNATTRIBUTABLE,
     VIA_ANCHOR,
     VIA_BRIDGE,
     VIA_IDENTITY,
@@ -700,6 +701,110 @@ class TestBoundaryDiscipline:
         for sc in suite.golds["bc_01_login"].critical_scenarios:
             for a in [*sc.expected_actions, *sc.expected_outcomes]:
                 assert normalize_text(a) in req, f"锚点非需求原文逐字子串：{a}"
+
+
+# ============================================================
+# 裁决 D14：多 Gold 场景 N != M 时不得猜测归因
+# ============================================================
+
+
+class TestD14Unattributable:
+    """一条场景引用 N 条 Gold、反查到 M 个 runtime item 且 N != M 时：覆盖率计入，但
+    `item_id=None`、保留 `item_ids`、登记 pending、不生成猜测性 S5 trace。
+    """
+
+    _OUTCOME = "账号已被锁定，请 15 分钟后再试"
+
+    def _build(self, n_golds, n_items, *, with_strategy=False):
+        """单条场景引用 n_golds 条 Gold；其 TC 追溯到 n_items 个 item（Gold 与 runtime 措辞全不同 → identity 必空）"""
+        items = [_item(f"独立需求陈述 {k} 与黄金无关 xyz{k}") for k in range(n_items)]
+        tps = [_tp([it.id], title=f"p{k}") for k, it in enumerate(items)]
+        tc = _tc([tp.id for tp in tps], display_id="TC_001", expected=self._OUTCOME)
+        gold = _gold(
+            grs=[_gr(f"gr-{k}", f"完全无关的黄金陈述 {k} abc{k}") for k in range(n_golds)],
+            scenarios=[
+                {
+                    "scenario_id": "cs-multi",
+                    "title": "多 Gold 场景",
+                    "requirement_gold_ids": [f"gr-{k}" for k in range(n_golds)],
+                    "expected_techniques": [],
+                    "expected_actions": [],
+                    "expected_outcomes": [self._OUTCOME],
+                }
+            ],
+            strategies=(
+                [{"feature": "required_field", "technique": "equivalence_class", "requirement_gold_id": "gr-0"}]
+                if with_strategy
+                else None
+            ),
+        )
+        return gold, EvalArtifacts(items=items, test_points=tps, test_cases=[tc]), items
+
+    def _rail(self, n_golds, n_items, **kw):
+        gold, arts, items = self._build(n_golds, n_items, **kw)
+        return associate_gold(gold, arts.to_index()), items, arts
+
+    def test_single_item_for_multiple_golds_is_not_attributed(self):
+        """N=2 / M=1 —— D14 的核心缺口：单个 item 不得被当作两条 Gold 的唯一表达"""
+        r, items, _ = self._rail(2, 1)
+        assert r.associated_gold_ids == ["gr-0", "gr-1"]  # 覆盖率仍计入（裁决 D14 第 1 条）
+        assert r.matches.auto == {}  # 不进唯一映射 → 不给 S5 猜测 trace
+        assert r.via_counts["anchor"] == 2
+        for m in r.matches.matches:
+            assert m.state == ItemMatchState.AUTO_HIT and m.via == VIA_ANCHOR
+            assert m.item_id is None, "N>M 时不得猜 item_id"
+            assert m.item_ids == [items[0].id]  # 保留候选
+        kinds = sorted((p.kind, p.ref_id) for p in r.pending)
+        assert kinds == [
+            (PENDING_ANCHOR_ITEM_UNATTRIBUTABLE, "gr-0"),
+            (PENDING_ANCHOR_ITEM_UNATTRIBUTABLE, "gr-1"),
+        ]
+
+    def test_single_gold_single_item_still_attributed(self):
+        """N=1 / M=1 一一对应 → 绝不误伤（item_id 正常给出、零 pending）"""
+        r, items, _ = self._rail(1, 1)
+        m = r.matches.matches[0]
+        assert m.item_id == items[0].id and m.item_ids == [items[0].id]
+        assert r.pending == []
+        assert r.associated_gold_ids == ["gr-0"]
+
+    def test_n_equals_m_with_two_items_uses_d10_without_double_pending(self):
+        """N=2 / M=2 → D14 不触发；M>1 由 D10 的 ambiguous 登记，不得重复挂 pending"""
+        r, _items, _ = self._rail(2, 2)
+        assert {p.kind for p in r.pending} == {PENDING_ANCHOR_ITEM_AMBIGUOUS}
+        assert len(r.pending) == 2
+        assert all(m.item_id is None and len(m.item_ids) == 2 for m in r.matches.matches)
+
+    def test_n_not_equal_m_with_multiple_items_registers_pending_once(self):
+        """N=3 / M=2 → M>1 走 D10 分支登记一次，D14 不叠加第二条 pending"""
+        r, _items, _ = self._rail(3, 2)
+        assert {p.kind for p in r.pending} == {PENDING_ANCHOR_ITEM_AMBIGUOUS}
+        assert len(r.pending) == 3
+        assert r.associated_gold_ids == ["gr-0", "gr-1", "gr-2"]
+        assert all(m.item_id is None for m in r.matches.matches)
+
+    def test_strategy_unjudgeable_under_d14(self):
+        """D14 下无唯一 item → strategy 判 None（不可判），不伪造 False"""
+        r, _items, _ = self._rail(2, 1, with_strategy=True)
+        assert r.matches.matches[0].via == VIA_ANCHOR  # 已确定性关联
+        assert r.strategy_outcomes[0].met is None
+        assert "唯一 item" in r.strategy_outcomes[0].detail
+
+    def test_metrics_hard_surfaces_d14_pending(self):
+        """Step B 集成：D14 的 pending 经 metrics_hard 汇入 pending_review，且覆盖率/诊断符合裁决 D1"""
+        rep = evaluate_hard_metrics(
+            RunObservation(
+                case_id="bc_rails",
+                gold=self._build(2, 1)[0],
+                status=BenchmarkRunStatus.COMPLETED,
+                run_id=_RUN,
+                artifacts=self._build(2, 1)[1],
+            )
+        )
+        assert rep.requirement_coverage.value == 1.0  # 覆盖率计入
+        assert rep.identity_match_rate.value == 0.0  # identity 仍为 0，但不得读作覆盖为 0
+        unattr = [p for p in rep.pending_review if p.kind == PENDING_ANCHOR_ITEM_UNATTRIBUTABLE]
+        assert sorted(p.ref_id for p in unattr) == ["gr-0", "gr-1"]
 
 
 # ============================================================

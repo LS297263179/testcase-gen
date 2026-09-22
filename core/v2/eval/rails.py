@@ -22,6 +22,10 @@
   - CANDIDATE / AMBIGUOUS / MISS 一律**不自动计分**，照旧进 pending_review 由人工裁决；
   - anchor 命中多个 runtime item 时（裁决 D10）：覆盖率**计入**，但 `item_id=None` 不猜、
     保留 `item_ids`、登记 pending、不向 S5 提供错误 trace；
+  - 裁决 D14（D10 的推广）：一条场景引用 N 条 Gold、反查到 M 个 runtime item 且 **N != M** 时无法建立
+    一一对应，同样按"覆盖率计入 + `item_id=None` + 保留 `item_ids` + 登记 pending + 不生成猜测性 S5 trace"
+    处理。实际缺口是 N>1 且 M==1 —— 单个 item 不得被认定为 N 条不同 Gold 的唯一表达；
+    M>1 的情形已由 D10 的 `anchor_item_ambiguous` 登记，D14 不重复挂 pending；
   - anchor 判定的 haystack = **全量非 ARCHIVED TestCase**（裁决 D9，`index.test_cases` 已由 S6
     装配层排除 ARCHIVED），避免重新引入 identity 前置依赖。
 
@@ -56,6 +60,7 @@ VIA_VALUES = (VIA_IDENTITY, VIA_BRIDGE, VIA_ANCHOR)
 # 追加的 pending kind（与 S3 既有 kind 并列，由 metrics_hard 合并进 pending_review）
 PENDING_ANCHOR_ITEM_AMBIGUOUS = "anchor_item_ambiguous"
 PENDING_ANCHOR_ITEM_UNRESOLVED = "anchor_item_unresolved"
+PENDING_ANCHOR_ITEM_UNATTRIBUTABLE = "anchor_item_unattributable"  # 裁决 D14：N 条 Gold ↔ M 个 item 且 N != M
 
 
 @dataclass
@@ -223,8 +228,10 @@ def _scenario_items(sc, index: ArtifactIndex, associated_items: set[str]) -> set
 
 def judge_scenarios(
     gold: BenchmarkGold, index: ArtifactIndex, by_gid: dict[str, RailMatch]
-) -> tuple[list[ScenarioOutcome], dict[str, set[str]], list[RailPending]]:
+) -> tuple[list[ScenarioOutcome], dict[str, set[str]], list[RailPending], set[str]]:
     """场景锚点判定（解耦 identity 前置门）+ COVERED 场景的 Gold 关联。
+
+    返回 `(outcomes, gold_id → 反查 items, pending, 不可归因 gold_ids)`；末项为裁决 D14 的产物。
 
     与 S3 `match_critical_scenarios` 的差别（均为裁决要求，非随意变更）：
       1. **不再以 identity AUTO_HIT 作为准入门**：引用项未 identity 命中不再直接判 MISSING/AMBIGUOUS，
@@ -237,6 +244,7 @@ def judge_scenarios(
     outcomes: list[ScenarioOutcome] = []
     assoc: dict[str, set[str]] = {}
     pending: list[RailPending] = []
+    unattributable: set[str] = set()
 
     for sc in gold.critical_scenarios:
         ident_linked = all(
@@ -297,7 +305,11 @@ def judge_scenarios(
         items = _scenario_items(sc, index, linked_items)
         for gid in sc.requirement_gold_ids:
             assoc.setdefault(gid, set()).update(items)
-    return outcomes, assoc, pending
+        # 裁决 D14：N 条 Gold ↔ M 个 item 且 N != M 时无法建立一一对应，
+        # 任何单个 item 都不得被认定为 N 条不同 Gold 的唯一表达。
+        if len(sc.requirement_gold_ids) > 1 and len(items) != len(sc.requirement_gold_ids):
+            unattributable.update(sc.requirement_gold_ids)
+    return outcomes, assoc, pending, unattributable
 
 
 # ============================================================
@@ -384,18 +396,20 @@ def associate_gold(gold: BenchmarkGold, index: ArtifactIndex) -> RailReport:
             via=VIA_BRIDGE,
         )
 
-    # ③ anchor（裁决 D9：全量非 ARCHIVED TC；D10：多义不猜 item_id）
-    scenario_outcomes, anchor_assoc, pending = judge_scenarios(gold, index, by_gid)
+    # ③ anchor（裁决 D9：全量非 ARCHIVED TC；D10：多义不猜 item_id；D14：N != M 不可归因）
+    scenario_outcomes, anchor_assoc, pending, unattributable = judge_scenarios(gold, index, by_gid)
     for gr in gold.gold_requirements:
         gid = gr.gold_id
         cur = by_gid.get(gid)
         if cur is None or cur.state == ItemMatchState.AUTO_HIT or gid not in anchor_assoc:
             continue
         ids = sorted(anchor_assoc[gid])
+        # M>1 由 D10 处理；D14 的增量只在 N>1 且 M==1 时出现（单个 item 被同时当作多条 Gold 的唯一表达）
+        unattributable_hit = gid in unattributable
         by_gid[gid] = RailMatch(
             gold_id=gid,
             state=ItemMatchState.AUTO_HIT,
-            item_id=ids[0] if len(ids) == 1 else None,
+            item_id=None if unattributable_hit or len(ids) != 1 else ids[0],
             item_ids=ids,
             similarity=cur.similarity,
             basis=f"scenario_anchor:{len(ids)} item(s)",
@@ -411,6 +425,14 @@ def associate_gold(gold: BenchmarkGold, index: ArtifactIndex) -> RailReport:
                     PENDING_ANCHOR_ITEM_AMBIGUOUS,
                     gid,
                     f"场景锚点满足但反查到 {len(ids)} 个 runtime item，覆盖率计入、item_id 不猜（裁决 D10）",
+                )
+            )
+        elif unattributable_hit:
+            pending.append(
+                RailPending(
+                    PENDING_ANCHOR_ITEM_UNATTRIBUTABLE,
+                    gid,
+                    "场景引用多条 Gold 但只反查到 1 个 runtime item，无法一一对应：覆盖率计入、item_id 不猜（裁决 D14）",
                 )
             )
 
@@ -444,6 +466,7 @@ def associate_gold(gold: BenchmarkGold, index: ArtifactIndex) -> RailReport:
 
 __all__ = [
     "PENDING_ANCHOR_ITEM_AMBIGUOUS",
+    "PENDING_ANCHOR_ITEM_UNATTRIBUTABLE",
     "PENDING_ANCHOR_ITEM_UNRESOLVED",
     "VIA_ANCHOR",
     "VIA_BRIDGE",
