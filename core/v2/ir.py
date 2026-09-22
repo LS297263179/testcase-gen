@@ -70,6 +70,9 @@ def build_requirement_ir(
     repo.save_version(version)
 
     parsed = parse_requirement(client, raw_text, version.id, images)
+    # 解析失败原因此前只活在 parsed.issues 里、从不落日志：items=0 却查不到任何根因
+    if parsed.issues:
+        logger.warning("IR 解析问题: %s", parsed.issues)
     validation = validate_ir(parsed.items)
 
     for item in validation.items:

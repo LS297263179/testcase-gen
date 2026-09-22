@@ -81,12 +81,16 @@ def extract_json(raw: str) -> object | None:
         return None
     text = _strip_control_chars(raw.strip())
 
-    # 1. ```json ... ``` 或 ``` ... ``` 代码块
-    m = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
-    if m:
-        text = m.group(1).strip()
+    # 1. ```json ... ``` 或 ``` ... ``` 代码块：**遍历全部**围栏块逐个尝试解析。
+    #    模型经常回显需求正文里的代码块（状态机流转、示例等），若只取第一个围栏块
+    #    并整体替换 text，真正的 JSON 负载会被丢弃，且后续兜底也在错误文本上进行。
+    for m in re.finditer(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL):
+        for loader in (_try_json, _try_json5):
+            obj = loader(m.group(1).strip())
+            if obj is not None:
+                return obj
 
-    # 2. 直接解析
+    # 2. 直接解析（无围栏，或所有围栏块都解析失败时）
     for loader in (_try_json, _try_json5):
         obj = loader(text)
         if obj is not None:

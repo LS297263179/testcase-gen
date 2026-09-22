@@ -62,6 +62,34 @@ class TestExtractJson:
     def test_empty_returns_none(self):
         assert extract_json("") is None
 
+    # --- F1：多围栏 / 回显围栏容错（离线复现 bc_02 / bc_03 的 IR 静默 0 条；零 LLM） ---
+
+    _ITEMS = {"items": [{"module": "订单", "type": "function", "statement": "用户可发起售后"}]}
+    _ITEMS_JSON = '{"items":[{"module":"订单","type":"function","statement":"用户可发起售后"}]}'
+
+    def test_f1_form1_normal_single_json_fence(self):
+        """形态①：正常单 JSON 围栏 → 行为必须不变（本轮通过 IR 的 8 个 case 皆为此形态）"""
+        assert extract_json(f"结果：\n```json\n{self._ITEMS_JSON}\n```") == self._ITEMS
+
+    def test_f1_form2_echoed_fence_before_json_fence(self):
+        """形态②：模型回显需求正文里的围栏，其后才是 JSON 围栏 → 旧实现取首块导致丢负载"""
+        resp = f"状态流转：\n```\n待支付 → 已支付\n```\n\n据此解析：\n```json\n{self._ITEMS_JSON}\n```"
+        assert extract_json(resp) == self._ITEMS
+
+    def test_f1_form3_echoed_fence_then_bare_json(self):
+        """形态③：回显围栏 + 裸 JSON（未用围栏包裹）→ 应解析成功"""
+        resp = f"状态：\n```\nNOT_APPLIED → PENDING\n```\n\n{self._ITEMS_JSON}"
+        assert extract_json(resp) == self._ITEMS
+
+    def test_f1_form4_no_json_anywhere_stays_none(self):
+        """形态④：响应里确实没有 JSON → 仍返回 None，禁止把围栏正文当作解析结果"""
+        assert extract_json("状态：\n```\n待支付 → 已支付\n```\n\n以上即全部") is None
+
+    def test_f1_form5_multiple_non_json_fences_then_json(self):
+        """形态⑤：多个非 JSON 围栏 + 尾部 JSON → 应解析成功"""
+        resp = f"```\nA → B\n```\n说明\n```\nC → D\n```\n{self._ITEMS_JSON}"
+        assert extract_json(resp) == self._ITEMS
+
 
 # ============================================================
 # coerce_item 代码修复

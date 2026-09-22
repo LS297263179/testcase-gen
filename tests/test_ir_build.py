@@ -109,3 +109,33 @@ class TestIngestAndBuild:
     def test_from_inline_text(self, env):
         result = ingest_and_build_ir(FakeClient(RESP), user_id=USER, title="t", text="手机号11位")
         assert len(result.items) == 2
+
+
+class TestIRIssueObservability:
+    """F2：解析失败原因必须落日志。
+
+    此前 items=0 时 `parsed.issues` 从不进入任何日志或持久化，导致线上无法归因
+    （bc_02 / bc_03 只能靠"哪些 case 含代码围栏"的相关性反推）。F2 只加日志，
+    不改返回值、失败分类与降级语义。
+    """
+
+    _NO_JSON = "状态：\n```\n待支付 → 已支付\n```\n\n抱歉，我无法输出 JSON"
+
+    def test_parse_issues_are_logged_as_warning(self, env, caplog):
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="core.v2.ir"):
+            result = build_requirement_ir(FakeClient(self._NO_JSON), user_id=USER, title="t", raw_text="x")
+        msgs = [r.getMessage() for r in caplog.records if "IR 解析问题" in r.getMessage()]
+        assert msgs, "解析失败原因仍未落日志"
+        assert any("无法从 LLM 响应解析出 JSON" in m for m in msgs)
+        assert result.items == []  # 返回值未被 F2 改变
+
+    def test_clean_parse_emits_no_issue_warning(self, env, caplog):
+        """正常路径不加噪，否则 warning 会失去信号价值"""
+        import logging
+
+        with caplog.at_level(logging.WARNING, logger="core.v2.ir"):
+            result = build_requirement_ir(FakeClient(RESP), user_id=USER, title="t", raw_text="x")
+        assert len(result.items) == 2
+        assert not [r for r in caplog.records if "IR 解析问题" in r.getMessage()]
