@@ -20,6 +20,8 @@ config.yaml
 output/
 # Step 11 S6：Benchmark runset 快照（本地/验收产物；正式 baseline 由 S7 显式提升入库）
 benchmark/runsets/
+# Step 11 S8：Compare/Delta 报告（由 baseline + runset 随时重算的派生产物，不入库）
+benchmark/compares/
 
 # 调试文件
 _debug_*.txt

@@ -1,0 +1,2430 @@
+{
+  "aggregate": {
+    "cases_total": 10,
+    "completion_rate": 1.0,
+    "mean_semantics": "n = 该格可评 case 数；value 为 None（如分母 0/0）的 case 不入分母，均值与 n 一起读",
+    "metric_means": {
+      "critical_scenario_coverage": {
+        "mean": 0.91333,
+        "n": 10
+      },
+      "duplication_score": {
+        "mean": 1.0,
+        "n": 10
+      },
+      "identity_match_rate": {
+        "mean": 0.0,
+        "n": 10
+      },
+      "obligation_coverage": {
+        "mean": 0.962967,
+        "n": 9
+      },
+      "requirement_coverage": {
+        "mean": 0.872,
+        "n": 10
+      },
+      "requirement_precision": {
+        "mean": 0.2737,
+        "n": 10
+      },
+      "structural_validity": {
+        "mean": 1.0,
+        "n": 10
+      },
+      "test_point_precision": {
+        "mean": 0.42714,
+        "n": 10
+      }
+    },
+    "s5_verdict_totals": {
+      "correct": 329,
+      "incorrect": 7,
+      "partial": 25,
+      "pending_review": 750
+    },
+    "soft_score_means": {
+      "accuracy": {
+        "mean": 67.4,
+        "n": 10
+      },
+      "consistency": {
+        "mean": 100.0,
+        "n": 10
+      },
+      "coverage": {
+        "mean": 100.0,
+        "n": 10
+      },
+      "duplication": {
+        "mean": 78.471,
+        "n": 10
+      },
+      "executability": {
+        "mean": 82.06,
+        "n": 10
+      },
+      "missing_risk": {
+        "mean": 61.6,
+        "n": 10
+      }
+    },
+    "status_counts": {
+      "completed": 10
+    },
+    "totals": {
+      "hard_pending_review": 950,
+      "illegal_evidence_refs_dropped": 32,
+      "invalid": 0,
+      "items": 176,
+      "llm_calls_pipeline": 1201,
+      "llm_calls_s5": 53,
+      "llm_calls_total": 1254,
+      "llm_failures": 0,
+      "llm_retries": 0,
+      "missing_risk_open": 8,
+      "test_cases_alive": 1111,
+      "test_cases_archived": 179,
+      "test_points": 1292,
+      "total_duration_ms": 5862026
+    },
+    "via_counts_totals": {
+      "ambiguous": 0,
+      "anchor": 36,
+      "bridge": 36,
+      "candidate": 9,
+      "identity": 0,
+      "miss": 2
+    }
+  },
+  "baseline_id": "baseline-v0.1",
+  "cases": {
+    "bc_01_login__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "502d93212d8ac13545c486820b04a4a22188d0ec23dad7cc5ed0b99d6a046314",
+        "gold_file_digest": "eb8de0d825a10bc840889e9b9b63969ce808c843e2abd594afc26fdfae4ad486",
+        "requirement_file_digest": "2d43feb77ac693f77a1909de503b27a27200893403ba451851845b4e373b821c"
+      },
+      "case_id": "bc_01_login",
+      "gold_version": "gold-v0.2",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 4597.9,
+          "llm_calls_per_case": 1.07,
+          "per_step": [
+            {
+              "duration_ms": 23998,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 133638,
+              "llm_attempts": 20,
+              "llm_calls": 20,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 1738,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 366951,
+              "llm_attempts": 108,
+              "llm_calls": 108,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 31505,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 1696,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 560949,
+          "total_llm_calls": 130
+        },
+        "counts": {
+          "archived_test_cases": 29,
+          "items": 19,
+          "obligations": 18,
+          "strategy_points": 44,
+          "test_cases": 122,
+          "test_points": 151
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.6386,
+          "gold_total": 10,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 10,
+          "module_consistency": "0/10",
+          "statement_verbatim": "1/10",
+          "type_consistency": "9/10"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 6,
+            "numerator": 3,
+            "provenance": "code",
+            "value": 0.5
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 10,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 6,
+            "numerator": 6,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 10,
+            "numerator": 8,
+            "provenance": "code",
+            "value": 0.8
+          },
+          "requirement_precision": {
+            "denominator": 19,
+            "numerator": 4,
+            "provenance": "code",
+            "value": 0.2105
+          },
+          "structural_validity": {
+            "denominator": 122,
+            "numerator": 122,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 151,
+            "numerator": 69,
+            "provenance": "code",
+            "value": 0.457
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 3,
+          "strategy_unmet_count": 0,
+          "total_open": 3
+        },
+        "pending_review_count": 102,
+        "reviewer_based": {
+          "finding_count": 105,
+          "obligation_coverage": 1.0,
+          "overall_score": 80.26,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 69.54,
+            "executability": 82.0,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 3,
+          "bridge": 5,
+          "candidate": 2,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 130,
+        "s5_soft": 6,
+        "total": 136
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 40,
+        "batch_count": 6,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 1,
+        "illegal_evidence_refs_dropped": 1,
+        "llm_calls": 6,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 80.26,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 69.54,
+          "executability": 82.0,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 40,
+          "incorrect": 1,
+          "partial": 3,
+          "pending_review": 78
+        }
+      },
+      "status": "completed"
+    },
+    "bc_02_refund_order__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "97b29aea392ad44370a026cf879309db78bc1128e8e0de5e6ebb22bea5cfeb44",
+        "gold_file_digest": "4ee2b58b055678ffb55e54a76445d0ca895dd58716c0f24f182e1a0e40057943",
+        "requirement_file_digest": "f39f4bd8c86d17fd8fefd6ea6aaf16edf661d78f65e5e597fda8539402c2f905"
+      },
+      "case_id": "bc_02_refund_order",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 4801.6,
+          "llm_calls_per_case": 1.11,
+          "per_step": [
+            {
+              "duration_ms": 41078,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 285387,
+              "llm_attempts": 44,
+              "llm_calls": 44,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 2432,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 721492,
+              "llm_attempts": 206,
+              "llm_calls": 206,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 42785,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 1283,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 1094758,
+          "total_llm_calls": 252
+        },
+        "counts": {
+          "archived_test_cases": 27,
+          "items": 34,
+          "obligations": 26,
+          "strategy_points": 50,
+          "test_cases": 228,
+          "test_points": 255
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.7459,
+          "gold_total": 13,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 13,
+          "module_consistency": "5/13",
+          "statement_verbatim": "0/13",
+          "type_consistency": "13/13"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 6,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 0.8333
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 13,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 8,
+            "numerator": 8,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 13,
+            "numerator": 10,
+            "provenance": "code",
+            "value": 0.7692
+          },
+          "requirement_precision": {
+            "denominator": 34,
+            "numerator": 7,
+            "provenance": "code",
+            "value": 0.2059
+          },
+          "structural_validity": {
+            "denominator": 228,
+            "numerator": 228,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 255,
+            "numerator": 85,
+            "provenance": "code",
+            "value": 0.3333
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 1,
+          "strategy_unmet_count": 0,
+          "total_open": 1
+        },
+        "pending_review_count": 203,
+        "reviewer_based": {
+          "finding_count": 68,
+          "obligation_coverage": 1.0,
+          "overall_score": 82.26,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 81.57,
+            "executability": 82.0,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 5,
+          "bridge": 5,
+          "candidate": 3,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 252,
+        "s5_soft": 9,
+        "total": 261
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 117,
+        "batch_count": 9,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 1,
+        "llm_calls": 9,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 82.26,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 81.57,
+          "executability": 82.0,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 59,
+          "incorrect": 2,
+          "partial": 4,
+          "pending_review": 163
+        }
+      },
+      "status": "completed"
+    },
+    "bc_03_order_status__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "c1bea20623eb71cf606942107d9bbcbecb3f61f1f9b69ee97990f91489cc0be9",
+        "gold_file_digest": "eedd33ca2f1ee4d6c56fd31d79d338effaf07aea6b3b337fb33da5aea08309d0",
+        "requirement_file_digest": "296490e8c12a8a01895b3d69ce918cf3f66d09130afdbb2e9e068ba776012329"
+      },
+      "case_id": "bc_03_order_status",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 4952.6,
+          "llm_calls_per_case": 1.16,
+          "per_step": [
+            {
+              "duration_ms": 34223,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 144147,
+              "llm_attempts": 22,
+              "llm_calls": 22,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 478,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 359437,
+              "llm_attempts": 109,
+              "llm_calls": 109,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 30482,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 488,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 569544,
+          "total_llm_calls": 133
+        },
+        "counts": {
+          "archived_test_cases": 6,
+          "items": 21,
+          "obligations": 3,
+          "strategy_points": 12,
+          "test_cases": 115,
+          "test_points": 121
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.8401,
+          "gold_total": 7,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 7,
+          "module_consistency": "0/7",
+          "statement_verbatim": "3/7",
+          "type_consistency": "1/7"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 7,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": null
+          },
+          "requirement_coverage": {
+            "denominator": 7,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 0.7143
+          },
+          "requirement_precision": {
+            "denominator": 21,
+            "numerator": 1,
+            "provenance": "code",
+            "value": 0.0476
+          },
+          "structural_validity": {
+            "denominator": 115,
+            "numerator": 115,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 121,
+            "numerator": 4,
+            "provenance": "code",
+            "value": 0.0331
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 1,
+          "obligation_open_count": 0,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 1
+        },
+        "pending_review_count": 142,
+        "reviewer_based": {
+          "finding_count": 40,
+          "obligation_coverage": 1.0,
+          "overall_score": 84.77,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 94.21,
+            "executability": 84.4,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 5,
+          "bridge": 0,
+          "candidate": 1,
+          "identity": 0,
+          "miss": 1
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 133,
+        "s5_soft": 5,
+        "total": 138
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 80,
+        "batch_count": 5,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 3,
+        "llm_calls": 5,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 84.77,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 94.21,
+          "executability": 84.4,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 4,
+          "pending_review": 111
+        }
+      },
+      "status": "completed"
+    },
+    "bc_04_payment__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "822f089cc33efe8bf1f7496a53a826d775659de864f49ab621fcee32b033d4c6",
+        "gold_file_digest": "f081251a6342e10a2c89d9e940f71a33d9d347eaac7c5a6c3ac193f6c6fc82ab",
+        "requirement_file_digest": "f61794d32c6b192fa802bc9a36882b71a50dabdf0d3792adf69d03ee4edab031"
+      },
+      "case_id": "bc_04_payment",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 4826.8,
+          "llm_calls_per_case": 1.01,
+          "per_step": [
+            {
+              "duration_ms": 19051,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 99024,
+              "llm_attempts": 12,
+              "llm_calls": 12,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 1733,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 258754,
+              "llm_attempts": 71,
+              "llm_calls": 71,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 25782,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 805,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 405454,
+          "total_llm_calls": 85
+        },
+        "counts": {
+          "archived_test_cases": 23,
+          "items": 11,
+          "obligations": 13,
+          "strategy_points": 36,
+          "test_cases": 84,
+          "test_points": 107
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.5984,
+          "gold_total": 9,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 9,
+          "module_consistency": "4/9",
+          "statement_verbatim": "0/9",
+          "type_consistency": "9/9"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 9,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 9,
+            "numerator": 9,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_precision": {
+            "denominator": 11,
+            "numerator": 4,
+            "provenance": "code",
+            "value": 0.3636
+          },
+          "structural_validity": {
+            "denominator": 84,
+            "numerator": 84,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 107,
+            "numerator": 60,
+            "provenance": "code",
+            "value": 0.5607
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 0
+        },
+        "pending_review_count": 59,
+        "reviewer_based": {
+          "finding_count": 51,
+          "obligation_coverage": 1.0,
+          "overall_score": 79.88,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 67.29,
+            "executability": 82.0,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 5,
+          "bridge": 4,
+          "candidate": 0,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 85,
+        "s5_soft": 5,
+        "total": 90
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 44,
+        "batch_count": 5,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 0,
+        "llm_calls": 5,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 79.88,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 67.29,
+          "executability": 82.0,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 35,
+          "incorrect": 2,
+          "partial": 3,
+          "pending_review": 44
+        }
+      },
+      "status": "completed"
+    },
+    "bc_05_admin_rbac__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "b82515aa441bc3fcd91cc216503deff403071bfe176718813897b3bda1b15755",
+        "gold_file_digest": "6b420b98dc79e566d84eeaca1fd327df2fb7587d809ed0b38b3d23f2f065cca1",
+        "requirement_file_digest": "9dcfead62d630c71f41d48b5a34d6d77f35ae3b629c5bec9241e51963cf06d91"
+      },
+      "case_id": "bc_05_admin_rbac",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 5561.1,
+          "llm_calls_per_case": 1.09,
+          "per_step": [
+            {
+              "duration_ms": 35452,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 215431,
+              "llm_attempts": 28,
+              "llm_calls": 28,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 1248,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 537109,
+              "llm_attempts": 130,
+              "llm_calls": 130,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 27508,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 415,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 817478,
+          "total_llm_calls": 160
+        },
+        "counts": {
+          "archived_test_cases": 11,
+          "items": 27,
+          "obligations": 20,
+          "strategy_points": 28,
+          "test_cases": 147,
+          "test_points": 158
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.5373,
+          "gold_total": 7,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 7,
+          "module_consistency": "1/7",
+          "statement_verbatim": "0/7",
+          "type_consistency": "5/7"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 5,
+            "numerator": 4,
+            "provenance": "code",
+            "value": 0.8
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 7,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 6,
+            "numerator": 6,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 7,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 0.7143
+          },
+          "requirement_precision": {
+            "denominator": 27,
+            "numerator": 2,
+            "provenance": "code",
+            "value": 0.0741
+          },
+          "structural_validity": {
+            "denominator": 147,
+            "numerator": 147,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 158,
+            "numerator": 21,
+            "provenance": "code",
+            "value": 0.1329
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 1,
+          "strategy_unmet_count": 0,
+          "total_open": 1
+        },
+        "pending_review_count": 167,
+        "reviewer_based": {
+          "finding_count": 32,
+          "obligation_coverage": 1.0,
+          "overall_score": 83.62,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 87.34,
+            "executability": 84.4,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 3,
+          "bridge": 2,
+          "candidate": 2,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 160,
+        "s5_soft": 6,
+        "total": 166
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 52,
+        "batch_count": 6,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 2,
+        "llm_calls": 6,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 83.62,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 87.34,
+          "executability": 84.4,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 15,
+          "incorrect": 1,
+          "partial": 1,
+          "pending_review": 130
+        }
+      },
+      "status": "completed"
+    },
+    "bc_06_search__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "01db8d3c8f7e820317ce0850ca70e0642cdc04995b13bb1a66b12e51e6d2c8db",
+        "gold_file_digest": "0f969092037900a2953773f4751795f30783e17a6f9f01cf82855d70459f46c9",
+        "requirement_file_digest": "7a9be8acb229b7bf9f6340fdde348de553c6a651084b2a32246e0e918f356d40"
+      },
+      "case_id": "bc_06_search",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 7400.7,
+          "llm_calls_per_case": 1.14,
+          "per_step": [
+            {
+              "duration_ms": 22986,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 90758,
+              "llm_attempts": 11,
+              "llm_calls": 11,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 597,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 321072,
+              "llm_attempts": 59,
+              "llm_calls": 59,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 30140,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 337,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 466247,
+          "total_llm_calls": 72
+        },
+        "counts": {
+          "archived_test_cases": 5,
+          "items": 10,
+          "obligations": 3,
+          "strategy_points": 10,
+          "test_cases": 63,
+          "test_points": 69
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.5951,
+          "gold_total": 6,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 6,
+          "module_consistency": "4/6",
+          "statement_verbatim": "0/6",
+          "type_consistency": "3/6"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 4,
+            "numerator": 4,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 6,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 3,
+            "numerator": 2,
+            "provenance": "code",
+            "value": 0.6667
+          },
+          "requirement_coverage": {
+            "denominator": 6,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 0.8333
+          },
+          "requirement_precision": {
+            "denominator": 10,
+            "numerator": 2,
+            "provenance": "code",
+            "value": 0.2
+          },
+          "structural_validity": {
+            "denominator": 63,
+            "numerator": 63,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 69,
+            "numerator": 26,
+            "provenance": "code",
+            "value": 0.3768
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 1,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 1
+        },
+        "pending_review_count": 55,
+        "reviewer_based": {
+          "finding_count": 27,
+          "obligation_coverage": 1.0,
+          "overall_score": 84.02,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 89.71,
+            "executability": 84.4,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 3,
+          "bridge": 2,
+          "candidate": 1,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [
+          "item_rejected_by_schema"
+        ],
+        "parse_issues": 1
+      },
+      "llm_calls": {
+        "pipeline": 72,
+        "s5_soft": 4,
+        "total": 76
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 51,
+        "batch_count": 4,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 7,
+        "llm_calls": 4,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 84.02,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 89.71,
+          "executability": 84.4,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 17,
+          "partial": 3,
+          "pending_review": 43
+        }
+      },
+      "status": "completed"
+    },
+    "bc_07_form_validation__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "733cde38d0e70e0a4631b3ca2c080f20e26cd6fe2ba7fe75685764207700f5ef",
+        "gold_file_digest": "dffec7d44870ab01968aeacec6537b08ee50be94b88059b9586deaaccfe597d8",
+        "requirement_file_digest": "40173f61857f592e67663adbee75ed3a4b87049be52b263ad7628a3d7c308f2b"
+      },
+      "case_id": "bc_07_form_validation",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 5167.1,
+          "llm_calls_per_case": 1.0,
+          "per_step": [
+            {
+              "duration_ms": 22815,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 129108,
+              "llm_attempts": 16,
+              "llm_calls": 16,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 2333,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 346154,
+              "llm_attempts": 85,
+              "llm_calls": 85,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 28920,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 2472,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 532216,
+          "total_llm_calls": 103
+        },
+        "counts": {
+          "archived_test_cases": 34,
+          "items": 15,
+          "obligations": 19,
+          "strategy_points": 53,
+          "test_cases": 103,
+          "test_points": 137
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.5893,
+          "gold_total": 8,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 8,
+          "module_consistency": "6/8",
+          "statement_verbatim": "0/8",
+          "type_consistency": "8/8"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 8,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 7,
+            "numerator": 7,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 8,
+            "numerator": 8,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_precision": {
+            "denominator": 15,
+            "numerator": 6,
+            "provenance": "code",
+            "value": 0.4
+          },
+          "structural_validity": {
+            "denominator": 103,
+            "numerator": 103,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 137,
+            "numerator": 87,
+            "provenance": "code",
+            "value": 0.635
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 0
+        },
+        "pending_review_count": 61,
+        "reviewer_based": {
+          "finding_count": 98,
+          "obligation_coverage": 1.0,
+          "overall_score": 79.77,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 64.23,
+            "executability": 84.4,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 2,
+          "bridge": 6,
+          "candidate": 0,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 103,
+        "s5_soft": 5,
+        "total": 108
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 40,
+        "batch_count": 5,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 5,
+        "llm_calls": 5,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 79.77,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 64.23,
+          "executability": 84.4,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 49,
+          "partial": 4,
+          "pending_review": 50
+        }
+      },
+      "status": "completed"
+    },
+    "bc_08_file_upload__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "359d1fad380ba1f9f1f8c9dfd52e567da35af1d3ed021e85d906628ed1694a75",
+        "gold_file_digest": "1d542a028afb016e500e22f4c279bdf5ba14f32e866c1e573c9218f233770897",
+        "requirement_file_digest": "ec3580b459125d759b0cd08944bd09ca175055dbe69a785cde7473e1d38610b4"
+      },
+      "case_id": "bc_08_file_upload",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 6319.4,
+          "llm_calls_per_case": 1.1,
+          "per_step": [
+            {
+              "duration_ms": 22343,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 93473,
+              "llm_attempts": 12,
+              "llm_calls": 12,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 1271,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 308169,
+              "llm_attempts": 64,
+              "llm_calls": 64,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 21648,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 1425,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 448674,
+          "total_llm_calls": 78
+        },
+        "counts": {
+          "archived_test_cases": 22,
+          "items": 11,
+          "obligations": 11,
+          "strategy_points": 30,
+          "test_cases": 71,
+          "test_points": 94
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.5641,
+          "gold_total": 6,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 6,
+          "module_consistency": "0/6",
+          "statement_verbatim": "0/6",
+          "type_consistency": "6/6"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 6,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 6,
+            "numerator": 6,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_precision": {
+            "denominator": 11,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 0.4545
+          },
+          "structural_validity": {
+            "denominator": 71,
+            "numerator": 71,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 94,
+            "numerator": 65,
+            "provenance": "code",
+            "value": 0.6915
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 0
+        },
+        "pending_review_count": 36,
+        "reviewer_based": {
+          "finding_count": 55,
+          "obligation_coverage": 1.0,
+          "overall_score": 76.61,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 62.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 66.67,
+            "executability": 73.0,
+            "missing_risk": 58.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 2,
+          "bridge": 4,
+          "candidate": 0,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 78,
+        "s5_soft": 4,
+        "total": 82
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 35,
+        "batch_count": 4,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 1,
+        "llm_calls": 4,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 76.61,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 62.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 66.67,
+          "executability": 73.0,
+          "missing_risk": 58.0
+        },
+        "verdicts": {
+          "correct": 37,
+          "incorrect": 1,
+          "partial": 4,
+          "pending_review": 29
+        }
+      },
+      "status": "completed"
+    },
+    "bc_09_approval_flow__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "e6a6632a3953a29f48859de927163791fa80155a04ee1dab7993c7f9245ab922",
+        "gold_file_digest": "978ab8c4271c179aa8e0ca4c979bd951c3b25875e3f887d3f11a5045560887a3",
+        "requirement_file_digest": "33c97ab582642bd8aba14aac945a0bb15e98f90240686b1ae0439b76cab4e1b3"
+      },
+      "case_id": "bc_09_approval_flow",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 5546.5,
+          "llm_calls_per_case": 1.06,
+          "per_step": [
+            {
+              "duration_ms": 34063,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 147490,
+              "llm_attempts": 18,
+              "llm_calls": 18,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 1495,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 371210,
+              "llm_attempts": 92,
+              "llm_calls": 92,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 32167,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 1138,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 587932,
+          "total_llm_calls": 112
+        },
+        "counts": {
+          "archived_test_cases": 15,
+          "items": 17,
+          "obligations": 13,
+          "strategy_points": 29,
+          "test_cases": 106,
+          "test_points": 121
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.5099,
+          "gold_total": 9,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 9,
+          "module_consistency": "0/9",
+          "statement_verbatim": "0/9",
+          "type_consistency": "7/9"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 6,
+            "numerator": 6,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 9,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 7,
+            "numerator": 7,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 9,
+            "numerator": 8,
+            "provenance": "code",
+            "value": 0.8889
+          },
+          "requirement_precision": {
+            "denominator": 17,
+            "numerator": 4,
+            "provenance": "code",
+            "value": 0.2353
+          },
+          "structural_validity": {
+            "denominator": 106,
+            "numerator": 106,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 121,
+            "numerator": 46,
+            "provenance": "code",
+            "value": 0.3802
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 1,
+          "obligation_open_count": 0,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 1
+        },
+        "pending_review_count": 92,
+        "reviewer_based": {
+          "finding_count": 45,
+          "obligation_coverage": 1.0,
+          "overall_score": 81.89,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 79.34,
+            "executability": 82.0,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 4,
+          "bridge": 4,
+          "candidate": 0,
+          "identity": 0,
+          "miss": 1
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 112,
+        "s5_soft": 5,
+        "total": 117
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 88,
+        "batch_count": 5,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 0,
+        "illegal_evidence_refs_dropped": 10,
+        "llm_calls": 5,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 81.89,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 79.34,
+          "executability": 82.0,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 34,
+          "partial": 1,
+          "pending_review": 71
+        }
+      },
+      "status": "completed"
+    },
+    "bc_10_report_export__r1": {
+      "benchmark_version": "bench-v0.1",
+      "case_fingerprint": {
+        "case_file_digest": "4fe0137a344c40d8682f32c6d70e98baa9ce6f351c838e888c5bd9a70f089e48",
+        "gold_file_digest": "21cdd1f4646804fe9b13bd4e4e279c17a09774ea462be482069433a2cc3695b0",
+        "requirement_file_digest": "30de6fccab459309c47fd7e69e87f9af3ea8ceb7bc80084751b55ed928668c61"
+      },
+      "case_id": "bc_10_report_export",
+      "gold_version": "gold-v0.1",
+      "hard": {
+        "anchor_scope": "all_non_archived_testcases",
+        "cost_latency": {
+          "duration_ms_per_case": 5260.8,
+          "llm_calls_per_case": 1.06,
+          "per_step": [
+            {
+              "duration_ms": 15294,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "ir",
+              "success": true
+            },
+            {
+              "duration_ms": 93336,
+              "llm_attempts": 12,
+              "llm_calls": 12,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testpoints",
+              "success": true
+            },
+            {
+              "duration_ms": 1031,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "strategy",
+              "success": true
+            },
+            {
+              "duration_ms": 245860,
+              "llm_attempts": 62,
+              "llm_calls": 62,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "testcases",
+              "success": true
+            },
+            {
+              "duration_ms": 22493,
+              "llm_attempts": 1,
+              "llm_calls": 1,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "review",
+              "success": true
+            },
+            {
+              "duration_ms": 418,
+              "llm_attempts": 0,
+              "llm_calls": 0,
+              "llm_failures": 0,
+              "llm_retries": 0,
+              "step": "optimizer",
+              "success": true
+            }
+          ],
+          "total_duration_ms": 378774,
+          "total_llm_calls": 76
+        },
+        "counts": {
+          "archived_test_cases": 7,
+          "items": 11,
+          "obligations": 9,
+          "strategy_points": 17,
+          "test_cases": 72,
+          "test_points": 79
+        },
+        "duplication_exact_count": 0,
+        "duplication_semantic_count": 0,
+        "identity_diagnostics": {
+          "auto_hit_identity_only": 0,
+          "best_similarity_mean": 0.4908,
+          "gold_total": 8,
+          "identity_match_rate": 0.0,
+          "identity_miss_gold_count": 8,
+          "module_consistency": "0/8",
+          "statement_verbatim": "0/8",
+          "type_consistency": "7/8"
+        },
+        "invalid_count": 0,
+        "metrics": {
+          "critical_scenario_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "duplication_score": {
+            "denominator": null,
+            "numerator": null,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "identity_match_rate": {
+            "denominator": 8,
+            "numerator": 0,
+            "provenance": "code",
+            "value": 0.0
+          },
+          "obligation_coverage": {
+            "denominator": 5,
+            "numerator": 5,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_coverage": {
+            "denominator": 8,
+            "numerator": 8,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "requirement_precision": {
+            "denominator": 11,
+            "numerator": 6,
+            "provenance": "code",
+            "value": 0.5455
+          },
+          "structural_validity": {
+            "denominator": 72,
+            "numerator": 72,
+            "provenance": "code",
+            "value": 1.0
+          },
+          "test_point_precision": {
+            "denominator": 79,
+            "numerator": 53,
+            "provenance": "code",
+            "value": 0.6709
+          }
+        },
+        "missing_risk": {
+          "gold_miss_count": 0,
+          "obligation_open_count": 0,
+          "scenario_open_count": 0,
+          "strategy_unmet_count": 0,
+          "total_open": 0
+        },
+        "pending_review_count": 33,
+        "reviewer_based": {
+          "finding_count": 24,
+          "obligation_coverage": 1.0,
+          "overall_score": 82.8,
+          "provenance": "mixed",
+          "scores": {
+            "accuracy": 68.0,
+            "consistency": 100.0,
+            "coverage": 100.0,
+            "duplication": 84.81,
+            "executability": 82.0,
+            "missing_risk": 62.0
+          }
+        },
+        "run_status": "completed",
+        "via_counts": {
+          "ambiguous": 0,
+          "anchor": 4,
+          "bridge": 4,
+          "candidate": 0,
+          "identity": 0,
+          "miss": 0
+        }
+      },
+      "ir": {
+        "parse_issue_kinds": [],
+        "parse_issues": 0
+      },
+      "llm_calls": {
+        "pipeline": 76,
+        "s5_soft": 4,
+        "total": 80
+      },
+      "quality_evaluated": true,
+      "repeat_index": 1,
+      "rules_hit": [
+        "rule=completed"
+      ],
+      "soft": {
+        "additional_valid_candidates_count": 31,
+        "batch_count": 4,
+        "batch_failed_count": 0,
+        "forbidden_suspects_count": 1,
+        "illegal_evidence_refs_dropped": 2,
+        "llm_calls": 4,
+        "model_meta": {
+          "enable_thinking": false,
+          "model": "deepseek-v4.1-flash",
+          "provider": "openai",
+          "temperature": 0.3
+        },
+        "overall_score": 82.8,
+        "present": true,
+        "prompt_version": "benchmark-semantic-eval-v1",
+        "s5_schema": "benchmark-soft-v1",
+        "scores": {
+          "accuracy": 68.0,
+          "consistency": 100.0,
+          "coverage": 100.0,
+          "duplication": 84.81,
+          "executability": 82.0,
+          "missing_risk": 62.0
+        },
+        "verdicts": {
+          "correct": 39,
+          "partial": 2,
+          "pending_review": 31
+        }
+      },
+      "status": "completed"
+    }
+  },
+  "created_at": "2026-09-23T09:25:43.024927+00:00",
+  "evaluated_cases": "10/10",
+  "fingerprint": {
+    "benchmark_version": "bench-v0.1",
+    "business_prompt_versions": {
+      "parser": "requirement-parser-v1",
+      "reviewer": "test-case-reviewer-v1",
+      "tc_pattern_data": "test-data-pattern-v1",
+      "tc_synthesizer": "test-case-synthesizer-v1",
+      "tp_completer": "test-point-completer-v1",
+      "tp_generator": "test-point-generator-v1"
+    },
+    "case_set_digest": "d9b5bb552b1833d9debd0e1d75fa6f31",
+    "case_versions": {
+      "bc_01_login": "bench-v0.1",
+      "bc_02_refund_order": "bench-v0.1",
+      "bc_03_order_status": "bench-v0.1",
+      "bc_04_payment": "bench-v0.1",
+      "bc_05_admin_rbac": "bench-v0.1",
+      "bc_06_search": "bench-v0.1",
+      "bc_07_form_validation": "bench-v0.1",
+      "bc_08_file_upload": "bench-v0.1",
+      "bc_09_approval_flow": "bench-v0.1",
+      "bc_10_report_export": "bench-v0.1"
+    },
+    "enable_thinking": false,
+    "generation_config_id": "01M36D2024NMG74054PEJPWJMZ",
+    "generator_version": "tp-gen-v1,tc-synth-v1",
+    "git_branch": "main",
+    "git_commit": "731e013b72acbf7c57fbbc0ab196c965127f3674",
+    "git_dirty": false,
+    "git_probe": "ok",
+    "gold_versions": {
+      "bc_01_login": "gold-v0.2",
+      "bc_02_refund_order": "gold-v0.1",
+      "bc_03_order_status": "gold-v0.1",
+      "bc_04_payment": "gold-v0.1",
+      "bc_05_admin_rbac": "gold-v0.1",
+      "bc_06_search": "gold-v0.1",
+      "bc_07_form_validation": "gold-v0.1",
+      "bc_08_file_upload": "gold-v0.1",
+      "bc_09_approval_flow": "gold-v0.1",
+      "bc_10_report_export": "gold-v0.1"
+    },
+    "manifest_case_ids": [
+      "bc_01_login",
+      "bc_02_refund_order",
+      "bc_03_order_status",
+      "bc_04_payment",
+      "bc_05_admin_rbac",
+      "bc_06_search",
+      "bc_07_form_validation",
+      "bc_08_file_upload",
+      "bc_09_approval_flow",
+      "bc_10_report_export"
+    ],
+    "manifest_id": "bm-bench-v0-1",
+    "manifest_version": "bench-v0.1",
+    "max_tokens": 8192,
+    "model_name": "deepseek-v4.1-flash",
+    "model_provider": "openai",
+    "resolved_benchmark_db": "C:\\Users\\29726\\Desktop\\testcase-gen\\benchmark\\data\\benchmark_v2.db",
+    "reviewer_version": "test-case-reviewer-v1",
+    "runner_version": "benchmark-runner-v1",
+    "s5_prompt_version": "benchmark-semantic-eval-v1",
+    "temperature": 0.3
+  },
+  "manifest": {
+    "cases": [
+      "bc_01_login",
+      "bc_02_refund_order",
+      "bc_03_order_status",
+      "bc_04_payment",
+      "bc_05_admin_rbac",
+      "bc_06_search",
+      "bc_07_form_validation",
+      "bc_08_file_upload",
+      "bc_09_approval_flow",
+      "bc_10_report_export"
+    ],
+    "manifest_id": "bm-bench-v0-1",
+    "repeat": 1
+  },
+  "note": "baseline-v0.1 正式基线。数值为单次读数（repeat=1），只作 S8 delta 的回归参照，不作质量验收线；identity 轨仅诊断（diagnostic_only），不得当 requirement coverage；token 用量因 core/llm_client.py 未插桩 response.usage 而不可得，本文件不含估算值。",
+  "planned_units": 10,
+  "runner_version": "benchmark-runner-v1",
+  "s6_schema": "benchmark-runset-v1",
+  "s8_schema": "benchmark-baseline-v1",
+  "source_operand_path": "benchmark\\runsets\\bm-bench-v0-1-20260923T055019Z",
+  "source_runset_id": "bm-bench-v0-1-20260923T055019Z",
+  "written_units": 10
+}

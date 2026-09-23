@@ -573,3 +573,95 @@ bc_01_login 同条件 smoke 各 1 次，gold-v0.2 口径，经 `evaluate_hard_me
   `hard_from_payload` 向后兼容。
 - **未改**：`matching.py`（仅 D8 机械抽取）、`metrics_soft.py`、`schema.py`、Runtime、Parser、6 个业务 Prompt、
   DDL、`schema_version`（仍为 10）、V2 API、Frontend、`scripts/v2_benchmark.py`。
+
+---
+
+## 附录 D：S8 Compare / Delta 实施说明（2026-09-23，纯追加，不改写 A/B/C）
+
+### D.0 范围与 §11 的对应
+
+S8 严格按 §11 四条落地：**Baseline → Compare → Delta → 报告**，输出 `improvement / regression / unchanged`，
+**不定义固定阈值、不因质量下降 exit 1、不接 CI Gate**（§11.3 / §2 边界 17）。
+§11.4 说的"第一版终点"= `baseline-v0.1.json` + 全套报告，其中机器可读基线由本轮补齐（B.2 #7 的"显式提升入库"）。
+A2/A4/A5/A6 均**不是** S8 前置：S8 不重跑 Runtime，A2 只影响未来产生 candidate 的成本；A4/A5/A6 是被比较的读数，修它们属另行授权。
+
+### D.1 交付物与数据流
+
+```
+benchmark/runsets/<id>/  ──(只读)──►  compare.emit_baseline ──► benchmark/baselines/baseline-v0.1.json
+benchmark/baselines/baseline-v0.1.json ┐
+benchmark/runsets/<新 id>/             ┴─(只读)─► compare.compare_runsets ──► benchmark/compares/<报告>.json
+```
+
+| 文件 | 角色 |
+|---|---|
+| `core/v2/eval/compare.py` | 唯一新逻辑：`digest_case_payload` / `aggregate_of` / `load_runset` / `load_baseline` / `resolve_operand` / `emit_baseline` / `check_comparability` / `flatten` / `direction_of` / `diff_cell` / `compare_runsets` / `report_from_payload` / `summarize_report` |
+| `scripts/v2_benchmark_compare.py` | 独立 CLI（比较模式 + `--promote-baseline` 提升模式） |
+| `benchmark/baselines/baseline-v0.1.json` | 机器可读正式基线（入库；`s8_schema=benchmark-baseline-v1`） |
+| `tests/test_benchmark_compare.py` | 59 例全离线 fixture |
+
+零 import LLM / 零 `sqlite3.connect`（各有专项测试用 monkeypatch 禁绝证明）。S6 CLI `scripts/v2_benchmark.py` **一行未改**。
+
+### D.2 脱敏投影（白名单，非黑名单）
+
+`digest_case_payload` 是 baseline 与 candidate **共用**的同一投影，因此两侧天然同口径。保留：数值 / 枚举 / 数据集稳定 id
+（`ri_*` / `cs-*` 计数、`case_fingerprint` 三段字节摘要、`anchor_scope`、`rules_hit`、`parse_issue_kinds`）。
+逐字丢弃：`detail` / `reason` / `note` / `anchors` / `safe_prefix` / `gold_modules` 等自由文本，
+以及跨 run 必然不同、无比较价值的 ULID（`run_id` / `generation_config_id` / `report_id` / `tc_id` / `ref_id`）。
+落盘复用 `runner_lib.write_json_atomic`（内含 `assert_no_sensitive` 双保险）。
+`baseline-v0.1.json` 内唯一的中文是顶层 `note` 的口径声明；case 层零自由文本（有专项测试）。
+
+### D.3 可比性判据（`COMPARABILITY_FIELDS`）
+
+逐项相等才 `comparable=true`：`benchmark_version`、`manifest_id`、`case_set_digest`、`gold_versions`、`case_versions`、
+`model_name`、`model_provider`、`temperature`、`enable_thinking`、`max_tokens`、`generator_version`、`reviewer_version`、
+`business_prompt_versions`、`s5_prompt_version`、`runner_version`；case 单元集合不一致亦阻塞。
+
+- **刻意不含 `git_commit` / `git_dirty`**：代码版本正是 S8 要测的对象，列进判据等于自锁死；差异仍作为**非阻塞项**记入报告。
+- **刻意不含 `generation_config_id` / `run_id`**：每次 Run 必然新生成。
+- `comparable=false` 时所有可评数值格降级为 `not_comparable`，**只保留原始读数与差值**，`improvement`/`regression` 计数恒为 0
+  （跨模型比较实测：`improvement=0 regression=0 not_comparable=809`）→ "不允许静默混算"由代码而非纪律保证。
+
+### D.4 方向口径表（是口径声明，不是质量阈值）
+
+`METRIC_DIRECTIONS` 把格子路径映射到 `higher_better` / `lower_better` / `neutral` / `diagnostic_only`；
+未列出的路径**默认 neutral**（宁可不判，不可误判）。三条特殊规定：
+
+1. `identity_match_rate` / `via_counts.*` / `identity_diagnostics.*` 一律 `diagnostic_only=true`：差值照报，
+   永不标 improvement/regression，**禁止当 requirement coverage**（承 C.1 / 裁决 D1）。
+2. 计数与成本类（`items` / `test_points` / `test_cases` / `archived` / `llm_calls*` / `duration*`）一律 neutral。
+3. `pending_review` 与 `additional_valid_candidates` 只作计数，**不折算为 miss / incorrect**（承 S3 规则③）。
+
+`unchanged` 判据 = JSON 十进制字面量精确相等（**无容差、无 ε、无阈值**）；`delta = candidate - baseline`，保留 6 位小数。
+`None` 语义三分：两侧皆 `None` → `unavailable_both`；只有一侧 `None` → `one_side_null`（典型来源是 `0/0` 不可评，
+如 bc_03 `obligation_coverage`）；数值 → 按方向判。均值分母 = 该格可评 case 数，`n` 与 `mean` 同时输出。
+
+### D.5 CLI 契约
+
+```
+python scripts/v2_benchmark_compare.py --baseline <baseline.json|runset目录> --candidate <runset目录> [--out <path>]
+python scripts/v2_benchmark_compare.py --promote-baseline --baseline <runset目录> [--out benchmark/baselines/baseline-v0.1.json]
+```
+
+退出码：`0` 成功产出 / `2` 参数错误 / `3` 操作数缺失或不完整（缺 `_COMPLETE.json`、`planned != written`、
+索引引用的 case 文件缺失、`s8_schema` 不符）/ `5` 落盘或敏感自检失败。
+**码表里没有 1**：S6 的 `1` 表示"存在非 COMPLETED"，S8 刻意不沿用，避免把状态分布差异变成隐式门禁。
+报告默认落在 `benchmark/compares/`（派生产物，已加入 `.gitignore`，与 `benchmark/runsets/` 同族纪律）。
+
+### D.6 自证与验收
+
+- **自比对零**：`baseline-v0.1.json` 与它自己的源 runset 比较 → `comparable=true`、**非零差值格子数 = 0**
+  ⇒ 投影与聚合是确定性的，且 runset→baseline 无损。
+- 复现封存值：`llm_calls 1201+53=1254`、`retries=failures=0`、`total_duration_ms=5862026`、
+  `items 176 / TP 1292 / TC 存活 1111 / 归档 179`、`missing_risk_open 8`、`via: identity 0 / bridge 36 / anchor 36 / candidate 9 / miss 2`、
+  `S5 verdicts 750/329/25/7`、`非法 evidence_refs 32`、`req_cov 均值 0.872`、`obligation n=9`（bc_03 0/0 不入分母）。
+  上述与 PROGRESS §11.4.1 一致；注意 `hard.pending_review` 合计为 **950**（S3 待人工条目），与 S5 `verdicts.pending_review` **750**（S5 判定）是两个不同口径的字段，不可互换。
+- `token` 用量在本报告中**不可得**（`core/llm_client.py` 未插桩 `response.usage`，挂账⑩），报告 caveats 显式声明，不做估算。
+- 验收：S8 新增 59 例全绿；全量 **1378 passed + 3 skipped**（= 基线 1319 + 59，零回归）；`ruff check` / `ruff format --check` 全绿；
+  `ddl.SCHEMA_VERSION` 仍 10；`data/data.db`、`data/data_v2.db`、`benchmark/data/benchmark_v2.db` 三库 SHA-256 与验收前一致；
+  `benchmark/{cases,gold,manifests}`、Runtime、S6 CLI、`metrics_hard/soft`、`matching`、`rails`、`runner_lib`、`schema`、`core/schemas` **diff 全为 0**。
+
+### D.7 本轮明确不做
+
+CI 门禁与阈值；regression 非零退出；A2 断点续跑；A4 pending 治理；A5 bc_03 `obligations_expected`（挂 Gold v0.3）；
+A6 identity 轨根因；A8 `fields.default` 根因；`LLMClient` token 插桩；任何 Gold / 数据集 / 评测口径 / Runtime 改动。
