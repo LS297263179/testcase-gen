@@ -63,6 +63,23 @@ class LLMClient:
 
             self.client = OpenAI(base_url=base_url, api_key=api_key)
 
+        # LLM 用量计数（纯观测，不影响任何调用行为；chat_stream 不计入）：
+        # calls=chat() 次数，attempts=底层请求次数（含重试），
+        # successes/failures=chat() 正常返回 / 以异常结束的次数，retries = attempts - calls。
+        self.llm_calls = 0
+        self.llm_attempts = 0
+        self.llm_successes = 0
+        self.llm_failures = 0
+
+    def llm_stats(self) -> dict:
+        """用量只读快照，供上层按阶段取增量对账。"""
+        return {
+            "calls": self.llm_calls,
+            "attempts": self.llm_attempts,
+            "successes": self.llm_successes,
+            "failures": self.llm_failures,
+        }
+
     def chat(
         self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int | None = None
     ) -> str:
@@ -72,9 +89,13 @@ class LLMClient:
         """
         effective_max_tokens = max_tokens or self.max_tokens
         last_error = None
+        self.llm_calls += 1
         for attempt in range(self.max_retries):
+            self.llm_attempts += 1
             try:
-                return self._call(system_prompt, user_prompt, images, effective_max_tokens)
+                out = self._call(system_prompt, user_prompt, images, effective_max_tokens)
+                self.llm_successes += 1
+                return out
             except Exception as e:
                 last_error = e
                 err_str = str(e).lower()
@@ -85,8 +106,10 @@ class LLMClient:
                     continue
                 # 不可重试的错误：认证失败、请求格式错误
                 if any(kw in err_str for kw in ("401", "unauthorized", "invalid_api_key", "authentication")):
+                    self.llm_failures += 1
                     raise
                 if any(kw in err_str for kw in ("400", "bad_request", "invalid_request")):
+                    self.llm_failures += 1
                     raise
                 # 可重试的错误：速率限制、服务端错误、网络超时
                 if attempt < self.max_retries - 1:
@@ -98,6 +121,7 @@ class LLMClient:
                     logger.warning(f"LLM 调用失败（第 {attempt + 1} 次），{wait}s 后重试: {e}")
                     time.sleep(wait)
 
+        self.llm_failures += 1
         raise RuntimeError(f"LLM 调用失败（已重试 {self.max_retries} 次）: {last_error}")
 
     def chat_stream(

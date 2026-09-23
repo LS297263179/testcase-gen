@@ -75,6 +75,25 @@ def _strip_control_chars(text: str) -> str:
     return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", text)
 
 
+def classify_parse_issue(issue: str) -> str:
+    """把 `ParseResult.issues` 归成粗粒度类别，供上层安全落盘（不携带响应原文）。
+
+    只用于可观测性：类别名固定小集合，避免把 LLM 响应片段或异常正文写进 runset / 前端计数。
+    """
+    text = str(issue or "")
+    if text.startswith("LLM 调用失败"):
+        return "llm_call_failed"
+    if "无法从 LLM 响应解析出 JSON" in text:
+        return "json_unparsable"
+    if "缺少 items 数组" in text:
+        return "missing_items_array"
+    if text.startswith("item 丢弃"):
+        return "item_rejected_by_schema"
+    if "未产出任何有效需求项" in text:
+        return "no_valid_items"
+    return "other"
+
+
 def extract_json(raw: str) -> object | None:
     """从 LLM 响应中鲁棒提取 JSON 对象/数组，失败返回 None"""
     if not raw or not raw.strip():

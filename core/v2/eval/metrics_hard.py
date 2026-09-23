@@ -80,12 +80,19 @@ class EvalArtifacts:
 
 @dataclass
 class StepTiming:
-    """单阶段耗时/调用数（从 PipelineStepResult 折算，属性鸭子类型解耦 Runtime）。"""
+    """单阶段耗时/调用数（从 PipelineStepResult 折算，属性鸭子类型解耦 Runtime）。
+
+    llm_attempts / llm_retries / llm_failures 来自 LLMClient 的阶段增量快照，
+    与 llm_calls 并列用于成本对账（老 payload 缺这些字段时按 0 处理）。
+    """
 
     step: str
     success: bool = True
     duration_ms: int = 0
     llm_calls: int = 0
+    llm_attempts: int = 0
+    llm_retries: int = 0
+    llm_failures: int = 0
     counts: dict = field(default_factory=dict)
 
 
@@ -123,6 +130,9 @@ class RunObservation:
                 success=bool(s.success),
                 duration_ms=int(s.duration_ms),
                 llm_calls=int(getattr(s, "llm_calls", 0) or 0),
+                llm_attempts=int(getattr(s, "llm_attempts", 0) or 0),
+                llm_retries=int(getattr(s, "llm_retries", 0) or 0),
+                llm_failures=int(getattr(s, "llm_failures", 0) or 0),
                 counts=dict(getattr(s, "counts", {}) or {}),
             )
             for s in getattr(pipeline_result, "steps", []) or []

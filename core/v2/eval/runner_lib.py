@@ -402,9 +402,22 @@ def classify_run_status(
     failed_step = getattr(pipeline_result, "failed_step", None) if pipeline_result is not None else None
 
     def _res(status: BenchmarkRunStatus, rules: list[str], note: str) -> ClassificationResult:
+        # 每条规则的证据计数（裁决 A7）：runset 内即可自证"为什么判成这一态"，无需回日志文件。
+        ev_counts = {
+            "llm_degrade_log": len(llm_log_hits),
+            "llm_error_signature": len(llm_err_hits),
+            "count_items_zero": int(items_zero),
+            "count_test_cases_zero": int(cases_zero),
+            "review_result_missing": int(review_missing),
+        }
+        unattributed = [
+            r for r in rules if r.removeprefix("rule=") in ev_counts and not ev_counts[r.removeprefix("rule=")]
+        ]
         signals = {
             "llm_degrade_logs": [safe_error_summary(m) for m in llm_log_hits],
             "llm_error_hits": [safe_error_summary(m) for m in llm_err_hits],
+            "evidence_counts": ev_counts,
+            "rules_without_evidence": unattributed,
             "ignored_intermediate_signals": ignored,
             "counts": {"items": items, "test_cases": test_cases, "review_present": bool(c.get("review_present"))},
             "review_ran": review_ran,

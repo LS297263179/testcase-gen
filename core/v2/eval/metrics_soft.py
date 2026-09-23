@@ -21,6 +21,7 @@ payload 超 MAX_PAYLOAD_CHARS 按稳定顺序对半拆分；同输入必产生�
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -116,7 +117,15 @@ class AdditionalValidCandidate:
 
 @dataclass
 class BatchMeta:
-    """单批调用元数据（失败隔离证据 + 可重放对账）。"""
+    """单批调用元数据（失败隔离证据 + 可重放对账）。
+
+    failure_kind 与 evidence 用于区分"批次失败"与"条目待人工"，并留下最小可诊断证据：
+      - transport：chat() 抛异常（网络/认证/额度），无响应正文；
+      - protocol：拿到响应但结构非法（空正文 / 不可解析 / 缺 results）；
+      - partial：批次整体成功，但有条目被治理丢弃或未返回；
+      - 空串：完全正常。
+    evidence 只含长度 / SHA-256 摘要 / 形状 / 计数，**绝不含响应原文**（敏感信息禁令 §10.1）。
+    """
 
     index: int
     kind: str  # "tc_batch" | "pending_batch"
@@ -125,6 +134,36 @@ class BatchMeta:
     llm_calls: int = 0
     error: str | None = None
     refs: list[str] = field(default_factory=list)
+    failure_kind: str = ""
+    evidence: dict = field(default_factory=dict)
+
+
+def _response_shape(raw: str | None, data: object) -> str:
+    """响应形状分类：只依据"有没有正文 / 能否解析 / 有无 results"，不返回任何内容。"""
+    if raw is None:
+        return "no_response"
+    if not raw.strip():
+        return "empty_body"
+    if isinstance(data, dict):
+        if isinstance(data.get("results"), list):
+            return "json_with_results"
+        return "json_without_results"
+    if data is None:
+        return "json_unparsable"
+    return "json_not_object"
+
+
+def _batch_evidence(raw: str | None, data: object = None, dropped: int = 0, unreturned: int = 0) -> dict:
+    """批次最小可诊断证据（长度 + 摘要 + 形状 + 计数）。空正文不产摘要，避免把 sha256('') 当线索。"""
+    text = raw or ""
+    ev: dict = {"shape": _response_shape(raw, data), "raw_len": len(text)}
+    if text:
+        ev["raw_sha256_12"] = hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
+    if dropped:
+        ev["dropped_items"] = dropped
+    if unreturned:
+        ev["unreturned_cases"] = unreturned
+    return ev
 
 
 @dataclass
@@ -443,6 +482,8 @@ def evaluate_soft_metrics(
     for idx, chunk in enumerate(_make_batches(entries, gold)):
         meta = BatchMeta(index=idx, kind="tc_batch", n_cases=len(chunk), refs=sorted(e["display_id"] for e in chunk))
         by_disp = {e["display_id"]: e for e in chunk}
+        raw: str | None = None
+        data: object = None
         try:
             raw = client.chat(SEMANTIC_EVAL_PROMPT, _batch_payload(chunk, gold))
             meta.llm_calls = 1
@@ -453,7 +494,11 @@ def evaluate_soft_metrics(
         except Exception as e:  # noqa: BLE001 - 批级失败隔离
             meta.ok = False
             meta.error = f"{type(e).__name__}: {e}"
-            report.failures.append(f"batch[{idx}] 失败，该批 {len(chunk)} 条全部降级 PENDING_REVIEW: {meta.error}")
+            meta.failure_kind = "transport" if raw is None else "protocol"
+            meta.evidence = _batch_evidence(raw, data, unreturned=len(chunk))
+            report.failures.append(
+                f"batch[{idx}] 失败（{meta.failure_kind}），该批 {len(chunk)} 条全部降级 PENDING_REVIEW: {meta.error}"
+            )
             for ee in chunk:
                 report.judgments.append(
                     TcJudgment(
@@ -471,6 +516,7 @@ def evaluate_soft_metrics(
             continue
 
         returned: set[str] = set()
+        fail_before = len(report.failures)
         for raw_j in data["results"]:
             if not isinstance(raw_j, dict):
                 report.failures.append(f"batch[{idx}] 丢弃非 dict result 条目")
@@ -556,6 +602,10 @@ def evaluate_soft_metrics(
                     )
                 )
         _merge_additions(report, data.get("additional_valid_candidates"), wl, f"batch[{idx}]", pool_refs)
+        dropped = len(report.failures) - fail_before
+        unreturned = len(chunk) - len(returned)
+        meta.evidence = _batch_evidence(raw, data, dropped=dropped, unreturned=unreturned)
+        meta.failure_kind = "partial" if (dropped or unreturned) else ""
         report.batches.append(meta)
 
     # ---- 裁决批（S3 登记的 Gold 外产物，仅产预审建议）----
@@ -565,6 +615,8 @@ def evaluate_soft_metrics(
     ):
         idx = base + gi
         meta = BatchMeta(index=idx, kind="pending_batch", n_cases=len(group), refs=sorted(p.ref_id for p in group))
+        raw = None
+        data = None
         try:
             raw = client.chat(SEMANTIC_EVAL_PROMPT, _pending_payload(gold, group, arts))
             meta.llm_calls = 1
@@ -575,12 +627,15 @@ def evaluate_soft_metrics(
         except Exception as e:  # noqa: BLE001
             meta.ok = False
             meta.error = f"{type(e).__name__}: {e}"
-            report.failures.append(f"pending_batch[{idx}] 失败（不影响 TC 判定）: {meta.error}")
+            meta.failure_kind = "transport" if raw is None else "protocol"
+            meta.evidence = _batch_evidence(raw, data, unreturned=len(group))
+            report.failures.append(f"pending_batch[{idx}] 失败（{meta.failure_kind}，不影响 TC 判定）: {meta.error}")
             report.batches.append(meta)
             continue
         if data.get("results"):
             report.failures.append(f"pending_batch[{idx}] 忽略越界 results 字段（裁决批不产 verdict）")
         _merge_additions(report, data.get("additional_valid_candidates"), wl, f"pending_batch[{idx}]", pool_refs)
+        meta.evidence = _batch_evidence(raw, data, dropped=0)
         report.batches.append(meta)
 
     _finalize(report, hard_report)
@@ -763,6 +818,8 @@ def to_payload(report: SoftMetricsReport) -> dict:
                 "llm_calls": b.llm_calls,
                 "error": b.error,
                 "refs": b.refs,
+                "failure_kind": b.failure_kind,
+                "evidence": dict(b.evidence),
             }
             for b in report.batches
         ],

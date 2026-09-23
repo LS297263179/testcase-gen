@@ -640,3 +640,104 @@ class TestFormalWiring:
         payload = to_payload(rep)
         assert payload["gold_based"]["verdict_counts"]["correct"] == len(gold.gold_requirements)
         assert json.dumps(payload, ensure_ascii=False)
+
+
+class TestBatchFailureEvidence:
+    """A3：批次失败必须可归因（分型 + 最小安全证据），并与"条目待人工"可区分、不污染其他批次。"""
+
+    @staticmethod
+    def _tc(rep):
+        return [b for b in rep.batches if b.kind == "tc_batch"]
+
+    def test_transport_failure_is_typed_evidenced_and_isolated(self):
+        g = _gold()
+        obs, hard = _setup(g, 41)
+
+        def responder(n, system, user):
+            if n == 2:
+                return RuntimeError("网关 500")
+            return _resp(_correct)(n, system, user)
+
+        rep = evaluate_soft_metrics(obs, hard, StubClient(responder))
+        tc = self._tc(rep)
+        assert [b.ok for b in tc] == [True, False, True]  # 不污染其他批
+        bad, good = tc[1], tc[0]
+        assert bad.failure_kind == "transport"
+        assert bad.evidence["shape"] == "no_response" and bad.evidence["raw_len"] == 0
+        assert bad.evidence["unreturned_cases"] == 20
+        assert "raw_sha256_12" not in bad.evidence  # 无正文就不产摘要，避免 sha256("") 冒充线索
+        assert good.ok and good.failure_kind == "" and good.evidence["shape"] == "json_with_results"
+        # 批次失败与"待人工"仍可区分：整批降级用 batch_failure，且失败批 ok=False
+        assert {j.pending_reason for j in rep.judgments if j.batch_index == 1} == {"batch_failure"}
+
+    def test_illegal_json_is_protocol_failure_with_digest(self):
+        g = _gold()
+        obs, hard = _setup(g, 1)
+        rep = evaluate_soft_metrics(obs, hard, StubClient(lambda n, s, u: "这不是JSON{{{"))
+        b = self._tc(rep)[0]
+        assert b.ok is False and b.failure_kind == "protocol"
+        assert b.evidence["shape"] == "json_unparsable" and b.evidence["raw_len"] > 0
+        digest = b.evidence["raw_sha256_12"]
+        assert len(digest) == 12 and all(c in "0123456789abcdef" for c in digest)
+
+    def test_json_without_results_array_is_separable_from_unparsable(self):
+        """结构合法但缺 results（bc_02/bc_04 的真实形态）必须与"完全不是 JSON"区分开"""
+        g = _gold()
+        obs, hard = _setup(g, 1)
+        rep = evaluate_soft_metrics(obs, hard, StubClient(lambda n, s, u: '{"foo": 1}'))
+        b = self._tc(rep)[0]
+        assert b.failure_kind == "protocol" and b.evidence["shape"] == "json_without_results"
+
+    def test_empty_body_gets_its_own_shape(self):
+        """推理模型常见故障：HTTP 成功但正文为空 —— 不得与"根本没连上"混为一谈"""
+        g = _gold()
+        obs, hard = _setup(g, 1)
+        rep = evaluate_soft_metrics(obs, hard, StubClient(lambda n, s, u: ""))
+        b = self._tc(rep)[0]
+        assert b.failure_kind == "protocol"  # 拿到了响应，属协议层
+        assert b.evidence["shape"] == "empty_body" and b.evidence["raw_len"] == 0
+        assert "raw_sha256_12" not in b.evidence
+
+    def test_partial_batch_is_neither_clean_nor_failed(self):
+        """整批 ok 但有条目被治理丢弃 → partial；且不得被误报成 batch_failure"""
+        g = _gold()
+        obs, hard = _setup(g, 2)
+
+        def responder(n, system, user):
+            payload = json.loads(user)
+            results = [_correct(t) for t in payload["testcases"]]
+            results[0]["verdict"] = "非常好"  # 越界 verdict → 该条被丢弃 → 落 missing_result
+            return json.dumps({"results": results})
+
+        rep = evaluate_soft_metrics(obs, hard, StubClient(responder))
+        b = self._tc(rep)[0]
+        assert b.ok is True and b.failure_kind == "partial"
+        assert b.evidence["unreturned_cases"] == 1 and b.evidence["dropped_items"] >= 1
+        reasons = {j.pending_reason for j in rep.judgments}
+        assert "missing_result" in reasons and "batch_failure" not in reasons
+
+    def test_evidence_survives_serialization_without_raw_response(self):
+        g = _gold()
+        obs, hard = _setup(g, 1)
+        body = "这不是JSON 内含疑似响应正文 abcdefghijk"
+        rep = evaluate_soft_metrics(obs, hard, StubClient(lambda n, s, u: body))
+        p = to_payload(rep)
+        assert p["batches"][0]["failure_kind"] == "protocol"
+        assert p["batches"][0]["evidence"]["raw_sha256_12"]
+        blob = json.dumps(p, ensure_ascii=False)
+        assert body not in blob and "这不是JSON" not in blob  # 响应原文绝不落盘
+        back = from_payload(p)
+        assert back.batches[0].failure_kind == "protocol"
+        assert back.batches[0].evidence["shape"] == "json_unparsable"
+
+    def test_old_soft_payload_without_evidence_fields_still_loads(self):
+        """A3 新增字段不得破坏历史 runset 的可读性"""
+        g = _gold()
+        obs, hard = _setup(g, 1)
+        p = to_payload(evaluate_soft_metrics(obs, hard, StubClient(_resp(_correct))))
+        for b in p["batches"]:
+            b.pop("failure_kind")
+            b.pop("evidence")
+        back = from_payload(p)
+        assert all(b.failure_kind == "" and b.evidence == {} for b in back.batches)
+        assert back.semantic_accuracy.value == 1.0

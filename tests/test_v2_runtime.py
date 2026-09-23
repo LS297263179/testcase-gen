@@ -400,3 +400,87 @@ def test_15_generate_test_points_standalone_creates_run(rt_env):
     assert _count_runs() == 1  # 自建了 Run
     assert res.run_id
     assert repo.get_run(res.run_id).status == RunStatus.DONE  # 原状态流转未被 skip
+
+
+# ============================================================
+# 阶段级 LLM 用量对账（A1）与 IR 解析问题记录（A8）
+# ============================================================
+
+
+class _StatsClient:
+    """带 llm_stats() 的假客户端：只为验证 Runtime 插桩，不产生任何真实调用。"""
+
+    def __init__(self):
+        self.calls = 0
+        self.attempts = 0
+
+    def chat(self, system_prompt, user_prompt, images=None, max_tokens=None):
+        self.calls += 1
+        self.attempts += 1
+        return "{}"
+
+    def llm_stats(self):
+        return {"calls": self.calls, "attempts": self.attempts, "successes": self.calls, "failures": 0}
+
+
+def test_16_step_level_llm_usage_is_attributed(rt_env, monkeypatch):
+    """A1：ir / review 此前恒记 0，现按客户端快照增量归到各自阶段"""
+    import core.v2.runtime as rt
+
+    rec = _Recorder()
+    _install_fakes(monkeypatch, rec)
+    orig_ir, orig_review = rt.ingest_and_build_ir, rt.review_test_cases
+
+    def ir_that_calls_twice(client, **kw):
+        client.chat("s", "u")
+        client.chat("s", "u")
+        return orig_ir(client, **kw)
+
+    def review_that_calls_once(client, **kw):
+        client.chat("s", "u")
+        return orig_review(client, **kw)
+
+    monkeypatch.setattr(rt, "ingest_and_build_ir", ir_that_calls_twice)
+    monkeypatch.setattr(rt, "review_test_cases", review_that_calls_once)
+
+    c = _StatsClient()
+    res = run_v2_pipeline(user_id=rt_env.user_id, title="T", text="x", client=c)
+    by = {s.step: s for s in res.steps}
+    assert (by["ir"].llm_calls, by["ir"].llm_attempts, by["ir"].llm_failures) == (2, 2, 0)
+    assert (by["review"].llm_calls, by["review"].llm_attempts) == (1, 1)
+    assert by["strategy"].llm_calls == 0  # 该阶段确实不调 LLM：0 是真值而非漏计
+    assert res.total_llm_calls >= 3  # ir/review 的调用已进入总量
+
+
+def test_17_uninstrumented_client_degrades_to_zero(rt_env, monkeypatch):
+    """A1 边界：客户端无 llm_stats()（历史 FakeClient）时按 0 处理，不得抛错或伪造用量"""
+    rec = _Recorder()
+    _install_fakes(monkeypatch, rec)
+    res = run_v2_pipeline(user_id=rt_env.user_id, title="T", text="x", client=object())
+    assert all(s.llm_attempts == 0 and s.llm_retries == 0 for s in res.steps)
+
+
+def test_18_ir_records_parse_issue_kinds(rt_env, monkeypatch):
+    """A8：严格校验的丢弃项必须记为粗粒度类别（不落响应原文），使 IR 静默降级可归因"""
+    import core.v2.runtime as rt
+
+    rec = _Recorder()
+    _install_fakes(monkeypatch, rec)
+    orig_ir = rt.ingest_and_build_ir
+
+    def ir_with_issues(client, **kw):
+        out = orig_ir(client, **kw)
+        out.parse = SimpleNamespace(
+            issues=[
+                "item 丢弃: Schema 校验失败 ('fields', 0, 'default') Input should be a valid string",
+                "未产出任何有效需求项",
+            ],
+            segments=1,
+        )
+        return out
+
+    monkeypatch.setattr(rt, "ingest_and_build_ir", ir_with_issues)
+    res = run_v2_pipeline(user_id=rt_env.user_id, title="T", text="x", client=object())
+    ir_step = next(s for s in res.steps if s.step == "ir")
+    assert ir_step.counts["parse_issues"] == 2
+    assert ir_step.counts["parse_issue_kinds"] == ["item_rejected_by_schema", "no_valid_items"]

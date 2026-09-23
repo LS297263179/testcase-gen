@@ -28,6 +28,7 @@ from core.v2.client_factory import build_llm_client
 from core.v2.ir import ingest_and_build_ir
 from core.v2.optimizer import OptimizerResult
 from core.v2.optimizer_orchestrator import optimize_duplicates
+from core.v2.parser import classify_parse_issue
 from core.v2.review_orchestrator import review_test_cases
 from core.v2.strategy.orchestrator import apply_strategy_engine
 from core.v2.tc_orchestrator import synthesize_test_cases
@@ -52,6 +53,11 @@ class PipelineStepResult:
     finished_at: datetime
     duration_ms: int
     llm_calls: int = 0
+    # LLM 用量对账字段（纯观测，来自 LLMClient.llm_stats() 的阶段增量）：
+    # llm_attempts=底层请求次数（含重试），llm_retries=attempts-calls，llm_failures=以异常结束的调用数。
+    llm_attempts: int = 0
+    llm_retries: int = 0
+    llm_failures: int = 0
     error: str | None = None
     artifact_ids: dict = field(default_factory=dict)
     counts: dict = field(default_factory=dict)  # P1：每步产物计数（前端免重算）
@@ -104,6 +110,25 @@ def run_v2_pipeline(
     explicit_client = client is not None
     gen_client = client or build_llm_client("generate")
     review_client = gen_client if explicit_client else build_llm_client("review")
+
+    def _usage(client_obj) -> dict:
+        """LLMClient 用量快照；非插桩客户端（测试 FakeClient）一律按 0 处理，不影响业务判定。"""
+        stats = getattr(client_obj, "llm_stats", None)
+        if not callable(stats):
+            return {"calls": 0, "attempts": 0, "successes": 0, "failures": 0}
+        return dict(stats())
+
+    def _usage_fields(client_obj, before: dict, reported: int | None = None) -> dict:
+        """阶段级 LLM 用量增量。reported 非空时保留该阶段原有的自报口径，只额外补对账字段。"""
+        after = _usage(client_obj)
+        calls = after["calls"] - before["calls"]
+        attempts = after["attempts"] - before["attempts"]
+        return {
+            "llm_calls": calls if reported is None else reported,
+            "llm_attempts": attempts,
+            "llm_retries": max(0, attempts - calls),
+            "llm_failures": after["failures"] - before["failures"],
+        }
 
     run: Run | None = None
     doc_id: str | None = None
@@ -166,12 +191,18 @@ def run_v2_pipeline(
 
     # ================= Step 2：IR（Run 尚未出生）=================
     started, t0 = datetime.now(UTC), time.perf_counter()
+    ir_before = _usage(gen_client)
     try:
         ir = ingest_and_build_ir(
             gen_client, user_id=user_id, title=title, text=text, paths=paths, source_type=source_type
         )
     except Exception as exc:
         return _fail("ir", started, t0, exc)
+    ir_usage = _usage_fields(gen_client, ir_before)
+    total_llm_calls += ir_usage["llm_calls"]
+    ir_parse = getattr(ir, "parse", None)
+    ir_issues = list(getattr(ir_parse, "issues", []) or []) if ir_parse is not None else []
+    issue_kinds = sorted({classify_parse_issue(x) for x in ir_issues})
     doc_id, version_id = ir.doc.id, ir.version.id
     if not ir.items:
         steps.append(
@@ -183,7 +214,8 @@ def run_v2_pipeline(
                 _ms(t0),
                 error="IR 未产出 items",
                 artifact_ids={"doc_id": doc_id, "version_id": version_id},
-                counts={"items": 0},
+                counts={"items": 0, "parse_issues": len(ir_issues), "parse_issue_kinds": issue_kinds},
+                **ir_usage,
             )
         )
         return _result(False, failed_step="ir", error_message="IR 未产出 items，无法生成测试点")
@@ -195,7 +227,8 @@ def run_v2_pipeline(
             datetime.now(UTC),
             _ms(t0),
             artifact_ids={"doc_id": doc_id, "version_id": version_id},
-            counts={"items": len(ir.items)},
+            counts={"items": len(ir.items), "parse_issues": len(ir_issues), "parse_issue_kinds": issue_kinds},
+            **ir_usage,
         )
     )
     if stop_after == "ir":
@@ -216,6 +249,7 @@ def run_v2_pipeline(
     # ================= Step 3：TestPoints（GENERATING）=================
     _set_status(RunStatus.GENERATING)
     started, t0 = datetime.now(UTC), time.perf_counter()
+    tp_before = _usage(gen_client)
     try:
         tp_res = generate_test_points(
             gen_client, version_id=version_id, user_id=user_id, run_id=run.id, skip_run_status_update=True
@@ -223,6 +257,7 @@ def run_v2_pipeline(
     except Exception as exc:
         return _fail("testpoints", started, t0, exc)
     tp_calls = tp_res.phase_a.calls + tp_res.phase_b.calls
+    tp_usage = _usage_fields(gen_client, tp_before, reported=tp_calls)
     total_llm_calls += tp_calls
     steps.append(
         PipelineStepResult(
@@ -231,9 +266,9 @@ def run_v2_pipeline(
             started,
             datetime.now(UTC),
             _ms(t0),
-            llm_calls=tp_calls,
             artifact_ids={"run_id": run.id},
             counts={"llm": len(tp_res.points)},
+            **tp_usage,
         )
     )
     if stop_after == "testpoints":
@@ -242,6 +277,7 @@ def run_v2_pipeline(
     # ================= Step 4：Strategy（STRATEGIZING）=================
     _set_status(RunStatus.STRATEGIZING)
     started, t0 = datetime.now(UTC), time.perf_counter()
+    st_before = _usage(gen_client)
     try:
         st_res = apply_strategy_engine(run.id, version_id, skip_run_status_update=True)
     except Exception as exc:
@@ -255,6 +291,7 @@ def run_v2_pipeline(
             _ms(t0),
             artifact_ids={"run_id": run.id},
             counts={"strategy": len(st_res.points), "obligations": len(st_res.obligations)},
+            **_usage_fields(gen_client, st_before),
         )
     )
     if stop_after == "strategy":
@@ -263,6 +300,7 @@ def run_v2_pipeline(
     # ================= Step 5：TestCases（GENERATING）=================
     _set_status(RunStatus.GENERATING)
     started, t0 = datetime.now(UTC), time.perf_counter()
+    tc_before = _usage(gen_client)
     try:
         tc_res = synthesize_test_cases(gen_client, run_id=run.id, version_id=version_id, skip_run_status_update=True)
     except Exception as exc:
@@ -275,9 +313,9 @@ def run_v2_pipeline(
             started,
             datetime.now(UTC),
             _ms(t0),
-            llm_calls=tc_res.llm_calls,
             artifact_ids={"run_id": run.id},
             counts={"cases": len(tc_res.cases), "validated": tc_res.validated_count, "failed": tc_res.failed_count},
+            **_usage_fields(gen_client, tc_before, reported=tc_res.llm_calls),
         )
     )
     if stop_after == "testcases":
@@ -286,10 +324,13 @@ def run_v2_pipeline(
     # ================= Step 7：Review（REVIEWING）=================
     _set_status(RunStatus.REVIEWING)
     started, t0 = datetime.now(UTC), time.perf_counter()
+    rv_before = _usage(review_client)
     try:
         rv_res = review_test_cases(review_client, run_id=run.id, skip_run_status_update=True)
     except Exception as exc:
         return _fail("review", started, t0, exc)
+    rv_usage = _usage_fields(review_client, rv_before)
+    total_llm_calls += rv_usage["llm_calls"]
     steps.append(
         PipelineStepResult(
             "review",
@@ -299,6 +340,7 @@ def run_v2_pipeline(
             _ms(t0),
             artifact_ids={"run_id": run.id},
             counts={"reviewed": rv_res.reviewed_count},
+            **rv_usage,
         )
     )
     if stop_after == "review":
@@ -307,10 +349,13 @@ def run_v2_pipeline(
     # ================= Step 8：Optimizer（OPTIMIZING）=================
     _set_status(RunStatus.OPTIMIZING)
     started, t0 = datetime.now(UTC), time.perf_counter()
+    op_before = _usage(gen_client)
     try:
         op_res = optimize_duplicates(gen_client, run_id=run.id, skip_run_status_update=True)
     except Exception as exc:
         return _fail("optimizer", started, t0, exc)
+    op_usage = _usage_fields(gen_client, op_before)
+    total_llm_calls += op_usage["llm_calls"]
     optimizer_result = op_res.optimizer_result
     steps.append(
         PipelineStepResult(
@@ -321,6 +366,7 @@ def run_v2_pipeline(
             _ms(t0),
             artifact_ids={"run_id": run.id},
             counts={"archived": optimizer_result.archived_cases if optimizer_result else 0},
+            **op_usage,
         )
     )
 
