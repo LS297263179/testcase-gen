@@ -21,8 +21,24 @@
   python scripts/v2_benchmark.py                                # 正式 runset（fresh benchmark DB）
   python scripts/v2_benchmark.py --case bc_01_login --repeat 2  # 排障子集
   python scripts/v2_benchmark.py --reuse-db                     # 调试用：保留历史 benchmark DB
+  python scripts/v2_benchmark.py --keep-db                      # A2：不清库，但要求库文件已存在
+  python scripts/v2_benchmark.py --resume <runset_id>           # A2 断点续跑（隐含 --keep-db）
 
-退出码：0=全 COMPLETED / 1=存在非 COMPLETED / 2=参数错误 / 3=DB 与生产库保护 / 4=数据集校验失败 / 5=落盘或敏感自检失败
+★ A2 断点续跑语义（MVP-A，零契约变更）：
+  - 复用既有 runset 目录与 id，不再生成新时间戳 runset；
+  - 单元状态以**磁盘 case 文件为唯一事实源**：reusable（跳过，零 LLM）/ rerun（旧文件转存
+    `.stale-*` 后重跑）/ missing（正常跑）；
+  - 复用门禁六条件（任一不满足即降级 rerun，绝不"用本轮配置冒充历史单元"）：
+    ① 文件存在且可解析 ② case s6_schema 匹配 ③ status==completed ④ case_fingerprint 与当前
+    case/gold/requirement 字节摘要一致 ⑤ 该单元 run_id 在目标 DB 仍可解析出 GenerationConfig
+    且关键配置一致 ⑥ 本轮 pass header 与既有 pass header 的 git_commit / 数据集 / prompt / runner 版本逐项相等；
+  - 收尾聚合一律**从磁盘读回全部单元**重建，且要求所有单元的 GenerationConfig 完全一致，
+    否则 fail-closed 不出 runset（取代旧的"取本轮第一个单元"）；
+  - `_COMPLETE.json` 只在 `planned == written == 磁盘可解析单元数` 且索引引用文件全部存在时写。
+
+退出码：0=全 COMPLETED / 1=存在非 COMPLETED / 2=参数错误（含 resume 目标不存在、已完整、
+与 --case/--repeat/--fresh-db/--reuse-db 冲突、跨 commit 或来源漂移被拒）/
+3=DB 与生产库保护（含 resume 时库文件不存在）/ 4=数据集校验失败 / 5=落盘或敏感自检失败
 """
 
 from __future__ import annotations
@@ -81,6 +97,10 @@ EXIT_WRITE_FAILURE = 5
 COMPLETE_MARKER = "_COMPLETE.json"
 
 
+class BenchmarkDbUnavailable(RuntimeError):
+    """A2：`--keep-db` / `--resume` 要求既有 benchmark DB，但库文件不存在（退出码同 3）。"""
+
+
 # ============================================================
 # 数据结构
 # ============================================================
@@ -130,19 +150,38 @@ def build_arg_parser() -> argparse.ArgumentParser:
     db_life = p.add_mutually_exclusive_group()
     db_life.add_argument("--fresh-db", dest="db_mode", action="store_const", const="fresh", help="干净初始化（默认）")
     db_life.add_argument("--reuse-db", dest="db_mode", action="store_const", const="reuse", help="调试：沿用现有库")
-    db_life.set_defaults(db_mode="fresh")
+    db_life.add_argument(
+        "--keep-db", dest="db_mode", action="store_const", const="keep", help="A2：不清库且要求库已存在"
+    )
+    db_life.set_defaults(db_mode=None)
     p.add_argument("--case", action="append", default=None, help="只跑指定 case（可重复给出；必须是 manifest 成员）")
     p.add_argument("--repeat", type=int, default=None, help="覆盖 manifest.repeat（仅运行参数，不改数据集）")
+    p.add_argument("--resume", default=None, metavar="RUNSET_ID", help="A2 断点续跑：复用既有 runset 目录，只补缺口")
     p.add_argument("--dry-run", action="store_true", help="只出执行计划：不建 DB / 不调 Runtime / 不调 LLM / 不写盘")
     p.add_argument("--username", default=DEFAULT_USERNAME, help="benchmark DB 内的 V2 user（查不到则自动创建）")
     p.add_argument("--verbose", action="store_true", help="DEBUG 日志")
     return p
 
 
+def resolve_db_mode(args: argparse.Namespace) -> str:
+    """DB 生命周期模式：显式指定优先；未指定时 resume → keep，否则 → fresh。"""
+    if args.db_mode:
+        return args.db_mode
+    return "keep" if args.resume else "fresh"
+
+
 def validate_args(args: argparse.Namespace) -> str | None:
     """argparse 之后的组合校验；返回错误串（None=通过）。"""
     if args.repeat is not None and args.repeat < 1:
         return f"--repeat 必须 ≥1（当前 {args.repeat}）"
+    if args.resume:
+        if args.case:
+            return "--resume 不接受 --case（续跑计划由既有 runset 与 manifest 决定，改子集会破坏完整性）"
+        if args.repeat is not None:
+            return "--resume 不接受 --repeat（同上）"
+        if args.db_mode in ("fresh", "reuse"):
+            return f"--resume 必须使用 --keep-db 语义，不能与 --{args.db_mode}-db 同用"
+    args.db_mode = resolve_db_mode(args)
     return None
 
 
@@ -202,12 +241,85 @@ def precheck_requirement(case: BenchmarkCase, dataset_root: Path) -> tuple[str, 
 
 
 def prepare_benchmark_db(db_path: Path, mode: str) -> None:
-    """fresh：删除 benchmark 库文件及其 WAL 伴随文件（仅限 benchmark 目录，生产库已被护栏挡住）；reuse：只保证父目录。"""
+    """fresh：删除 benchmark 库文件及其 WAL 伴随文件（仅限 benchmark 目录，生产库已被护栏挡住）；
+    reuse：只保证父目录；keep（A2）：不清库，但要求库文件已存在（resume 的 GenerationConfig 归因依赖它）。
+    """
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if mode == "fresh":
         for candidate in (db_path, *[Path(str(db_path) + sfx) for sfx in ("-wal", "-shm", "-journal")]):
             candidate.unlink(missing_ok=True)
         logger.info("benchmark DB 已按 fresh 模式清理: %s", db_path)
+    elif mode == "keep":
+        if not db_path.exists():
+            raise BenchmarkDbUnavailable(f"--resume/--keep-db 要求既有 benchmark DB 存在: {db_path}")
+        logger.info("benchmark DB 按 keep 模式沿用（不清库）: %s", db_path)
+
+
+def _pass_header(
+    *, runset_id: str, pass_no: int, manifest, suite, digests: dict[str, str], git: dict, db_target: Path
+) -> dict:
+    """写进 INCOMPLETE 的"本轮来源声明"——resume 的唯一核对依据。"""
+    return {
+        "runset_id": runset_id,
+        "pass_no": pass_no,
+        "pass_started_at": rl.utc_now_iso(),
+        "git": git,
+        "manifest_id": manifest.manifest_id,
+        "benchmark_version": manifest.benchmark_version,
+        "case_set_digest": rl.case_set_digest(manifest, digests, suite.cases, suite.golds),
+        "gold_versions": {cid: suite.golds[cid].gold_version for cid in manifest.cases if cid in suite.golds},
+        "case_versions": {cid: suite.cases[cid].benchmark_version for cid in manifest.cases if cid in suite.cases},
+        "runner_version": rl.RUNNER_VERSION,
+        "s6_schema": rl.S6_SCHEMA_VERSION,
+        "business_prompt_versions": dict(rl.BUSINESS_PROMPT_VERSIONS),
+        "s5_prompt_version": rl.S5_PROMPT_VERSION,
+        "resolved_benchmark_db": str(db_target),
+    }
+
+
+def _classify_units(plan: tuple[RunPlan, ...], runset_dir: Path, ctx: CaseContext):
+    """以磁盘 case 文件为事实源做复用门禁。
+
+    返回 (待跑单元, reused, rerun, missing, reused_cfgs)；`reused` 单元**绝不进 run_case**。
+    跨单元的配置一致性不在这里"猜本轮会用什么配置"，而是：① 要求复用单元的 GenerationConfig
+    在目标 DB 中可解析且彼此一致；② 收尾时再对**全部**单元做一致性检查，不一致即 fail-closed。
+    """
+    to_run: list[RunPlan] = []
+    reused: list[str] = []
+    rerun: list[str] = []
+    missing: list[str] = []
+    reused_cfgs: dict[str, Any] = {}
+    for unit in plan:
+        key = rl.unit_key(unit.case.case_id, unit.repeat_index)
+        rel = rl.unit_rel_path(unit.case.case_id, unit.repeat_index)
+        payload, _why = rl.read_unit_payload(runset_dir, rel)
+        ok, reason = rl.check_unit_reusability(
+            payload, case=unit.case, gold=unit.gold, digest_map=ctx.digests, repeat_index=unit.repeat_index
+        )
+        cfg = None
+        if ok:
+            cfg = rl.load_generation_config(payload.get("run_id"))
+            if not rl.config_signature(cfg):
+                ok, reason = False, "config_unresolvable_in_db"
+        if ok:
+            common = rl.pick_uniform_generation_config({**reused_cfgs, key: cfg})
+            if common[0] is None:
+                ok, reason = False, "config_drift_among_reused"
+        if ok:
+            reused.append(key)
+            reused_cfgs[key] = cfg
+            logger.info("resume: 单元 %s 复用（零 LLM 调用）", key)
+            continue
+        if payload is None:
+            missing.append(key)
+            reason = reason or "missing_file"
+        else:
+            rerun.append(key)
+            stale = rl.stale_path(runset_dir, rel)
+            (runset_dir / rel).replace(stale)
+            logger.warning("resume: 单元 %s 不可复用(%s)，旧文件转存 %s 后重跑", key, reason, stale.name)
+        to_run.append(unit)
+    return to_run, reused, rerun, missing, reused_cfgs
 
 
 def resolve_benchmark_user(username: str) -> str:
@@ -525,6 +637,102 @@ def do_dry_run(args, suite, plan, repeat, dataset_root: Path, db_target: Path) -
     return EXIT_OK
 
 
+def _finalize_runset(
+    *,
+    runset_dir: Path,
+    runset_id: str,
+    plan: tuple[RunPlan, ...],
+    manifest,
+    suite,
+    digests: dict[str, str],
+    db_target: Path,
+    repeat: int,
+    resume_info: dict | None = None,
+    pass_no: int = 1,
+) -> int:
+    """收尾：从磁盘读回**全部**计划单元 → 配置一致性校验 → 重建 runset.json → 完整才写 `_COMPLETE.json`。
+
+    正常跑与 resume 共用这一条路径，因此"3+7 两次"与"10 一次"产出的索引结构等价。
+    任一单元文件缺失/不可解析、或单元间 GenerationConfig 不一致 ⇒ fail-closed：
+    不写 `_COMPLETE`、保留 `INCOMPLETE`，S8 侧天然拒绝该 runset。
+    """
+    entries: list[dict] = []
+    cfgs: dict[str, Any] = {}
+    for unit in plan:
+        rel = rl.unit_rel_path(unit.case.case_id, unit.repeat_index)
+        payload, why = rl.read_unit_payload(runset_dir, rel)
+        if payload is None:
+            logger.error("收尾失败：单元文件不可用 %s (%s) —— 不写 _COMPLETE", rel, why)
+            return EXIT_WRITE_FAILURE
+        entries.append(rl.build_case_index_entry(payload, rel))
+        cfgs[rl.unit_key(unit.case.case_id, unit.repeat_index)] = rl.load_generation_config(payload.get("run_id"))
+
+    cfg, problems = rl.pick_uniform_generation_config(cfgs)
+    if cfg is None:
+        for p in problems:
+            logger.error("收尾失败：环境指纹一致性检查不通过 —— %s", p)
+        logger.error("拒绝把单一指纹贴到来源不一的单元集合上（不写 _COMPLETE）")
+        return EXIT_WRITE_FAILURE
+
+    try:
+        fingerprint = rl.build_environment_fingerprint(
+            manifest=manifest,
+            cases=suite.cases,
+            golds=suite.golds,
+            digest_map=digests,
+            git=rl.probe_git(_PROJECT_ROOT),
+            generation_config=cfg,
+            resolved_benchmark_db=str(db_target),
+        )
+        index = build_runset_index(runset_id, fingerprint, entries, len(plan), repeat)
+        if resume_info:
+            index["resume"] = resume_info
+        rl.write_json_atomic(runset_dir / "manifest.resolved.json", {"manifest": manifest.model_dump(mode="json")})
+        rl.write_json_atomic(runset_dir / "runset.json", index)
+    except rl.SensitiveDataError as exc:
+        logger.error("runset 敏感自检失败: %s", exc)
+        return EXIT_WRITE_FAILURE
+    except OSError as exc:
+        logger.error("runset 落盘失败: %s", exc)
+        return EXIT_WRITE_FAILURE
+
+    if index["planned_units"] != index["written_units"]:
+        logger.error(
+            "收尾失败：planned=%s != written=%s —— 不写 _COMPLETE", index["planned_units"], index["written_units"]
+        )
+        return EXIT_WRITE_FAILURE
+
+    marker: dict[str, Any] = {
+        "runset_id": runset_id,
+        "units": index["written_units"],
+        "planned_units": index["planned_units"],
+        "written_units": index["written_units"],
+        "pass_no": pass_no,
+    }
+    if resume_info:
+        marker.update(
+            {
+                "resumed_from": resume_info["resumed_from"],
+                "reused_units": len(resume_info["reused_units"]),
+                "rerun_units": len(resume_info["rerun_units"]),
+                "missing_units": len(resume_info["missing_units"]),
+            }
+        )
+    (runset_dir / COMPLETE_MARKER).write_text(rl.json_dumps(marker), encoding="utf-8")
+    (runset_dir / rl.PASS_HEADER_FILE).unlink(missing_ok=True)  # 只有完整落盘后才摘掉未完成标记
+
+    non_completed = index["non_completed_cases"]
+    print(f"\nrunset: {runset_dir}")
+    print(f"units : {index['written_units']}（非 COMPLETED {non_completed}）evaluated={index['evaluated_cases']}")
+    print(f"状态分布: {index['status_counts']}")
+    if resume_info:
+        print(
+            f"resume: pass={pass_no} reused={len(resume_info['reused_units'])} "
+            f"rerun={len(resume_info['rerun_units'])} missing={len(resume_info['missing_units'])}"
+        )
+    return EXIT_NOT_ALL_COMPLETED if non_completed else EXIT_OK
+
+
 def run_benchmark(args: argparse.Namespace) -> int:
     """真实 runset 主流程（返回退出码）。"""
     dataset_root = Path(args.dataset_root).resolve()
@@ -561,86 +769,118 @@ def run_benchmark(args: argparse.Namespace) -> int:
     try:
         prepare_benchmark_db(db_target, args.db_mode)
         ensure_v2_ready()
-    except (V2BootstrapError, OSError) as exc:
+    except (V2BootstrapError, OSError, BenchmarkDbUnavailable) as exc:
         logger.error("benchmark DB bootstrap 失败: %s", exc)
         return EXIT_DB_GUARD
     if Path(get_v2_db_path()).resolve() != db_target:
         logger.error("DB 路径在 bootstrap 后发生漂移，拒绝继续: %s", get_v2_db_path())
         return EXIT_DB_GUARD
 
-    # 6. runset 目录（INCOMPLETE 标记 → 成功后写 _COMPLETE.json，避免留下"看起来完整"的半成品）
-    runset_id = new_runset_id(args.manifest)
-    runset_dir = resolve_output_dir(args.output_dir) / runset_id
-    runset_dir.mkdir(parents=True, exist_ok=True)
-    (runset_dir / "INCOMPLETE").write_text(runset_id, encoding="utf-8")
+    # 6. runset 目录 + pass header（INCOMPLETE = 本轮来源声明，resume 靠它核对 git/数据集/prompt 来源）
+    digests = rl.build_digest_map(dataset_root)
+    git = rl.probe_git(_PROJECT_ROOT)
+    out_root = resolve_output_dir(args.output_dir)
+    if args.resume:
+        runset_id = args.resume
+        runset_dir = out_root / runset_id
+        if not runset_dir.is_dir():
+            logger.error("--resume 指定的 runset 不存在: %s", runset_dir)
+            return EXIT_USAGE
+        if (runset_dir / COMPLETE_MARKER).is_file():
+            logger.error("--resume 指定的 runset 已完整收尾（%s 存在），无需续跑", COMPLETE_MARKER)
+            return EXIT_USAGE
+        prev, hstatus = rl.read_pass_header(runset_dir)
+        if hstatus != "ok":
+            logger.error(
+                "--resume 拒绝执行：既有 runset 的 pass header 状态=%s，无法核对 git_commit / 数据集 / prompt 来源"
+                "（宁可不续跑，也不给半成品贴指纹）",
+                hstatus,
+            )
+            return EXIT_USAGE
+        pass_no = int(prev.get("pass_no") or 1) + 1
+        header = _pass_header(
+            runset_id=runset_id,
+            pass_no=pass_no,
+            manifest=manifest,
+            suite=suite,
+            digests=digests,
+            git=git,
+            db_target=db_target,
+        )
+        problems = rl.diff_pass_header(prev, header)
+        if problems:
+            for p in problems:
+                logger.error("--resume 来源不一致: %s", p)
+            logger.error("跨 commit / 数据集漂移 / prompt 或 runner 版本变化一律拒绝续跑（MVP-A 纪律）")
+            return EXIT_USAGE
+    else:
+        pass_no = 1
+        runset_id = new_runset_id(args.manifest)
+        runset_dir = out_root / runset_id
+        runset_dir.mkdir(parents=True, exist_ok=True)
+        header = _pass_header(
+            runset_id=runset_id,
+            pass_no=pass_no,
+            manifest=manifest,
+            suite=suite,
+            digests=digests,
+            git=git,
+            db_target=db_target,
+        )
+    rl.write_pass_header(runset_dir, header)
 
     ctx = CaseContext(
         manifest=manifest,
         dataset_root=dataset_root,
         output_root=runset_dir,
-        digests=rl.build_digest_map(dataset_root),
+        digests=digests,
         username=args.username,
         user_id=resolve_benchmark_user(args.username),
     )
-    capture, handler = rl.attach_log_capture()
 
-    # 7. 逐单元执行（case / repeat 级隔离）
-    case_entries: list[dict] = []
-    fingerprint: dict[str, Any] = {}
+    # 7. 单元分类（磁盘 case 文件为唯一事实源）→ 只跑缺口；reused 单元绝不进 run_case（零 LLM）
+    to_run, reused, rerun, missing, _cfgs = _classify_units(plan, runset_dir, ctx)
+    if args.resume:
+        logger.info(
+            "resume: reused=%d rerun=%d missing=%d 本轮待跑=%d", len(reused), len(rerun), len(missing), len(to_run)
+        )
+
+    capture, handler = rl.attach_log_capture()
     try:
-        first_cfg: Any = None
-        for unit in plan:
+        for unit in to_run:
             payload = run_case(unit, ctx, capture)
-            rel_case = f"cases/{unit.case.case_id}__r{unit.repeat_index:02d}.json"
+            rel_case = rl.unit_rel_path(unit.case.case_id, unit.repeat_index)
             try:
                 rl.write_json_atomic(runset_dir / rel_case, payload)
             except rl.SensitiveDataError as exc:  # 单元级泄漏：立即中止（不落"看似完整"的索引）
                 logger.error("case 文件敏感自检失败: %s", exc)
                 return EXIT_WRITE_FAILURE
-            if first_cfg is None:
-                first_cfg = rl.load_generation_config(payload.get("run_id"))
-            case_entries.append(
-                {
-                    "case_id": unit.case.case_id,
-                    "repeat_index": unit.repeat_index,
-                    "status": payload["status"],
-                    "run_id": payload.get("run_id"),
-                    "quality_evaluated": payload["status"] == BenchmarkRunStatus.COMPLETED.value,
-                    "file": rel_case,
-                    "llm_calls": payload["llm_calls"]["total"],
-                }
-            )
             logger.info("case=%s r%d → %s", unit.case.case_id, unit.repeat_index, payload["status"])
-        fingerprint = rl.build_environment_fingerprint(
-            manifest=manifest,
-            cases=suite.cases,
-            golds=suite.golds,
-            digest_map=ctx.digests,
-            git=rl.probe_git(_PROJECT_ROOT),
-            generation_config=first_cfg,
-            resolved_benchmark_db=str(db_target),
-        )
-        index = build_runset_index(runset_id, fingerprint, case_entries, len(plan), repeat)
-        rl.write_json_atomic(runset_dir / "manifest.resolved.json", {"manifest": manifest.model_dump(mode="json")})
-        rl.write_json_atomic(runset_dir / "runset.json", index)
-    except rl.SensitiveDataError as exc:
-        logger.error("runset 敏感自检失败: %s", exc)
-        return EXIT_WRITE_FAILURE
-    except OSError as exc:
-        logger.error("runset 落盘失败: %s", exc)
-        return EXIT_WRITE_FAILURE
     finally:
         rl.detach_log_capture(handler)
 
-    (runset_dir / COMPLETE_MARKER).write_text(
-        rl.json_dumps({"runset_id": runset_id, "units": len(case_entries)}), encoding="utf-8"
+    # 8. 收尾：从磁盘重建全量聚合（正常跑与 resume 共用同一条路径）
+    resume_info = None
+    if args.resume:
+        resume_info = {
+            "resumed_from": runset_id,
+            "pass_no": pass_no,
+            "reused_units": reused,
+            "rerun_units": rerun,
+            "missing_units": missing,
+        }
+    return _finalize_runset(
+        runset_dir=runset_dir,
+        runset_id=runset_id,
+        plan=plan,
+        manifest=manifest,
+        suite=suite,
+        digests=digests,
+        db_target=db_target,
+        repeat=repeat,
+        resume_info=resume_info,
+        pass_no=pass_no,
     )
-    (runset_dir / "INCOMPLETE").unlink(missing_ok=True)  # 只有完整落盘后才摘掉未完成标记
-    non_completed = sum(1 for e in case_entries if e["status"] != BenchmarkRunStatus.COMPLETED.value)
-    print(f"\nrunset: {runset_dir}")
-    print(f"units : {len(case_entries)}（非 COMPLETED {non_completed}）evaluated={index['evaluated_cases']}")
-    print(f"状态分布: {index['status_counts']}")
-    return EXIT_NOT_ALL_COMPLETED if non_completed else EXIT_OK
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -1248,12 +1248,15 @@ class TestCliArguments:
         assert code == vb.EXIT_USAGE
 
     def test_fresh_and_reuse_mutually_exclusive(self):
-        """#34 --fresh-db 与 --reuse-db 互斥（argparse 直接拒绝）"""
+        """#34 --fresh-db 与 --reuse-db 互斥（argparse 直接拒绝）；默认仍是 fresh（A2 后由 resolve_db_mode 解析）"""
         import scripts.v2_benchmark as vb
 
         with pytest.raises(SystemExit):
             vb.build_arg_parser().parse_args(["--fresh-db", "--reuse-db"])
-        assert vb.build_arg_parser().parse_args([]).db_mode == "fresh"
+        plain = vb.build_arg_parser().parse_args([])
+        assert plain.db_mode is None  # 未显式指定
+        assert vb.resolve_db_mode(plain) == "fresh"  # 默认语义不变
+        assert vb.resolve_db_mode(vb.build_arg_parser().parse_args(["--resume", "x"])) == "keep"
 
     def test_forbidden_flags_absent(self):
         """任务书 §二十一 明禁参数不得出现在 CLI"""
@@ -1299,3 +1302,437 @@ class TestBoundaryDiscipline:
                 assert banned not in src, f"{rel} 出现 {banned}"
         mods = self._imported_modules("core/v2/eval/runner_lib.py")
         assert "core.v2.ddl" not in mods
+
+
+# ============================================================
+# G. A2 断点续跑（MVP-A）—— 全部离线，零真实 LLM
+# ============================================================
+
+
+class _Aborted(RuntimeError):
+    """模拟进程被 kill：异常从主循环穿透出去，runset 只剩 INCOMPLETE + 散落 case 文件。"""
+
+
+import scripts.v2_benchmark as _vb_pristine  # noqa: E402
+
+# 必须在任何 monkeypatch 之前抓住原始实现：否则第二次装配会把第一次的
+# "计数/中断"包装当成 base，导致 abort_after 语义在后续 pass 里复活。
+_PRISTINE_RUN_CASE = _vb_pristine.run_case
+_PRISTINE_FINALIZE = _vb_pristine._finalize_runset
+
+
+def _offline_env(tmp_path, monkeypatch, suite, *, abort_after=None, boom_at_finalize=False, git_commit="c" * 7):
+    """装配离线 CLI：真数据集 + 假 Runtime/LLM + 可控"中断"。
+
+    abort_after=N ⇒ 第 N+1 个单元在进入 run_case 前抛 _Aborted（等价于进程被 kill）。
+    boom_at_finalize=True ⇒ 单元全部落盘后、收尾前抛异常（用于"全部 reusable"零调用验证）。
+    """
+    import scripts.v2_benchmark as vb
+
+    _patch_offline(monkeypatch, vb, suite)
+    monkeypatch.setattr(
+        rl,
+        "probe_git",
+        lambda root: {"git_commit": git_commit, "git_branch": "main", "git_dirty": False, "git_probe": "ok"},
+    )
+    db = tmp_path / "benchmark" / "data" / "benchmark_v2.db"
+    out = tmp_path / "rs"
+    state = {"units": 0}
+
+    def _rc(unit, ctx, capture=None):
+        state["units"] += 1
+        if abort_after is not None and state["units"] > abort_after:
+            raise _Aborted(f"模拟中断于第 {state['units']} 个单元")
+        return _PRISTINE_RUN_CASE(unit, ctx, capture)
+
+    monkeypatch.setattr(vb, "run_case", _rc)
+    if boom_at_finalize:
+
+        def _fin(**kw):
+            raise _Aborted("模拟收尾前中断（单元已落盘，但 runset.json/_COMPLETE 尚未写）")
+
+        monkeypatch.setattr(vb, "_finalize_runset", _fin)
+    return db, out, state
+
+
+def _common_args(db, out):
+    return ["--db", str(db), "--output-dir", str(out)]
+
+
+def _runset_dirs(out):
+    return sorted(p for p in out.iterdir() if p.is_dir())
+
+
+def _index_of(out):
+    d = _runset_dirs(out)[0]
+    return d, json.loads((d / "runset.json").read_text(encoding="utf-8"))
+
+
+def _normalize_index(index: dict) -> dict:
+    """抹掉设计上必然不同的字段，用于"3+7 两次" vs "10 一次"的等价性比较。
+
+    必然不同：created_at / resume 块 / runset_id（时间戳目录）/ 每单元 run_id 与 generation_config_id（ULID）
+    / resolved_benchmark_db（两个方案跑在不同临时目录）。
+    """
+    idx = json.loads(json.dumps(index))
+    idx.pop("created_at", None)
+    idx.pop("resume", None)
+    idx.pop("runset_id", None)
+    fp = idx.get("environment_fingerprint") or {}
+    fp.pop("generation_config_id", None)
+    fp.pop("resolved_benchmark_db", None)
+    for entry in idx.get("cases") or []:
+        entry.pop("run_id", None)
+    return idx
+
+
+class TestResumeReuseGate:
+    """复用门禁的文件侧判据（①-⑤），逐条负例。"""
+
+    @pytest.fixture
+    def real_payload(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--case", "bc_01_login"]) == vb.EXIT_OK
+        d = _runset_dirs(out)[0]
+        return json.loads((d / "cases" / "bc_01_login__r01.json").read_text(encoding="utf-8"))
+
+    def _check(self, payload, suite, real_payload, *, repeat=1):
+        case = suite.cases[real_payload["case_id"]]
+        gold = suite.golds[real_payload["case_id"]]
+        digests = rl.build_digest_map(_BENCH)
+        return rl.check_unit_reusability(payload, case=case, gold=gold, digest_map=digests, repeat_index=repeat)
+
+    def test_clean_payload_is_reusable(self, real_payload, suite):
+        ok, why = self._check(dict(real_payload), suite, real_payload)
+        assert (ok, why) == (True, "reusable")
+
+    def test_missing_file_not_reusable(self, real_payload, suite):
+        assert self._check(None, suite, real_payload) == (False, "missing_file")
+
+    def test_schema_mismatch_not_reusable(self, real_payload, suite):
+        p = dict(real_payload)
+        p["s6_schema"] = "benchmark-runset-case-v0"
+        assert self._check(p, suite, real_payload)[0] is False
+        assert self._check(p, suite, real_payload)[1] == "schema_mismatch"
+
+    def test_non_completed_not_reusable(self, real_payload, suite):
+        p = dict(real_payload)
+        p["status"] = "llm_failure"
+        assert self._check(p, suite, real_payload) == (False, "not_completed")
+
+    def test_fingerprint_drift_not_reusable(self, real_payload, suite):
+        p = json.loads(json.dumps(real_payload))
+        p["case_fingerprint"]["gold_file_digest"] = "0" * 64  # Gold 字节变过 ⇒ 不可复用
+        assert self._check(p, suite, real_payload) == (False, "fingerprint_drift")
+
+    def test_gold_version_change_is_drift(self, real_payload, suite):
+        p = json.loads(json.dumps(real_payload))
+        p["case_fingerprint"]["gold_version"] = "gold-v9.9"
+        assert self._check(p, suite, real_payload)[0] is False
+
+    def test_unit_mismatch_not_reusable(self, real_payload, suite):
+        p = dict(real_payload)
+        assert self._check(p, suite, real_payload, repeat=2)[1] == "unit_mismatch"
+
+
+class TestResumeFlow:
+    def test_abort_leaves_incomplete_and_no_runset(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=3)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        d = _runset_dirs(out)[0]
+        assert (d / "INCOMPLETE").is_file()
+        assert not (d / vb.COMPLETE_MARKER).exists()
+        assert not (d / "runset.json").exists()
+        assert len(list((d / "cases").glob("*.json"))) == 3
+
+    def test_resume_fills_missing_and_reuses_completed(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=3)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        rid = _runset_dirs(out)[0].name
+
+        _db2, _out2, state = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_OK
+        d, index = _index_of(out)
+        assert index["planned_units"] == 10 and index["written_units"] == 10
+        assert index["status_counts"] == {"completed": 10}
+        assert (d / vb.COMPLETE_MARKER).is_file() and not (d / "INCOMPLETE").exists()
+        # 第二轮只应跑缺口 7 个单元
+        assert state["units"] == 7
+        assert len(index["resume"]["reused_units"]) == 3
+        assert len(index["resume"]["missing_units"]) == 7
+        # 单元顺序仍按 manifest 原序
+        assert [c["case_id"] for c in index["cases"]] == [
+            "bc_01_login",
+            "bc_02_refund_order",
+            "bc_03_order_status",
+            "bc_04_payment",
+            "bc_05_admin_rbac",
+            "bc_06_search",
+            "bc_07_form_validation",
+            "bc_08_file_upload",
+            "bc_09_approval_flow",
+            "bc_10_report_export",
+        ]
+
+    def test_resumed_runset_equals_single_pass(self, tmp_path_factory, monkeypatch, suite):
+        """等价性：3+7 两次 resume 与 10 一次跑完，除 created_at / resume 块外结果等价。"""
+        import scripts.v2_benchmark as vb
+
+        base = tmp_path_factory.mktemp("onepass")
+        db1, out1, _ = _offline_env(base, monkeypatch, suite)
+        assert vb.main([*_common_args(db1, out1)]) == vb.EXIT_OK
+        _, one = _index_of(out1)
+
+        split = tmp_path_factory.mktemp("split")
+        db2, out2, _ = _offline_env(split, monkeypatch, suite, abort_after=3)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db2, out2))
+        rid = _runset_dirs(out2)[0].name
+        _db3, _o3, _s3 = _offline_env(split, monkeypatch, suite)
+        assert vb.main([*_common_args(db2, out2), "--resume", rid]) == vb.EXIT_OK
+        _, two = _index_of(out2)
+
+        a, b = _normalize_index(one), _normalize_index(two)
+        assert a == b, (
+            "3+7 两次 resume 的 runset.json 必须与 10 一次跑完等价（除 created_at / resume / 目录与 ULID 类字段）"
+        )
+        # 关键口径再显式断言一遍，避免"两边同时错成别的值"
+        assert one["status_counts"] == two["status_counts"] == {"completed": 10}
+        assert one["completion_rate"] == two["completion_rate"] == 1.0
+        assert [c["case_id"] for c in one["cases"]] == [c["case_id"] for c in two["cases"]]
+        assert one["environment_fingerprint"]["case_set_digest"] == two["environment_fingerprint"]["case_set_digest"]
+
+    def test_all_reusable_resume_makes_zero_llm_calls(self, tmp_path, monkeypatch, suite):
+        """最关键测试：10 个单元全部 reusable ⇒ resume 期间任何 Runtime/LLM 调用都不得发生。"""
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, boom_at_finalize=True)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        rid = _runset_dirs(out)[0].name
+        assert not (out / rid / vb.COMPLETE_MARKER).exists()
+        assert len(list((out / rid / "cases").glob("*.json"))) == 10
+
+        hits = []
+
+        def _forbidden(*a, **k):
+            hits.append(a[:1])
+            raise AssertionError("reusable 单元绝不允许进入 LLM / Runtime 调用链")
+
+        # 顺序要紧：先装离线环境（它会 patch run_case/run_v2_pipeline），再把三者换成"一调用就炸"
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite)
+        monkeypatch.setattr(vb, "_finalize_runset", _PRISTINE_FINALIZE)  # 解除第一轮的"收尾前中断"
+        monkeypatch.setattr(vb, "run_v2_pipeline", _forbidden)
+        monkeypatch.setattr(vb, "run_case", _forbidden)
+        monkeypatch.setattr(vb, "build_llm_client", _forbidden)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_OK
+        assert hits == []
+        _, index = _index_of(out)
+        assert index["written_units"] == 10 and index["status_counts"] == {"completed": 10}
+        assert len(index["resume"]["reused_units"]) == 10
+        assert index["resume"]["missing_units"] == [] and index["resume"]["rerun_units"] == []
+
+    def test_non_completed_unit_is_rerun_and_stale_kept(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=1)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        rid = _runset_dirs(out)[0].name
+        target = out / rid / "cases" / "bc_01_login__r01.json"
+        bad = json.loads(target.read_text(encoding="utf-8"))
+        bad["status"] = "llm_failure"  # 模拟"上次这个 case 跑失败了"
+        target.write_text(json.dumps(bad), encoding="utf-8")
+
+        _d, _o, state = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_OK
+        _, index = _index_of(out)
+        assert index["status_counts"] == {"completed": 10}
+        assert "bc_01_login__r1" in index["resume"]["rerun_units"]
+        assert len(index["resume"]["missing_units"]) == 9
+        assert state["units"] == 10  # bc_01 重跑 + 9 个缺口
+        stale = [p.name for p in (out / rid / "cases").glob("*.stale-*")]
+        assert stale, "重跑前必须把旧文件转存为 .stale-*，不得删除失败现场"
+
+    def test_s8_can_load_resumed_runset(self, tmp_path, monkeypatch, suite):
+        """resume 产出的 runset 必须能被 S8 正常加载并进入比较路径。"""
+        import scripts.v2_benchmark as vb
+        from core.v2.eval import compare as cp
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=4)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        rid = _runset_dirs(out)[0].name
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_OK
+
+        rec = cp.load_runset(out / rid)
+        assert len(rec["cases"]) == 10
+        assert rec["runset_id"] == rid
+        comp = cp.check_comparability(rec, rec)
+        assert comp["comparable"] is True
+        rep = cp.compare_runsets(rec, cp.load_runset(out / rid))
+        assert rep["verdict_totals"]["improvement"] == 0 and rep["verdict_totals"]["regression"] == 0
+
+
+class TestResumeFailClosed:
+    def test_resume_with_case_or_repeat_is_usage_error(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", "x", "--case", "bc_01_login"]) == vb.EXIT_USAGE
+        assert vb.main([*_common_args(db, out), "--resume", "x", "--repeat", "2"]) == vb.EXIT_USAGE
+
+    def test_resume_with_fresh_or_reuse_db_is_usage_error(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", "x", "--fresh-db"]) == vb.EXIT_USAGE
+        assert vb.main([*_common_args(db, out), "--resume", "x", "--reuse-db"]) == vb.EXIT_USAGE
+
+    def test_resume_without_existing_db_is_db_guard(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(tmp_path / "no" / "such.db", out), "--resume", "whatever"]) == vb.EXIT_DB_GUARD
+
+    def test_resume_missing_runset_dir_is_usage_error(self, tmp_path, monkeypatch, suite):
+        """DB 已存在（续跑前提成立）但指定 runset 目录不存在 ⇒ 参数错误，而不是 DB 护栏。"""
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=1)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        assert db.exists()
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", "bm-bench-v0-1-19700101T000000Z"]) == vb.EXIT_USAGE
+
+    def test_resume_on_completed_runset_is_usage_error(self, tmp_path, monkeypatch, suite):
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main(_common_args(db, out)) == vb.EXIT_OK
+        rid = _runset_dirs(out)[0].name
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_USAGE
+
+    def test_cross_commit_resume_is_refused(self, tmp_path, monkeypatch, suite):
+        """续跑必须发生在同一 commit：跨 commit 一律 fail-closed，绝不混合来源。"""
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=2)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        rid = _runset_dirs(out)[0].name
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite, git_commit="d" * 7)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_USAGE
+        assert not (out / rid / vb.COMPLETE_MARKER).exists()
+
+    def test_legacy_plaintext_incomplete_is_refused(self, tmp_path, monkeypatch, suite):
+        """旧版 INCOMPLETE 只写 runset_id 纯文本 ⇒ 无法核对 git_commit，必须拒绝续跑。"""
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=2)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        d = _runset_dirs(out)[0]
+        (d / "INCOMPLETE").write_text(d.name, encoding="utf-8")  # 退回旧格式
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", d.name]) == vb.EXIT_USAGE
+
+    def test_mixed_generation_config_fails_closed_at_finalize(self, tmp_path, monkeypatch, suite):
+        """复用单元与本轮单元配置不一致 ⇒ 收尾拒绝合并指纹：不写 _COMPLETE、exit 5。"""
+        import sqlite3
+
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite, abort_after=3)
+        with pytest.raises(_Aborted):
+            vb.main(_common_args(db, out))
+        rid = _runset_dirs(out)[0].name
+        con = sqlite3.connect(str(db))
+        con.execute("UPDATE generation_configs SET model_name='m-other'")  # 篡改历史单元的配置来源
+        con.commit()
+        con.close()
+        _d, _o, _s = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--resume", rid]) == vb.EXIT_WRITE_FAILURE
+        assert not (out / rid / vb.COMPLETE_MARKER).exists()
+        assert (out / rid / "INCOMPLETE").exists()
+
+
+class TestResumeContracts:
+    def test_case_payload_contract_unchanged(self, tmp_path, monkeypatch, suite):
+        """A2 不得改 S6 case 契约：payload 顶层键集合保持原样。"""
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--case", "bc_01_login"]) == vb.EXIT_OK
+        d = _runset_dirs(out)[0]
+        payload = json.loads((d / "cases" / "bc_01_login__r01.json").read_text(encoding="utf-8"))
+        assert payload["s6_schema"] == rl.S6_CASE_SCHEMA_VERSION
+        assert set(payload) == {
+            "s6_schema",
+            "case_id",
+            "repeat_index",
+            "benchmark_version",
+            "gold_version",
+            "run_id",
+            "status",
+            "reliability_note",
+            "classification",
+            "pipeline",
+            "artifacts_summary",
+            "archived_test_case_ids",
+            "hard",
+            "soft",
+            "soft_note",
+            "llm_calls",
+            "generation_config_id",
+            "case_fingerprint",
+            "started_at",
+            "finished_at",
+        }
+
+    def test_runset_index_adds_only_resume_key(self, tmp_path, monkeypatch, suite):
+        """非 resume 运行的 runset.json 键集合不变；resume 才多一个 resume 块。"""
+        import scripts.v2_benchmark as vb
+
+        db, out, _ = _offline_env(tmp_path, monkeypatch, suite)
+        assert vb.main([*_common_args(db, out), "--case", "bc_01_login"]) == vb.EXIT_OK
+        _, index = _index_of(out)
+        assert "resume" not in index
+        assert {
+            "s6_schema",
+            "runset_id",
+            "runner_version",
+            "environment_fingerprint",
+            "planned_units",
+            "written_units",
+            "status_counts",
+            "cases",
+        } <= set(index)
+
+    def test_resume_does_not_import_llm_or_runtime(self):
+        """A2 仍属只读收尾层：CLI 不新增 runtime/orchestrator/llm 直连 import。"""
+        import ast
+
+        for rel in ("core/v2/eval/runner_lib.py", "scripts/v2_benchmark.py"):
+            tree = ast.parse((_ROOT / rel).read_text(encoding="utf-8"))
+            mods: set[str] = set()
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    mods |= {a.name for a in node.names}
+                elif isinstance(node, ast.ImportFrom) and node.module:
+                    mods.add(node.module)
+            bad = {m for m in mods if m.startswith(("core.llm_client", "core.v2.runtime", "openai"))}
+            if rel == "core/v2/eval/runner_lib.py":
+                assert not bad, bad
+            assert "core.v2.ddl" not in mods

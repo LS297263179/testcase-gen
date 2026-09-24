@@ -859,3 +859,190 @@ def build_environment_fingerprint(
         "runner_version": RUNNER_VERSION,
         "resolved_benchmark_db": resolved_benchmark_db,
     }
+
+
+# ============================================================
+# A2 断点续跑支持（S6 落盘契约零变更：以下全部只读回既有产物 / 只做纯判定）
+# ============================================================
+
+PASS_HEADER_FILE = "INCOMPLETE"
+STALE_INFIX = ".stale-"
+
+# 复用门禁里参与归因的 GenerationConfig 字段（不含 id / 时间戳等每次必变的值）
+CONFIG_SIGNATURE_FIELDS = (
+    "model_provider",
+    "model_name",
+    "temperature",
+    "enable_thinking",
+    "max_tokens",
+    "generator_version",
+    "reviewer_version",
+    "prompt_version",
+)
+
+
+def unit_key(case_id: str, repeat_index: int) -> str:
+    return f"{case_id}__r{repeat_index}"
+
+
+def unit_rel_path(case_id: str, repeat_index: int) -> str:
+    """单元落盘相对路径（与 S6 既有形态一致，不改契约）。"""
+    return f"cases/{case_id}__r{repeat_index:02d}.json"
+
+
+def read_unit_payload(runset_dir: Path | str, rel: str) -> tuple[dict | None, str | None]:
+    """读回一个单元文件 → (payload | None, 不可用原因 | None)。"""
+    p = Path(runset_dir) / rel
+    if not p.is_file():
+        return None, "missing_file"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None, "unparseable"
+    if not isinstance(data, dict):
+        return None, "unparseable"
+    return data, None
+
+
+def check_unit_reusability(
+    payload: dict | None,
+    *,
+    case,
+    gold,
+    digest_map: dict[str, str],
+    repeat_index: int,
+) -> tuple[bool, str]:
+    """文件侧复用判据（DB 侧与 pass header 侧判据由 CLI 分别执行）。
+
+    任一不满足即不可复用，原因串用于日志与审计：
+    missing_file / unparseable / schema_mismatch / not_completed / unit_mismatch / fingerprint_drift。
+    """
+    if payload is None:
+        return False, "missing_file"
+    if payload.get("s6_schema") != S6_CASE_SCHEMA_VERSION:
+        return False, "schema_mismatch"
+    if payload.get("status") != BenchmarkRunStatus.COMPLETED.value:
+        return False, "not_completed"
+    if payload.get("case_id") != case.case_id or int(payload.get("repeat_index") or -1) != int(repeat_index):
+        return False, "unit_mismatch"
+    if dict(payload.get("case_fingerprint") or {}) != case_fingerprint(case, gold, digest_map):
+        return False, "fingerprint_drift"
+    return True, "reusable"
+
+
+def config_signature(cfg: GenerationConfig | None) -> dict[str, Any]:
+    """GenerationConfig → 归因签名；cfg 缺失（DB 不连续）→ 空 dict，调用方必须 fail-closed。"""
+    if cfg is None:
+        return {}
+    return {f: _en(getattr(cfg, f, None)) for f in CONFIG_SIGNATURE_FIELDS}
+
+
+def pick_uniform_generation_config(
+    cfgs: dict[str, GenerationConfig | None],
+) -> tuple[GenerationConfig | None, list[str]]:
+    """所有被索引单元的 GenerationConfig 必须完全一致，否则返回问题清单（fail-closed 依据）。
+
+    取代旧 `first_cfg = 本轮第一个单元` 的做法 —— 混合来源时宁可不出 runset，
+    也不给整轮贴一个只对某个单元成立的指纹。
+    """
+    problems: list[str] = []
+    named = {k: v for k, v in cfgs.items() if v is not None}
+    missing = sorted(set(cfgs) - set(named))
+    if missing:
+        problems.append(f"以下单元无法解析 GenerationConfig（DB 不连续或 run 未落库）: {missing}")
+    if not named:
+        return None, problems or ["没有任何单元带 GenerationConfig"]
+    sigs = {k: config_signature(v) for k, v in named.items()}
+    distinct = {json.dumps(s, sort_keys=True, ensure_ascii=False) for s in sigs.values()}
+    if len(distinct) > 1:
+        by_sig: dict[str, list[str]] = {}
+        for k, s in sigs.items():
+            by_sig.setdefault(json.dumps(s, sort_keys=True, ensure_ascii=False), []).append(k)
+        problems.append(f"单元间配置不一致，拒绝归并为单一环境指纹: {sorted(by_sig.values(), key=len, reverse=True)}")
+        return None, problems
+    return named[sorted(named)[0]], problems
+
+
+def build_case_index_entry(payload: dict, rel: str) -> dict[str, Any]:
+    """case payload → runset.json 的索引条目（与 S6 既有字段完全一致）。"""
+    status = payload.get("status")
+    return {
+        "case_id": payload.get("case_id"),
+        "repeat_index": payload.get("repeat_index"),
+        "status": status,
+        "run_id": payload.get("run_id"),
+        "quality_evaluated": status == BenchmarkRunStatus.COMPLETED.value,
+        "file": rel,
+        "llm_calls": int(((payload.get("llm_calls") or {}).get("total")) or 0),
+    }
+
+
+def write_pass_header(runset_dir: Path | str, header: dict[str, Any]) -> Path:
+    """把本轮 pass 的来源信息写进 INCOMPLETE（resume 的核对依据）。"""
+    return write_json_atomic(Path(runset_dir) / PASS_HEADER_FILE, header)
+
+
+def read_pass_header(runset_dir: Path | str) -> tuple[dict | None, str]:
+    """读回 pass header → (header, 状态)。
+
+    状态：ok / none（无文件）/ legacy（旧版只写 runset_id 纯文本，无法核对 git_commit）/ bad。
+    """
+    p = Path(runset_dir) / PASS_HEADER_FILE
+    if not p.is_file():
+        return None, "none"
+    try:
+        raw = p.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None, "bad"
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None, "legacy"
+    if not isinstance(data, dict):
+        return None, "legacy"
+    return data, "ok"
+
+
+def load_runset_record(runset_dir: Path | str) -> dict | None:
+    """读回已收尾 runset 的索引（用于判断"已完成，无需 resume"）。"""
+    p = Path(runset_dir) / "runset.json"
+    if not p.is_file():
+        return None
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def stale_path(runset_dir: Path | str, rel: str) -> Path:
+    """重跑前保留旧文件的落点：cases/.<name>.stale-<UTC 时间戳>.json（不删除失败现场）。"""
+    p = Path(runset_dir) / rel
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    return p.parent / f".{p.name}{STALE_INFIX}{stamp}"
+
+
+# resume 时必须与本轮逐项相等的 pass header 字段（来源一致性门禁）
+RESUME_HEADER_FIELDS = (
+    "manifest_id",
+    "benchmark_version",
+    "case_set_digest",
+    "gold_versions",
+    "case_versions",
+    "runner_version",
+    "s6_schema",
+    "business_prompt_versions",
+    "s5_prompt_version",
+    "resolved_benchmark_db",
+)
+
+
+def diff_pass_header(prev: dict, cur: dict) -> list[str]:
+    """比较两次 pass 的来源声明，返回不一致项（含 git_commit / git_dirty）。"""
+    problems: list[str] = []
+    for f in ("git_commit", "git_branch", "git_dirty", *RESUME_HEADER_FIELDS):
+        pv = (prev.get("git") or {}).get(f) if f in ("git_commit", "git_branch", "git_dirty") else prev.get(f)
+        cv = (cur.get("git") or {}).get(f) if f in ("git_commit", "git_branch", "git_dirty") else cur.get(f)
+        if pv != cv:
+            problems.append(f"{f}: 既有 runset={pv!r} 本轮={cv!r}")
+    return problems
