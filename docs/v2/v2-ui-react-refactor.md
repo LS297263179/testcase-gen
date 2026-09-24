@@ -58,6 +58,9 @@ Runtime、状态机、schema_version=10。
   →Review findings 跳转用例→Optimizer 叙事→报告→材料/设置渲染；控制台 0 error，32 请求全 200。
 - 真实渲染截图（无头浏览器 1440×900）：`screenshots/v2r-01-dashboard.png` 至 `v2r-11-settings.png` 共 11 张，
   覆盖工作台/运行列表/概览(Pipeline 全✓)/需求与AI分析/测试点/测试用例/AI评审/优化/报告/材料/设置。
+  ★ 该 11 张已随仓库提交，并作为 V2 界面预览嵌入 `README.md`；核对过：截图渲染自 `static/v2/` 当前构建产物
+  （构建 CSS 已含 P0 设计令牌，且工作树构建与 HEAD 逐字节一致），故截图即当前发布界面；
+  逐张复查 + PNG 字节扫描确认无 API Key/base_url/凭据（设置页仅显示「已配置」徽标），业务内容仅为合成验收数据。
 - 兼容性：Step 10.5 真实 Run `01M2QBWABYW3VTNYK5BBX2WDN4` 经 `GET /api/v2/runs/<id>` 仍可查询
   （status=done，counts=28 items / 174 points / 174 cases / 25 obligations）。
 - 诚实呈现核查：材料引用「暂未接入」标注、Pipeline 不显示耗时、Optimizer 无 diff 说明、

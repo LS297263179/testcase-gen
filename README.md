@@ -28,11 +28,29 @@
 
 ---
 
-## 🖼 界面预览
+## 🖼 界面预览（V2 · React SPA）
 
-| 工作台 | 测试用例生成 | 测试点管理 |
-|:------:|:------------:|:----------:|
-| ![工作台](screenshots/dashboard.png) | ![用例](screenshots/testcase.png) | ![测试点](screenshots/testpoints.png) |
+真实渲染截图，1440×900，无头浏览器 E2E 走查产物（播种账号 `ui_reviewer`，数据为合成验收数据「订单退款申请（UI 验收数据）」）。
+系统设置页的 API Key 只显示「已配置」徽标，不出现任何凭据。
+
+| 工作台 | 测试运行列表 | 运行概览 |
+|:------:|:----------:|:-------:|
+| ![工作台](screenshots/v2r-01-dashboard.png) | ![运行列表](screenshots/v2r-02-runlist.png) | ![概览](screenshots/v2r-03-overview.png) |
+
+| 需求与 AI 分析（IR） | 测试点 | 测试用例 |
+|:------------------:|:-----:|:-------:|
+| ![需求](screenshots/v2r-04-requirements.png) | ![测试点](screenshots/v2r-05-testpoints.png) | ![用例](screenshots/v2r-06-testcases.png) |
+
+| AI 评审（6 维） | 去重优化 | 报告 |
+|:-------------:|:-------:|:----:|
+| ![评审](screenshots/v2r-07-review.png) | ![优化](screenshots/v2r-08-optimizer.png) | ![报告](screenshots/v2r-09-report.png) |
+
+| 项目材料 | 系统设置 |
+|:-------:|:-------:|
+| ![材料](screenshots/v2r-10-materials.png) | ![设置](screenshots/v2r-11-settings.png) |
+
+> V1 界面（`/`）的历史截图仍保留在 `screenshots/dashboard.png`、`testcase.png`、`testpoints.png`。
+> 走查清单与结论见 `docs/v2/v2-ui-react-refactor.md`。
 
 ---
 
