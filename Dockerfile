@@ -1,6 +1,7 @@
 FROM python:3.12-slim
 
 ARG PIP_INDEX_URL=https://pypi.org/simple
+ARG DEBIAN_MIRROR=mirrors.aliyun.com
 ARG APP_UID=10001
 ARG APP_GID=10001
 
@@ -11,8 +12,13 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# slim 基础镜像不带时区数据，缺了它 compose 的 TZ=Asia/Shanghai 会静默回落 UTC
-RUN apt-get update \
+# slim 基础镜像不带时区数据，缺了它 compose 的 TZ=Asia/Shanghai 会静默回落 UTC。
+# 换源是必需的：deb.debian.org 从国内云服务器实测约 45KB/s，光拉 Packages 索引就能把构建卡死。
+RUN sed -i \
+        -e "s|http://deb.debian.org/debian-security|https://${DEBIAN_MIRROR}/debian-security|" \
+        -e "s|http://deb.debian.org/debian|https://${DEBIAN_MIRROR}/debian|" \
+        /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends tzdata \
     && rm -rf /var/lib/apt/lists/*
 
