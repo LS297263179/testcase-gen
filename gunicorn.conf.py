@@ -1,21 +1,21 @@
 """Gunicorn 生产部署配置"""
 
-import multiprocessing
-
 # 绑定地址
 bind = "0.0.0.0:5000"
 
-# Worker 数量（SQLite 单文件数据库，不宜太多 worker）
-# 建议 2-4 个 worker，避免 SQLite 写冲突
-workers = min(4, multiprocessing.cpu_count())
+# Worker 模型：产品主链路是 SSE 流式生成，一个流会独占 worker 直到结束。
+# sync 下并发上限就等于 worker 数（而 SQLite 单文件库又不宜多 worker 写），故用 gthread 以线程扛流。
+worker_class = "gthread"
+workers = 2
+threads = 8
 
-# Worker 类型：sync 适合 SQLite（每个请求独立处理）
-# 如果需要更好的并发，可以用 gevent（需安装 gevent）
-worker_class = "sync"
-
-# 超时设置（LLM 调用可能耗时较长）
-timeout = 300  # 5 分钟
+# 超时设置：一次生成可能串起数十次 LLM 调用，300s 会在流中途把 worker 掐死
+timeout = 900
 graceful_timeout = 30
+keepalive = 75
+
+# worker 心跳放内存盘，避免容器磁盘 IO 抖动导致误判 worker 卡死而重启它
+worker_tmp_dir = "/dev/shm"
 
 # 请求大小限制（与 Flask 的 MAX_CONTENT_LENGTH 一致）
 limit_request_line = 0

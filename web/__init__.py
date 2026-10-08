@@ -7,7 +7,7 @@ from flask import Flask, jsonify, redirect, render_template, request, session
 
 from core import config, db
 from core.v2.bootstrap import ensure_v2_ready
-from web.utils import get_real_ip
+from web.utils import generate_csrf_token, get_real_ip
 
 # 统一日志配置
 logging.basicConfig(
@@ -75,6 +75,30 @@ app.register_blueprint(v2_bp)  # Step 10.3：V2 REST API（/api/v2/*，V2_READY 
 
 
 # ============================================================
+# 免登录模式（公共实例）
+# ============================================================
+
+
+@app.before_request
+def _guest_auto_login():
+    """GUEST_AUTO_LOGIN=1 时，无 session 的请求自动落到共享访客账号。
+
+    只补 session：48 处 login_required、csrf_protect 与 V2 的 session→user 映射均按原样生效；
+    前端 #authPage/#appPage 默认都是 display:none，checkAuth() 拿到 logged_in 直接进主界面。
+    """
+    if not config.guest_mode_enabled() or "user_id" in session:
+        return
+    if request.path.startswith(("/static/", "/api/health")):
+        return
+    user = db.get_or_create_user(config.guest_username())
+    session["user_id"] = user["id"]
+    session["username"] = user["username"]
+    session["guest"] = True  # 配置锁按此判定，正式账号登录后不受限
+    if not session.get("csrf_token"):
+        generate_csrf_token()
+
+
+# ============================================================
 # 全局请求日志
 # ============================================================
 
@@ -120,7 +144,7 @@ def too_large(e):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", guest_mode=config.guest_mode_enabled())
 
 
 @app.route("/v2")

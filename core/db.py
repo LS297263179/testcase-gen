@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import secrets
 import sqlite3
 import threading
 from contextlib import contextmanager, suppress
@@ -340,6 +341,18 @@ def create_user(username: str, password: str) -> int:
             return cur.lastrowid
         except sqlite3.IntegrityError:
             raise ValueError("用户名已存在") from None
+
+
+def get_or_create_user(username: str) -> dict:
+    """幂等取/建用户（免登录模式的共享账号）"""
+    try:
+        user_id = create_user(username, secrets.token_urlsafe(32))
+    except ValueError:
+        # 用户名已存在（含多 worker 冷启动时同时首次创建的竞争）→ 取现有行
+        with db_read_conn() as conn:
+            row = conn.execute("SELECT id, username FROM users WHERE username = ?", (username,)).fetchone()
+        return {"id": row["id"], "username": row["username"]}
+    return {"id": user_id, "username": username}
 
 
 def verify_user(username: str, password: str) -> dict | None:

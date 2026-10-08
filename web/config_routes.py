@@ -148,6 +148,9 @@ def api_model_config_get():
                 cfg[section]["api_key_hint"] = key[:4] + "****" + key[-4:]
             else:
                 cfg[section]["api_key_hint"] = "****"
+            # get_model_config() 已解密，明文 Key 不得出接口；前端只用 hint 做占位提示，
+            # 保存时留空会由下方 POST 恢复旧值。
+            cfg[section].pop("api_key")
     return jsonify({"config": cfg, "presets": {k: v["name"] for k, v in MODEL_PRESETS.items()}})
 
 
@@ -156,6 +159,8 @@ def api_model_config_get():
 @csrf_protect
 def api_model_config_set():
     """保存模型配置"""
+    if config.guest_config_locked() and session.get("guest"):
+        return jsonify({"error": "公共实例已锁定模型配置，仅管理员可修改"}), 403
     data = request.get_json()
     preset = data.get("preset")
     need_key = False

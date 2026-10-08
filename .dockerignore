@@ -1,16 +1,55 @@
-__pycache__
-*.pyc
+# ---------- 版本控制与 IDE ----------
 .git
 .gitignore
+.gitignore.bak
 .vscode
+.idea
 *.md
+
+# ---------- 密钥与本地数据（★ 绝不允许进镜像层）----------
+# config.yaml 含明文 api_key；data/ 含 data.db（加密后的 Key + 全部业务数据）与 data_v2.db。
+# 旧版只排了根级 data.db，`COPY . .` 会把两者烤进镜像层，推送到 registry 即泄密。
+config.yaml
+.env
+data/
 data.db
 output/
-.env
-.claude/
-worktrees/
-# V2 前端：源码工程依赖不入库镜像（构建产物 static/v2/ 已提交，镜像无需 Node）
-frontend-v2/node_modules/
-frontend-v2/dist/
+benchmark/runsets/
+benchmark/compares/
+
+# ---------- Python 构建/缓存 ----------
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
 .venv/
 venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# ---------- 前端源码工程（构建产物 static/v2/ 已入库，镜像无需 Node）----------
+frontend-v2/
+node_modules/
+
+# ---------- 助手配置与本地杂项 ----------
+.agents/
+.claude/
+.codex/
+.canvas-staging/
+worktrees/
+_remote_diag/
+_debug_*.txt
+*.bak
+*.log
+.DS_Store
+Thumbs.db
+
+# ---------- 非运行期资产 ----------
+docs/
+tests/
+screenshots/
+examples/

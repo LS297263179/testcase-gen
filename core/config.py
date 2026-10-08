@@ -166,3 +166,30 @@ def get_secret_key() -> bytes | str:
         "建议在 .env 或环境变量中设置 FLASK_SECRET_KEY。"
     )
     return os.urandom(24)
+
+
+# ============================================================
+# 公共实例（免登录访客）开关
+# ============================================================
+
+
+def _env_flag(name: str) -> bool:
+    return os.environ.get(name, "").strip().lower() in ("1", "true", "yes", "on")
+
+
+def guest_mode_enabled() -> bool:
+    """免登录模式：请求进入时自动落到共享访客账号，登录/注册页不再出现。
+
+    默认关闭 —— 本地开发与 pytest（conftest 用 /api/register 造登录态）行为不变。
+    """
+    return _env_flag("GUEST_AUTO_LOGIN")
+
+
+def guest_username() -> str:
+    """共享访客账号的用户名"""
+    return os.environ.get("GUEST_USERNAME", "").strip() or "shared"
+
+
+def guest_config_locked() -> bool:
+    """免登录模式下是否锁定模型配置写入（挡住访客改 api_key/base_url/model）"""
+    return guest_mode_enabled() and _env_flag("GUEST_LOCK_CONFIG")

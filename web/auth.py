@@ -4,7 +4,7 @@ import logging
 
 from flask import Blueprint, jsonify, request, session
 
-from core import db
+from core import config, db
 from web.utils import check_rate_limit, generate_csrf_token, get_real_ip
 
 logger = logging.getLogger("web")
@@ -15,6 +15,9 @@ bp = Blueprint("auth", __name__)
 @bp.route("/api/register", methods=["POST"])
 def api_register():
     """用户注册"""
+    if config.guest_mode_enabled():
+        # 免登录实例人人共用同一空间，不再放行独立账号，避免陌生人各自开一份数据
+        return jsonify({"error": "公共实例已关闭注册"}), 403
     if not check_rate_limit(get_real_ip()):
         return jsonify({"error": "请求过于频繁，请稍后再试"}), 429
     data = request.get_json(silent=True)
@@ -64,6 +67,7 @@ def api_login():
 
     session["user_id"] = user["id"]
     session["username"] = user["username"]
+    session.pop("guest", None)  # 正式登录后不再受公共实例配置锁限制
     csrf_token = generate_csrf_token()
     return jsonify({"success": True, "user": user, "csrf_token": csrf_token})
 
