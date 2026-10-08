@@ -1,7 +1,7 @@
-# testcase-gen — AI 测试工程平台
+# testcase-gen — AI 测试用例生成辅助平台
 
 ## 一句话
-Flask + SQLite + LLM 的 AI 测试工程平台（AI Test Engineering Platform）。含两条并存产品线：
+Flask + SQLite + LLM 的 AI 测试用例生成辅助平台（AI Test Case Generation Assistant Platform）。含两条并存产品线：
 **V1**（`/`，Prompt→用例的自由文本链路）与 **V2**（`/v2`，结构化测试工程链路 + Benchmark 质量评价）。
 
 ## 技术栈

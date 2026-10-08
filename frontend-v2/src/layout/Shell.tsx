@@ -45,7 +45,7 @@ export function Shell({ crumbs, children }: { crumbs: ReactNode; children: React
     <div className="app">
       <aside className="sidebar">
         <div className="sidebar-brand">
-          <div className="brand-title">AI 测试工程平台</div>
+          <div className="brand-title">AI 测试用例生成辅助平台</div>
           <div className="brand-sub">V2 · AI + 规则 + 人 协同测试设计</div>
         </div>
         <Nav />

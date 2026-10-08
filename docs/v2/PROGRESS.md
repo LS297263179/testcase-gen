@@ -24,7 +24,7 @@
 
 ## 0. 给新会话的上下文（一句话）
 
-本项目 V1 = 基于 LLM 的 AI 测试工程平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
+本项目 V1 = 基于 LLM 的 AI 测试用例生成辅助平台（Flask + SQLite + 原生前端）。现按 **13 步蓝图**重构为 **V2**。
 V2 的核心不是 `Prompt→LLM→Result`，而是 **"结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据"**：LLM 是大脑但不单独控制系统，测试的确定性关注点尽量代码化。
 
 **当前进度（截至 2026-09-23）**：Step 1~10 全部完成并推送（含 `cdb325c` V2 产品级 UI/UX 重构——React+TS+Vite `frontend-v2/`，产物 `static/v2/v2_react.js`+`v2_react.css`，Run-centric IA，只读端点 requirements 13→14，旧 `v2_app.js`/`v2_style.css` 退役，详见 `docs/v2/v2-ui-react-refactor.md`——与 `d1c5345` V2 Product Polish）。中后期路线评审已由用户拍板：Step 11 = Quality Evaluation Foundation + Benchmark Foundation，冻结设计见 `docs/v2/step11-benchmark-evaluation.md`。Step 11 已完成 S1~S7 及 S7 之后三项修正，**全部提交已推送，代码侧 origin=gitee=local 三方同步于 `9f7888c`（其后仅纯文档提交，代码树与 `9f7888c` 逐字节一致）**：
@@ -110,7 +110,7 @@ LLM 的输入/输出两端都必须是已定义 Schema 的结构化数据；LLM 
 | 7 AI Reviewer 6维评审 | ✅ 完成+验证(14门槛全过) | `core/v2/`{review_prompts,review_hard,review_soft,review_orchestrator} + Schema/DDL/Repo 升级(v6→v7：ReviewReport 5 字段 + ReviewFinding.detail + CoverageDetail/ExecutabilityDetail + DuplicateLevel) + 4 测试文件 | 已推 origin+gitee (cb68f01) |
 | 8 去重体系(Dedup Optimizer) | ✅ 完成+验证(14门槛全过) | `core/v2/`{optimizer,optimizer_orchestrator} + Schema/DDL 升级(v7→v8：状态机放开 REVIEWED→ARCHIVED) + 3 测试文件 | 已推 origin+gitee (909d6dd) |
 | 9 人工编辑/确认闭环 | ✅ 完成+验证(19门槛全过) | `core/v2/`{human_editor,human_editor_orchestrator} + Schema/DDL/Repo 升级(v8→v9：TestCaseRevision 激活 + 乐观锁 + 状态机放开 VALIDATION_FAILED→EDITED) + 3 测试文件 | 已推 origin+gitee (d9edbbb) |
-| — 项目重命名 | ✅ 完成 | 全局改名「AI 测试工程平台 / AI Test Engineering Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
+| — 项目重命名 | ✅ 完成 | 全局改名「AI 测试用例生成辅助平台 / AI Test Case Generation Assistant Platform」（12 个版本库文件 + 本地 config.yaml/egg-info） | 已推 origin+gitee (8cc469c) |
 | 10 V2 Runtime+Productization | ✅ 完成（10.1~10.7 全部完成并已推送，10.7 = `430a319`） | 7 子步骤，拆分见下 + 详见 §9 | — |
 | ├ 10.1 V2 DB 真初始化 | ✅ 完成+推送 | `core/v2/bootstrap.py`(ensure_v2_ready) + `web/__init__.py` 启动接线 + V2_READY 状态 + 14 测试 | `e660ead` |
 | ├ 10.2 顶层 Runtime | ✅ 完成+推送 | `core/v2/runtime.py`(run_v2_pipeline) + `client_factory.py` + schema 9→10（runs 加 failed_step/error_message + RunStatus.OPTIMIZING + 5 orchestrator 加 skip_run_status_update） | `5626084` |

@@ -1,6 +1,6 @@
-# AI 测试工程平台 🧪
+# AI 测试用例生成辅助平台 🧪
 
-基于大模型（LLM）的 AI 测试工程平台（AI Test Engineering Platform）。输入需求描述或 UI 截图，AI 自动生成测试点和测试用例，支持 Excel / Markdown 导出。
+基于大模型（LLM）的 AI 测试用例生成辅助平台（AI Test Case Generation Assistant Platform）。输入需求描述或 UI 截图，AI 自动生成测试点和测试用例，支持 Excel / Markdown 导出。
 
 当前有两条并存的产品线：**V1**（`/`，Prompt→用例的自由文本链路，见下表）与 **V2**（`/v2`，按 13 步蓝图重构的**结构化测试工程链路**：Requirement IR → 策略引擎 → 用例合成 → 追溯 → 6 维评审 → 去重优化 → 人工编辑闭环 → Runtime 一键串联 → Benchmark 质量评价）。V2 不是「Prompt→LLM→结果」，而是「结构化数据 → 规则/策略 → LLM → 结构化数据 → Validator → Reviewer → 结构化数据」：确定性关注点代码化，LLM 只做语义理解与内容生成，产物一律先过代码校验再入库。进度与决策见 `docs/v2/PROGRESS.md`。
 
