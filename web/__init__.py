@@ -144,6 +144,18 @@ def too_large(e):
 
 @app.route("/")
 def index():
+    """默认入口给 V2；未登录时仍回 V1，因为登录/注册界面只在 V1 里。
+
+    不能无条件跳 /v2：/v2 对未登录者 302 回 /，两者会成环。
+    """
+    if "user_id" in session:
+        return redirect("/v2")
+    return render_template("index.html", guest_mode=config.guest_mode_enabled())
+
+
+@app.route("/v1")
+def v1_index():
+    """V1 工作台（原 `/`）。"""
     return render_template("index.html", guest_mode=config.guest_mode_enabled())
 
 

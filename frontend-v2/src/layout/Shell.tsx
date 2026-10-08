@@ -51,7 +51,7 @@ export function Shell({ crumbs, children }: { crumbs: ReactNode; children: React
         <Nav />
         <div className="sidebar-footer">
           <div className="who">{username}</div>
-          <a href="/" style={{ color: "#94a3b8", fontSize: 11.5 }}>
+          <a href="/v1" style={{ color: "#94a3b8", fontSize: 11.5 }}>
             返回 V1
           </a>
           <button

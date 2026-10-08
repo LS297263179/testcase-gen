@@ -20,7 +20,19 @@ def _csrf(client) -> str:
 class TestGuestAutoLogin:
     """开关打开后，无需任何登录动作即可直接使用（登录/注册页不再出现）"""
 
-    def test_index_renders_without_login(self, client, guest_env):
+    def test_index_defaults_to_v2_for_guests(self, client, guest_env):
+        rv = client.get("/")
+        assert rv.status_code == 302
+        assert rv.headers["Location"].endswith("/v2")
+        assert client.get("/", follow_redirects=True).status_code == 200
+
+    def test_v1_still_reachable_at_its_own_path(self, client, guest_env):
+        rv = client.get("/v1")
+        assert rv.status_code == 200
+        assert b"<!DOCTYPE html>" in rv.data
+
+    def test_anonymous_root_does_not_redirect(self, client):
+        """未登录时 `/` 必须留在 V1（登录页在此），否则与 /v2 的跳转成环。"""
         assert client.get("/").status_code == 200
 
     def test_me_is_logged_in_as_shared_guest(self, client, guest_env):

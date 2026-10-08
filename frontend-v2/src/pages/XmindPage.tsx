@@ -21,7 +21,7 @@ export function XmindPage() {
           <p className="small">
             XMind 文件转换在 V1 工作台完成，产物进入 <b>V1 会话资产库</b>（data.db），不会自动出现在 V2 测试运行中。
           </p>
-          <a className="btn btn-outline" href="/#page=xmind2case">
+          <a className="btn btn-outline" href="/v1#page=xmind2case">
             前往 V1 使用 XMind 转用例 →
           </a>
         </Card>
