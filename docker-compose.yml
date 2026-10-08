@@ -5,6 +5,7 @@ services:
       args:
         PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
         DEBIAN_MIRROR: ${DEBIAN_MIRROR:-mirrors.aliyun.com}
+        PIP_EXTRA: ${PIP_EXTRA:-}
     image: testcase-gen:latest
     container_name: testcase-gen
     ports:

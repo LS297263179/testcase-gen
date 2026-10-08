@@ -2,6 +2,8 @@ FROM python:3.12-slim
 
 ARG PIP_INDEX_URL=https://pypi.org/simple
 ARG DEBIAN_MIRROR=mirrors.aliyun.com
+# 部署侧追加的运行时依赖（默认不装）。例如无独立反代、要让 gunicorn 直接听 443 时传 pyopenssl。
+ARG PIP_EXTRA=""
 ARG APP_UID=10001
 ARG APP_GID=10001
 
@@ -27,7 +29,7 @@ RUN sed -i \
 # 依赖清单仍只有 pyproject.toml 一个真源（stdlib tomllib 抽取，无需额外文件）。
 COPY pyproject.toml ./
 RUN python -c "import tomllib,pathlib;print('\n'.join(tomllib.loads(pathlib.Path('pyproject.toml').read_text())['project']['dependencies']))" > /tmp/deps.txt \
-    && pip install -i "$PIP_INDEX_URL" -r /tmp/deps.txt
+    && pip install -i "$PIP_INDEX_URL" -r /tmp/deps.txt $PIP_EXTRA
 
 # 运行期所需目录逐条 COPY（改代码不再重装依赖），密钥与本地数据由 .dockerignore 挡在上下文外
 COPY core/ ./core/

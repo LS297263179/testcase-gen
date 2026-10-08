@@ -1,0 +1,17 @@
+# 无独立反向代理、要让 gunicorn 直接终结 TLS 时叠加此文件。
+#
+# 启用方式（写在 .env 里，之后仍用普通 `docker compose up -d`）：
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml
+#   PIP_EXTRA=pyopenssl          # gunicorn 的 ssl:// 监听依赖它，默认镜像不装
+#
+# 证书：./certs 下放 fullchain.pem 与 privkey.pem，属主需与镜像内 UID 一致（chown -R 10001:10001 certs），
+# 否则容器里的非 root 用户读不到私钥。证书到期后要手动更换并 docker compose restart。
+services:
+  app:
+    ports:
+      - "0.0.0.0:443:443"
+    volumes:
+      - ./certs:/app/certs:ro
+    environment:
+      - TLS_CERTFILE=/app/certs/fullchain.pem
+      - TLS_KEYFILE=/app/certs/privkey.pem
