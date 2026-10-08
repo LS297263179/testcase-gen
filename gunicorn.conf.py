@@ -7,11 +7,15 @@ import os
 bind = ["0.0.0.0:5000"]
 
 # 没有独立反代时让 gunicorn 自己终结 TLS：需镜像装 pyopenssl（Dockerfile 的 PIP_EXTRA），
-# 并由 TLS_CERTFILE/TLS_KEYFILE 给出证书路径，两者齐备才追加 443 的 ssl 监听。
+# 并由 TLS_CERTFILE/TLS_KEYFILE 给出证书路径。
+# gunicorn 26 起已移除 "ssl://host:port?certfile=..." 写法，改由全局 certfile/keyfile 决定；
+# 且 TLS 会包裹所有监听，因此开启后只听 443，不再保留明文 5000。
 _certfile = os.environ.get("TLS_CERTFILE", "").strip()
 _keyfile = os.environ.get("TLS_KEYFILE", "").strip()
 if _certfile and _keyfile:
-    bind.append(f"ssl://0.0.0.0:443?certfile={_certfile}&keyfile={_keyfile}")
+    bind = ["0.0.0.0:443"]
+    certfile = _certfile
+    keyfile = _keyfile
 
 # Worker 模型：产品主链路是 SSE 流式生成，一个流会独占 worker 直到结束。
 # sync 下并发上限就等于 worker 数（而 SQLite 单文件库又不宜多 worker 写），故用 gthread 以线程扛流。

@@ -2,16 +2,23 @@
 #
 # 启用方式（写在 .env 里，之后仍用普通 `docker compose up -d`）：
 #   COMPOSE_FILE=docker-compose.yml:docker-compose.tls.yml
-#   PIP_EXTRA=pyopenssl          # gunicorn 的 ssl:// 监听依赖它，默认镜像不装
+#   PIP_EXTRA=pyopenssl          # gunicorn 的 TLS 依赖它，默认镜像不装
 #
-# 证书：./certs 下放 fullchain.pem 与 privkey.pem，属主需与镜像内 UID 一致（chown -R 10001:10001 certs），
-# 否则容器里的非 root 用户读不到私钥。证书到期后要手动更换并 docker compose restart。
+# 证书：./certs 下放 fullchain.pem 与 privkey.pem，属主需与镜像内 UID 一致
+# （chown -R 10001:10001 certs && chmod 600 certs/*），否则容器里的非 root 用户读不到私钥。
+# 证书到期后手动替换再 `docker compose restart` 即可。
+#
+# 代价：gunicorn 的 TLS 是全局的（会包裹所有监听），所以开启后只听 443、
+# 原本映射到 5000 的明文 HTTP 端口不再提供服务，也没有 http→https 跳转（那需要反代）。
 services:
   app:
-    ports:
+    ports: !override
       - "0.0.0.0:443:443"
     volumes:
       - ./certs:/app/certs:ro
     environment:
       - TLS_CERTFILE=/app/certs/fullchain.pem
       - TLS_KEYFILE=/app/certs/privkey.pem
+    healthcheck:
+      # 明文 5000 已不存在，健康检查改走本机 HTTPS；证书是自签/域名不符时忽略校验。
+      test: ["CMD", "python", "-c", "import ssl,urllib.request as u; u.urlopen('https://127.0.0.1:443/api/health', timeout=5, context=ssl._create_unverified_context())"]
