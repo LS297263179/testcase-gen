@@ -1,5 +1,6 @@
 """LLM 调用客户端 - 支持 Anthropic 和 OpenAI 两种 API 格式，支持多模态和流式输出"""
 
+import inspect
 import logging
 import time
 from collections.abc import Generator
@@ -58,6 +59,11 @@ class LLMClient:
             import anthropic
 
             self.client = anthropic.Anthropic(base_url=base_url, api_key=api_key)
+            # anthropic SDK 1.x 起 messages.create() 不再有 temperature 形参（0.x 有），
+            # 无条件传 temperature 会在 Python 层就 TypeError、请求根本发不出去。
+            self._anthropic_temperature_kwarg = (
+                "temperature" in inspect.signature(self.client.messages.create).parameters
+            )
         else:
             from openai import OpenAI
 
@@ -190,15 +196,22 @@ class LLMClient:
         kwargs = {
             "model": self.model,
             "max_tokens": max_tokens,
-            "temperature": self.temperature,
             "system": system_prompt,
             "messages": [{"role": "user", "content": content}],
         }
+        self._set_anthropic_temperature(kwargs)
         if self.enable_thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
 
         with self.client.messages.stream(**kwargs) as stream:
             yield from stream.text_stream
+
+    def _set_anthropic_temperature(self, kwargs: dict) -> None:
+        """按当前 anthropic SDK 的形态传 temperature（两代签名不同，见 __init__ 的探测）。"""
+        if getattr(self, "_anthropic_temperature_kwarg", True):
+            kwargs["temperature"] = self.temperature
+        else:
+            kwargs["extra_body"] = {"temperature": self.temperature}
 
     def _call(
         self, system_prompt: str, user_prompt: str, images: list[dict] | None = None, max_tokens: int = 4096
@@ -229,10 +242,10 @@ class LLMClient:
         kwargs = {
             "model": self.model,
             "max_tokens": max_tokens,
-            "temperature": self.temperature,
             "system": system_prompt,
             "messages": [{"role": "user", "content": content}],
         }
+        self._set_anthropic_temperature(kwargs)
         if self.enable_thinking:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 10000}
 

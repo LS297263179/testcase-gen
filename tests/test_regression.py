@@ -463,6 +463,35 @@ class TestLLMClient:
         assert client.model == "claude-3"
         assert client.api_type == "anthropic"
 
+    def test_anthropic_temperature_adapts_to_sdk_signature(self):
+        """anthropic SDK 1.x 移除了 create(temperature=)，无条件传会在 Python 层就 TypeError。
+
+        本地装 0.x、镜像装 1.x ⇒ 只有按签名探测才能让两代都把参数送进请求体。
+        """
+        from types import SimpleNamespace
+
+        from core.llm_client import build_client
+
+        client = build_client({"api_type": "anthropic", "base_url": "https://x.invalid", "api_key": "k", "model": "m"})
+        sent: dict = {}
+
+        def create(**kwargs):
+            sent.clear()
+            sent.update(kwargs)
+            return SimpleNamespace(content=[SimpleNamespace(type="text", text="ok")], stop_reason="end_turn")
+
+        client.client = SimpleNamespace(messages=SimpleNamespace(create=create))
+
+        for accepts_kwarg in (True, False):
+            client._anthropic_temperature_kwarg = accepts_kwarg
+            assert client._call_anthropic("sys", "user") == "ok"
+            if accepts_kwarg:
+                assert sent["temperature"] == client.temperature
+                assert "extra_body" not in sent
+            else:
+                assert sent["extra_body"] == {"temperature": client.temperature}
+                assert "temperature" not in sent
+
     def test_load_config(self):
         from core.llm_client import load_config
 
