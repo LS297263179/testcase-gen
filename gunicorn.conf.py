@@ -44,5 +44,7 @@ loglevel = "info"
 # 进程名
 proc_name = "testcase-gen"
 
-# 预加载应用（减少内存占用）
-preload_app = True
+# 预加载应用（减少内存占用）。但开 TLS 时必须关掉：preload 会在 fork 前由 master 建立
+# SSL 上下文，worker 继承后握手会间歇性卡死 —— 实测 2 worker 下约一半连接 10s 超时，
+# 关掉后同镜像同并发 14/14 全部握手成功。明文模式（走反代）不受影响，仍保留预加载。
+preload_app = not (_certfile and _keyfile)
